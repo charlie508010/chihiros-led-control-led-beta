@@ -16,7 +16,7 @@ from datetime import time as datetime_time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib import error, request
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 
 def _load_normalize_protocol_debug_text():
@@ -516,11 +516,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(503, {"message": "SUPERVISOR_TOKEN fehlt"})
             return
         try:
-            response = supervisor_request("GET", "/addons/self/info", token)
-            info = response.get("data") if isinstance(response.get("data"), dict) else response
-            slug = str(info.get("slug") or "").strip() if isinstance(info, dict) else ""
-            if not slug or not re.fullmatch(r"[a-z0-9_]+", slug):
-                raise ValueError("Supervisor hat keinen gueltigen Add-on-Slug geliefert")
+            source_commit = github_source_commit()
+            supervisor_request("GET", "/addons/self/info", token)
         except ValueError as err:
             self.send_json(502, {"message": str(err)})
             return
@@ -529,14 +526,15 @@ class Handler(BaseHTTPRequestHandler):
             202,
             {
                 "status": "restarting",
-                "message": "LED Core wird neu gestartet und aus dem privaten Repository aktualisiert.",
+                "source_commit": source_commit,
+                "message": f"GitHub-Zugriff geprüft. LED Core wird mit Commit {source_commit} neu gestartet.",
             },
         )
 
         def restart() -> None:
             time.sleep(1)
             try:
-                supervisor_request("POST", f"/addons/{slug}/restart", token)
+                supervisor_request("POST", "/addons/self/restart", token)
             except ValueError as err:
                 print(f"LED Core update restart failed: {err}")
 
@@ -598,6 +596,51 @@ def state_obj(value: object, unit: str = "", **attrs: object) -> dict[str, objec
     if unit:
         attributes["unit_of_measurement"] = unit
     return {"state": str(value), "attributes": attributes}
+
+
+def github_source_commit() -> str:
+    """Verify private GitHub access and return the configured branch head."""
+    options_path = Path("/data/options.json")
+    try:
+        options = json.loads(options_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        raise ValueError("Add-on-Konfiguration konnte nicht gelesen werden") from err
+    github_token = str(options.get("github_token") or "").strip()
+    source_branch = str(options.get("source_branch") or "main").strip() or "main"
+    if not github_token:
+        raise ValueError("GitHub-Token fehlt in der LED-Core-Add-on-Konfiguration")
+    url = (
+        "https://api.github.com/repos/charlie508010/chihiros-led-control-led-beta/commits/"
+        f"{quote(source_branch, safe='')}"
+    )
+    req = request.Request(
+        url,
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {github_token}",
+            "User-Agent": "chihiros-led-core-addon",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=30) as response:
+            payload = response.read().decode("utf-8")
+    except error.HTTPError as err:
+        if err.code in (401, 403, 404):
+            raise ValueError(
+                "GitHub-Zugriff fehlgeschlagen: Token, Repository-Berechtigung oder Branch prüfen"
+            ) from err
+        raise ValueError(f"GitHub API Fehler {err.code}") from err
+    except OSError as err:
+        raise ValueError(f"GitHub nicht erreichbar: {err}") from err
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError as err:
+        raise ValueError("GitHub hat keine gültige Commit-Antwort geliefert") from err
+    commit = str(data.get("sha") or "") if isinstance(data, dict) else ""
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", commit):
+        raise ValueError("GitHub hat keinen gültigen Branch-Commit geliefert")
+    return commit[:12]
 
 
 def supervisor_request(method: str, path: str, token: str, body: dict[str, object] | None = None) -> dict[str, object]:

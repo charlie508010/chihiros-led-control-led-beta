@@ -27,7 +27,9 @@ def test_private_addon_runtime_restart_keeps_the_token_backed_source_clone() -> 
     assert 'fetch("./api/addon-update"' in index
     assert 'if request_path == "/api/addon-update":' in server
     assert 'supervisor_request("GET", "/addons/self/info", token)' in server
-    assert 'supervisor_request("POST", f"/addons/{slug}/restart", token)' in server
+    assert "source_commit = github_source_commit()" in server
+    assert 'supervisor_request("POST", "/addons/self/restart", token)' in server
+    assert 'echo "LED Core source commit: ${SOURCE_COMMIT}"' in run
     assert "cp -a /opt/chihiros-led-core-src/chihiros_beta/ui/. /opt/chihiros-led-core-ui/" in run
 
 
@@ -111,7 +113,9 @@ def test_led_core_update_button_uses_the_direct_addon_restart_flow() -> None:
     assert "const result = await api.runAddonUpdate();" in dashboard
     assert 'fetch("./api/addon-update"' in index
     assert 'if request_path == "/api/addon-update":' in server
-    assert 'supervisor_request("POST", f"/addons/{slug}/restart", token)' in server
+    assert "source_commit = github_source_commit()" in server
+    assert '"Authorization": f"Bearer {github_token}"' in server
+    assert 'supervisor_request("POST", "/addons/self/restart", token)' in server
     assert "await this.runAddonUpdate();" in dashboard
 
 

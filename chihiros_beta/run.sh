@@ -44,6 +44,8 @@ if [[ -n "${GITHUB_TOKEN}" && "${SOURCE_REPOSITORY}" == https://github.com/* ]];
 fi
 
 git clone --depth 1 --branch "${SOURCE_BRANCH}" "${CLONE_REPOSITORY}" /opt/chihiros-led-core-src
+SOURCE_COMMIT="$(git -C /opt/chihiros-led-core-src rev-parse --short=12 HEAD)"
+echo "LED Core source commit: ${SOURCE_COMMIT}"
 
 mkdir -p /config/.chihiros_led_core
 export HASS_CONFIG="/config"
