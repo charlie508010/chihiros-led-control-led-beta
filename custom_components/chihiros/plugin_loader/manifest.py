@@ -22,6 +22,7 @@ class PluginManifest:
     python_entrypoint: str
     frontend: str
     cli_entrypoint: str
+    platforms: tuple[str, ...]
     tabs: tuple[dict[str, str], ...]
 
     @classmethod
@@ -42,6 +43,7 @@ class PluginManifest:
             python_entrypoint=_safe_relative_path(data.get("python_entrypoint"), "plugin.py"),
             frontend=_safe_relative_path(data.get("frontend"), ""),
             cli_entrypoint=str(data.get("cli_entrypoint") or "").strip(),
+            platforms=_normalize_platforms(data.get("platforms")),
             tabs=tabs,
         )
 
@@ -52,6 +54,7 @@ class PluginManifest:
             "name": self.name,
             "version": self.version,
             "frontend": self.frontend,
+            "platforms": list(self.platforms),
             "tabs": [dict(tab) for tab in self.tabs],
         }
 
@@ -85,3 +88,15 @@ def _normalize_tabs(value: object, plugin_id: str, plugin_name: str) -> tuple[di
     if not tabs:
         tabs.append({"id": plugin_id, "title": plugin_name, "icon": ""})
     return tuple(tabs)
+
+
+def _normalize_platforms(value: object) -> tuple[str, ...]:
+    rows = value if isinstance(value, list) else []
+    platforms: list[str] = []
+    for row in rows:
+        platform = str(row or "").strip()
+        if not _PLUGIN_ID.fullmatch(platform):
+            raise ValueError(f"Invalid plugin platform {platform!r}")
+        if platform not in platforms:
+            platforms.append(platform)
+    return tuple(platforms)

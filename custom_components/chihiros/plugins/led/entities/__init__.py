@@ -1,4 +1,4 @@
-"""LED entity platform declaration."""
+"""LED entity platform declaration for Home Assistant."""
 
 ENTITY_PLATFORMS = ("light", "switch", "sensor")
 

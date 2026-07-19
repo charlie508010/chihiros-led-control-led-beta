@@ -29,8 +29,32 @@ def test_led_plugin_has_complete_manifest_and_isolated_subsystems() -> None:
     assert data["id"] == "led"
     assert data["python_entrypoint"] == "plugin.py"
     assert data["frontend"] == "dashboard/chihiros-led-card.js"
+    assert data["platforms"] == ["light", "sensor", "switch"]
     for directory in ("protocol", "services", "entities", "storage", "cli", "dashboard", "translations"):
         assert (LED_PLUGIN / directory).is_dir()
+    assert (LED_PLUGIN / "const.py").is_file()
+    assert (LED_PLUGIN / "validators.py").is_file()
+    assert (LED_PLUGIN / "services" / "runtime.py").is_file()
+    assert (LED_PLUGIN / "storage" / "runtime.py").is_file()
+    for platform in ("light", "sensor", "switch"):
+        assert (LED_PLUGIN / "entities" / f"{platform}.py").is_file()
+
+
+def test_integration_uses_led_plugin_as_canonical_domain_implementation() -> None:
+    """Core runtime imports must resolve LED constants and services through the plugin."""
+    integration = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+    light = (COMPONENT / "light.py").read_text(encoding="utf-8")
+    sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+    switch = (COMPONENT / "switch.py").read_text(encoding="utf-8")
+
+    assert "from .plugins.led.const import (" in integration
+    assert "from .plugins.led.services import async_update_led_services" in integration
+    assert "from .plugins.led.services import async_enable_led_auto_mode" in switch
+    assert ".packages.led" not in integration
+    assert ".packages.led" not in switch
+    assert "async_setup_entry = async_setup_led_plugin_entry" in light
+    assert "async_setup_entry = async_setup_led_plugin_entry" in sensor
+    assert "async_setup_entry = async_setup_led_plugin_entry" in switch
 
 
 def test_plugin_manifest_rejects_paths_outside_plugin_directory(tmp_path: Path) -> None:
@@ -48,6 +72,15 @@ def test_plugin_manifest_rejects_paths_outside_plugin_directory(tmp_path: Path) 
         assert "inside its plugin directory" in str(err)
     else:
         raise AssertionError("Unsafe plugin path was accepted")
+
+
+def test_led_manifest_exposes_entity_platforms_to_core() -> None:
+    """The validated manifest must expose platforms without plugin-specific imports."""
+    module = _load_manifest_module()
+    manifest = module.PluginManifest.from_path(LED_PLUGIN / "plugin.json")
+
+    assert manifest.platforms == ("light", "sensor", "switch")
+    assert manifest.public_data()["platforms"] == ["light", "sensor", "switch"]
 
 
 def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values() -> None:

@@ -30,7 +30,7 @@ from .core.notifications import (
 from .core.plugin_loader import async_load_plugins
 from .core.storage import record_led_notification_poll
 from .models import ChihirosData
-from .packages.led.const import (
+from .plugins.led.const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
     ATTR_ADDRESS,
@@ -57,7 +57,7 @@ from .packages.led.const import (
     SET_BRIGHTNESS_SCHEMA,
     SET_SCHEDULE_SCHEMA,
 )
-from .packages.led.services import async_update_led_services
+from .plugins.led.services import async_update_led_services
 from .runtime import resolve_chihiros_runtime
 
 _LOGGER = logging.getLogger(__name__)

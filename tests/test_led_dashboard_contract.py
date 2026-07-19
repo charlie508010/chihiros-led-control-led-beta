@@ -225,9 +225,10 @@ def test_addon_promotes_only_addresses_with_led_color_light_entities() -> None:
 def test_addon_accepts_only_entities_owned_by_led_core() -> None:
     """Legacy Chihiros and Doser entities must never become LED Core device tabs."""
     server = source(ADDON_SERVER)
-    light = source(ROOT / "custom_components" / "chihiros" / "light.py")
-    switch = source(ROOT / "custom_components" / "chihiros" / "switch.py")
-    sensor = source(ROOT / "custom_components" / "chihiros" / "sensor.py")
+    entities = ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "entities"
+    light = source(entities / "light.py")
+    switch = source(entities / "switch.py")
+    sensor = source(entities / "sensor.py")
 
     assert 'attributes.get("integration_domain") != "chihiros_led_core"' in server
     assert '"integration_domain": DOMAIN' in light
@@ -649,7 +650,7 @@ def test_universal_wrgb_1000_shows_live_estimated_wattage() -> None:
     """Configured Universal WRGB products expose calculated channel and total wattage."""
     panel = source(LED_PANEL)
     dashboard = source(DASHBOARD)
-    light = source(ROOT / "custom_components" / "chihiros" / "light.py")
+    light = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "entities" / "light.py")
 
     assert "max_power_watts: this.resolveLedMaxPowerWatts(device)" in panel
     assert '"max_power_watts": self._device.model.max_power_watts' in light
