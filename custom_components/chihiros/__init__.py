@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import logging
 import re
 from pathlib import Path
 from typing import Any
 
-from aiohttp import web
 from homeassistant.components import frontend
-from homeassistant.components.http import HomeAssistantView, StaticPathConfig
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, Platform
-from homeassistant.core import EVENT_HOMEASSISTANT_STARTED, HomeAssistant
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
@@ -30,17 +28,7 @@ from .common.notification_poll import (
 from .common.storage import record_led_notification_poll
 from .const import DOMAIN
 from .coordinator import ChihirosDataUpdateCoordinator
-from .dosing import CONF_PUMP_COUNT, DosingDailyTotals, is_dosing_capable, normalize_pump_count
 from .models import ChihirosData
-from .packages.doser.registry import async_migrate_doser_ext_entity_devices
-from .packages.doser.services import (
-    ATTR_ML,
-    ATTR_PUMP,
-    SERVICE_DOSE_ML,
-    async_trigger_dose_ml,
-    async_update_doser_services,
-)
-from .packages.doser.watcher import DoserAutoTotalsWatcher
 from .packages.led.const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
@@ -69,11 +57,10 @@ from .packages.led.const import (
     SET_SCHEDULE_SCHEMA,
 )
 from .packages.led.services import async_update_led_services
-from .packages.stirrer.services import async_update_stirrer_services
 from .runtime import resolve_chihiros_runtime
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH, Platform.SENSOR, Platform.NUMBER, Platform.BUTTON]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH, Platform.SENSOR]
 
 __all__ = [
     "ADD_SCHEDULE_SCHEMA",
@@ -86,9 +73,7 @@ __all__ = [
     "ATTR_ENTITY_ID",
     "ATTR_ENTRY_ID",
     "ATTR_LEVELS",
-    "ATTR_ML",
     "ATTR_PERIODS",
-    "ATTR_PUMP",
     "ATTR_RAMP_UP_MINUTES",
     "ATTR_SEND",
     "ATTR_START",
@@ -97,20 +82,16 @@ __all__ = [
     "RESET_SCHEDULE_SCHEMA",
     "SERVICE_ADD_SCHEDULE",
     "SERVICE_ENABLE_AUTO_MODE",
-    "SERVICE_DOSE_ML",
     "SERVICE_REMOVE_SCHEDULE",
     "SERVICE_RESET_SCHEDULE",
     "SERVICE_SET_BRIGHTNESS",
     "SERVICE_SET_SCHEDULE",
     "SET_BRIGHTNESS_SCHEMA",
     "SET_SCHEDULE_SCHEMA",
-    "async_trigger_dose_ml",
 ]
 
-DOSER_EXT_WATCHERS = f"{DOMAIN}_doser_ext_watchers"
 FRONTEND_PANEL_REGISTERED = f"{DOMAIN}_frontend_panel_registered"
 FRONTEND_STATIC_URL = "/chihiros_static"
-FRONTEND_PLUGIN_STATIC_URL = "/chihiros_plugin_static"
 FRONTEND_PANEL_URL = "chihiros"
 RUNTIME_POLL_UNSUBS = f"{DOMAIN}_runtime_poll_unsubs"
 RUNTIME_POLL_LOCK = NOTIFICATION_POLL_LOCK
@@ -146,22 +127,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     coordinator.async_start_bluetooth()
 
-    dosing_totals = None
-    dosing_volumes: list[float] = []
-    if is_dosing_capable(runtime.client):
-        dosing_totals = DosingDailyTotals(hass, runtime.address, normalize_pump_count(entry.data.get(CONF_PUMP_COUNT)))
-        await dosing_totals.async_load()
-        dosing_volumes = [1.0] * dosing_totals.pump_count
-
     hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = ChihirosData(
-        entry.title, runtime.client, coordinator, dosing_totals, dosing_volumes
-    )
+    hass.data[DOMAIN][entry.entry_id] = ChihirosData(entry.title, runtime.client, coordinator)
     _async_update_services(hass)
     await _async_register_frontend_panel(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    if not dosing_totals and runtime.client.model.color_channels:
+    if runtime.client.model.color_channels:
         async def _async_record_poll(status: str, output: str, notifications: int) -> None:
             try:
                 await hass.async_add_executor_job(
@@ -208,16 +180,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unsubscribe = async_track_notification_poll(hass, _async_poll_runtime)
         hass.data.setdefault(RUNTIME_POLL_UNSUBS, {})[entry.entry_id] = unsubscribe
         await _async_poll_runtime(None)
-    if dosing_totals:
-        chihiros_data = hass.data[DOMAIN][entry.entry_id]
-        await async_migrate_doser_ext_entity_devices(hass, entry, chihiros_data)
-        watcher = DoserAutoTotalsWatcher(hass, chihiros_data)
-        hass.data.setdefault(DOSER_EXT_WATCHERS, {})[entry.entry_id] = watcher
-        if getattr(hass, "is_running", False):
-            watcher.start()
-        else:
-            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, lambda _event: watcher.start())
-
     return True
 
 
@@ -227,13 +189,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         unsubscribe = hass.data.get(RUNTIME_POLL_UNSUBS, {}).pop(entry.entry_id, None)
         if unsubscribe is not None:
             unsubscribe()
-        watcher = hass.data.get(DOSER_EXT_WATCHERS, {}).pop(entry.entry_id, None)
-        if watcher is not None:
-            await watcher.stop()
         chihiros_data: ChihirosData = hass.data[DOMAIN].pop(entry.entry_id)
         chihiros_data.coordinator.async_close()
-        if chihiros_data.dosing_totals:
-            chihiros_data.dosing_totals.async_close()
         await chihiros_data.device.disconnect()
         _async_update_services(hass)
 
@@ -254,14 +211,8 @@ async def _async_register_frontend_panel(hass: HomeAssistant) -> None:
                 str(Path(__file__).parent / "www"),
                 cache_headers=False,
             ),
-            StaticPathConfig(
-                FRONTEND_PLUGIN_STATIC_URL,
-                str(Path(__file__).parent / "plugins"),
-                cache_headers=False,
-            ),
         ]
     )
-    hass.http.register_view(ChihirosPluginBackendView())
     frontend.async_register_built_in_panel(
         hass,
         component_name="custom-panel",
@@ -281,69 +232,9 @@ async def _async_register_frontend_panel(hass: HomeAssistant) -> None:
     hass.data[FRONTEND_PANEL_REGISTERED] = True
 
 
-class ChihirosPluginBackendView(HomeAssistantView):
-    """Call optional dashboard plugin backend functions from the HA panel."""
-
-    url = "/api/chihiros/plugin-backend"
-    name = "api:chihiros:plugin_backend"
-    requires_auth = True
-
-    async def post(self, request: web.Request) -> web.Response:
-        """Handle one plugin backend call."""
-        try:
-            data = await request.json()
-        except ValueError:
-            return web.json_response({"message": "Invalid JSON"}, status=400)
-
-        plugin = re.sub(r"[^a-z0-9_]+", "", str(data.get("plugin") or "").strip().lower())
-        function_name = re.sub(r"[^a-zA-Z0-9_]+", "", str(data.get("function") or "").strip())
-        args = data.get("args", [])
-        if not plugin or not function_name:
-            return web.json_response({"message": "Plugin oder Funktion fehlt"}, status=400)
-        if not isinstance(args, list):
-            return web.json_response({"message": "args muss eine Liste sein"}, status=400)
-
-        backend_path = Path(__file__).parent / "plugins" / plugin / "backend.py"
-        if not backend_path.is_file():
-            return web.json_response({"message": f"Plugin Backend nicht gefunden: {plugin}"}, status=404)
-
-        try:
-            spec = importlib.util.spec_from_file_location(f"chihiros_{plugin}_plugin_backend", backend_path)
-            if spec is None or spec.loader is None:
-                raise RuntimeError(f"Plugin Backend kann nicht geladen werden: {backend_path}")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            func = getattr(module, function_name, None)
-            if not callable(func):
-                return web.json_response({"message": f"Plugin Funktion fehlt: {plugin}.{function_name}"}, status=404)
-            result = func(*args)
-        except ValueError as err:
-            return web.json_response({"message": str(err)}, status=400)
-        except Exception as err:  # noqa: BLE001
-            return web.json_response({"message": str(err)}, status=500)
-
-        return web.json_response(result if isinstance(result, dict) else {"result": result})
-
-
 def _async_update_services(hass: HomeAssistant) -> None:
     """Register services that apply to currently configured device capabilities."""
-    has_dosing_device = _has_dosing_devices(hass)
-    has_stirrer_device = _has_stirrer_devices(hass)
-
     async_update_led_services(hass, True, lambda data: _resolve_service_device(hass, data))
-
-    async_update_doser_services(hass, has_dosing_device, lambda data: _resolve_service_device(hass, data))
-    async_update_stirrer_services(hass, has_stirrer_device)
-
-
-def _has_dosing_devices(hass: HomeAssistant) -> bool:
-    """Return whether any configured device supports dosing services."""
-    return any(data.dosing_totals for data in hass.data.get(DOMAIN, {}).values())
-
-
-def _has_stirrer_devices(hass: HomeAssistant) -> bool:
-    """Return whether any configured device supports stirrer services."""
-    return any(getattr(data.device, "is_stirrer", False) for data in hass.data.get(DOMAIN, {}).values())
 
 
 def _resolve_service_device(hass: HomeAssistant, data: dict[str, Any]) -> ChihirosData:

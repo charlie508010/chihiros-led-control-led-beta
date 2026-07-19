@@ -40,7 +40,7 @@
         background: var(--panel);
         overflow: hidden;
       }
-      chihiros-doser-card-v3 {
+      chihiros-led-core-card {
         display: block;
         --primary-text-color: var(--text);
         --secondary-text-color: var(--muted);
@@ -85,17 +85,14 @@
       }
     </script>
     <script type="module">
-      await import(`./dashboard/chihiros-doser-card-v3.js?v=${Date.now()}`);
+      await import(`./dashboard/chihiros-led-core-card.js?v=${Date.now()}`);
 
       const status = document.getElementById("status");
       const title = document.getElementById("title");
       let addonDatabase = {};
       let addonKind = "core";
       let addonTitle = "LED Core";
-      let enabledTabs = ["led", "config"];
-      let installedPlugins = [];
-      let pluginAssets = {};
-      const loadedPluginModules = new Set();
+      const enabledTabs = ["led", "config"];
 
       function defaultTabForKind(kind) {
         const map = { core: "led", doser: "doser", ruehrer: "ruehrer", heizer: "heizer" };
@@ -208,7 +205,7 @@
 
       function ensureCard() {
         if (card) return card;
-        card = document.createElement("chihiros-doser-card-v3");
+        card = document.createElement("chihiros-led-core-card");
         document.getElementById("dashboard").appendChild(card);
         return card;
       }
@@ -221,10 +218,8 @@
           enabled_tabs: enabledTabs,
           plugin_kind: addonKind,
           plugin_title: addonTitle,
-          installed_plugins: installedPlugins,
-          plugin_assets: pluginAssets,
+          installed_plugins: [],
           language: "de",
-          doser_devices: devices,
           addon_mode: true,
           addon_database: addonDatabase,
           show_mac: true,
@@ -240,12 +235,8 @@
       fetch("./api/status")
         .then((response) => response.json())
         .then(async (data) => {
-          addonKind = data.plugin_kind || addonKind;
+          addonKind = "core";
           setAddonTitle(data.plugin_title);
-          enabledTabs = Array.isArray(data.enabled_tabs) ? data.enabled_tabs : enabledTabs;
-          installedPlugins = Array.isArray(data.installed_plugins) ? data.installed_plugins : installedPlugins;
-          pluginAssets = data.plugin_assets && typeof data.plugin_assets === "object" ? data.plugin_assets : pluginAssets;
-          await loadPluginModules(pluginAssets);
           ensureCard();
           applyCardState(Array.isArray(data.devices) ? data.devices : []);
           setStatus("online", true);
@@ -257,12 +248,8 @@
         const response = await fetch("./api/dashboard-state");
         const data = await response.json();
         addonDatabase = data.database || addonDatabase || {};
-        addonKind = data.plugin_kind || addonKind;
+        addonKind = "core";
         setAddonTitle(data.plugin_title);
-        enabledTabs = Array.isArray(data.enabled_tabs) ? data.enabled_tabs : enabledTabs;
-        installedPlugins = Array.isArray(data.installed_plugins) ? data.installed_plugins : installedPlugins;
-        pluginAssets = data.plugin_assets && typeof data.plugin_assets === "object" ? data.plugin_assets : pluginAssets;
-        await loadPluginModules(pluginAssets);
         ensureCard();
         hassShell.states = data.states || {};
         applyCardState(Array.isArray(data.devices) ? data.devices : []);
@@ -301,19 +288,6 @@
 
       const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
-      async function loadPluginModules(assets) {
-        const entries = Object.entries(assets || {});
-        for (const [name, asset] of entries) {
-          const modulePath = asset && asset.module ? String(asset.module) : "";
-          const version = asset && asset.mtime ? String(asset.mtime) : "";
-          const moduleUrl = version ? `${modulePath}?v=${encodeURIComponent(version)}` : modulePath;
-          if (!modulePath || loadedPluginModules.has(moduleUrl)) continue;
-          await import(moduleUrl);
-          loadedPluginModules.add(moduleUrl);
-          console.info(`Chihiros plugin loaded: ${name}`);
-        }
-      }
-
       window.ChihirosAddonApi = {
         saveDatabaseConfig: async (payload) => {
           const response = await fetch("./api/dashboard-settings", {
@@ -336,21 +310,8 @@
           if (!response.ok) throw new Error(data.message || "Datenbankstatus konnte nicht geladen werden");
           return data;
         },
-        runCtlCommand: async (command) => {
-          return await window.ChihirosAddonApi.callPluginBackend("ctl", "run_command", [command]);
-        },
         runAddonUpdate: async () => {
           throw new Error("Add-on Update API ist deaktiviert; Dashboard nutzt nur Store reload und Update-Entity refresh.");
-        },
-        callPluginBackend: async (plugin, functionName, args = []) => {
-          const response = await fetch("./api/plugin-backend", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ plugin, function: functionName, args }),
-          });
-          const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.message || data.output || "Plugin Aktion fehlgeschlagen");
-          return data;
         },
         refreshDashboard,
         refreshHassStates: refreshDashboard,

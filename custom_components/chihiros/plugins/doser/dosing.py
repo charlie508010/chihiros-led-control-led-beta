@@ -12,8 +12,8 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
-from .vendor.chihiros_led_control.models import DOSING_PUMP
+from ...const import DOMAIN
+from ...vendor.chihiros_led_control.models import DOSING_PUMP
 
 STORAGE_KEY = f"{DOMAIN}_dosing_daily_totals"
 STORAGE_VERSION = 1

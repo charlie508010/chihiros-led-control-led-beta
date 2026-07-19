@@ -13,9 +13,9 @@ ADDON_CONFIGS = {
 CORE_CACHE_VERSION_FILES = {
     ROOT / "custom_components/chihiros/manifest.json": r'("version"\s*:\s*")\d+\.\d+\.\d+("\s*,?)',
     ROOT / "custom_components/chihiros/www/chihiros-panel.js": (
-        r'(chihiros-doser-card-v3\.js\?v=)\d+\.\d+\.\d+'
+        r'(chihiros-led-core-card\.js\?v=)\d+\.\d+\.\d+'
     ),
-    ROOT / "custom_components/chihiros/www/chihiros-doser-card-v3.js": (
+    ROOT / "custom_components/chihiros/www/chihiros-led-core-card.js": (
         r'(chihiros-led-panel\.js\?v=)\d+\.\d+\.\d+'
     ),
 }

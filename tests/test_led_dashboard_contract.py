@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LED_PANEL = ROOT / "custom_components/chihiros/www/panels/chihiros-led-panel.js"
-DASHBOARD = ROOT / "custom_components/chihiros/www/chihiros-doser-card-v3.js"
+DASHBOARD = ROOT / "custom_components/chihiros/www/chihiros-led-core-card.js"
 DOSER_PLUGIN = ROOT / "custom_components/chihiros/plugins/doser/www/doser-plugin.js"
 CTL_PLUGIN = ROOT / "custom_components/chihiros/plugins/ctl/www/ctl-plugin.js"
 WIRESHARK_PLUGIN = ROOT / "custom_components/chihiros/plugins/wireshark/www/wireshark-plugin.js"
@@ -14,6 +14,32 @@ ADDON_SERVER = ROOT / "chihiros_beta/ui/server.py"
 def source(path: Path) -> str:
     """Read one dashboard source file."""
     return path.read_text(encoding="utf-8")
+
+
+def test_home_assistant_doser_sources_live_only_in_plugin() -> None:
+    """Keep optional Doser implementation files out of the Home Assistant LED Core package."""
+    integration = ROOT / "custom_components" / "chihiros"
+    plugin = integration / "plugins" / "doser"
+    required = {
+        "backend.py",
+        "button.py",
+        "dosing.py",
+        "entity.py",
+        "number.py",
+        "protocol.py",
+        "registry.py",
+        "runtime.py",
+        "services.py",
+        "storage.py",
+        "types.py",
+        "watcher.py",
+    }
+    assert required <= {path.name for path in plugin.glob("*.py")}
+    assert not list((integration / "packages" / "doser").glob("*.py"))
+    assert not list(integration.glob("doser_*.py"))
+    assert not (integration / "dosing.py").exists()
+    assert not (integration / "button.py").exists()
+    assert not (integration / "number.py").exists()
 
 
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:
@@ -54,8 +80,8 @@ def test_doser_timer_list_dialog_supports_24_individual_doses() -> None:
     """Timer-list editing exposes time and amount rows with the app limits."""
     plugin = source(DOSER_PLUGIN)
     dashboard = source(DASHBOARD)
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "services.py")
-    protocol = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "protocol.py")
+    services = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "services.py")
+    protocol = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "protocol.py")
 
     assert "data-schedule-timer-list" in plugin
     assert "data-schedule-timer-time" in plugin
@@ -77,8 +103,8 @@ def test_doser_custom_dialog_uses_daily_amount_and_window_dose_counts() -> None:
     """Custom schedules expose app-style windows and enforce the 24/30 limits."""
     plugin = source(DOSER_PLUGIN)
     dashboard = source(DASHBOARD)
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "services.py")
-    protocol = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "protocol.py")
+    services = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "services.py")
+    protocol = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "protocol.py")
 
     assert 'kindOption("window", this.tr("custom_schedule"))' in plugin
     assert "data-schedule-window-list" in plugin
@@ -355,9 +381,9 @@ def test_doser_calibration_keeps_prime_debug_and_reminder_wired() -> None:
     """Calibration exposes safe hose fill, config debug, and persisted renewal metadata."""
     plugin = source(DOSER_PLUGIN)
     dashboard = source(DASHBOARD)
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "services.py")
-    storage = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "storage.py")
-    protocol = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "protocol.py")
+    services = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "services.py")
+    storage = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "storage.py")
+    protocol = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "protocol.py")
 
     assert 'service: "prime_doser_calibration"' in plugin
     assert "data-calibration-prime-duration" in plugin
@@ -415,14 +441,14 @@ def test_doser_calibration_keeps_prime_debug_and_reminder_wired() -> None:
 
 def test_manual_doser_debug_comparison_keeps_connection_prelude() -> None:
     """The compact comparison must retain both the 90 prelude and 165 Doser frames."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "services.py")
+    services = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "services.py")
 
     assert "render_protocol_debug(tx_commands={0x5A, 0xA5}, dedupe_rx=True)" in services
 
 
 def test_doser_schedule_uses_shared_integration_device() -> None:
     """Schedule sending must not create a second BLE client beside the integration device."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "services.py")
+    services = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "services.py")
 
     schedule_sender = services.split("async def _send_doser_schedule(", 1)[1]
     assert "dosing_device = cast(DosingChihirosClient, chihiros_data.device)" in schedule_sender
@@ -433,7 +459,7 @@ def test_doser_schedule_uses_shared_integration_device() -> None:
 
 def test_doser_schedule_errors_never_hide_the_exception_type() -> None:
     """An exception without text must still identify its type and include device debug."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "services.py")
+    services = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "services.py")
 
     assert "error_text = str(ex).strip() or type(ex).__name__" in services
     assert "debug_output = debug_output or _device_protocol_debug(chihiros_data.device)" in services
@@ -441,8 +467,8 @@ def test_doser_schedule_errors_never_hide_the_exception_type() -> None:
 
 def test_doser_total_reads_use_shared_integration_device() -> None:
     """Background and button total reads must not open competing BLE clients."""
-    button = source(ROOT / "custom_components" / "chihiros" / "button.py")
-    watcher = source(ROOT / "custom_components" / "chihiros" / "packages" / "doser" / "watcher.py")
+    button = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "button.py")
+    watcher = source(ROOT / "custom_components" / "chihiros" / "plugins" / "doser" / "watcher.py")
 
     assert "await dosing_device.read_auto_totals(" in button
     assert "await dosing_device.read_auto_totals(" in watcher
@@ -740,16 +766,14 @@ def test_enable_auto_mode_button_uses_response_service_instead_of_schedule_write
     assert "Auto-Mode-Entitaet nicht gefunden" not in implementation
 
 
-def test_wireshark_backend_receives_configured_language() -> None:
-    """Capture and packet timestamps use the language selected in dashboard config."""
-    plugin = source(WIRESHARK_PLUGIN)
+def test_led_panel_does_not_load_device_plugins() -> None:
+    """The LED Core entry point must not load optional device plugins."""
     panel_loader = source(ROOT / "custom_components/chihiros/www/chihiros-panel.js")
 
-    assert "backendSettings(card, settings = {})" in plugin
-    assert 'return { ...settings, language: language === "en" ? "en" : "de" };' in plugin
-    assert plugin.count("this.backendSettings(card") == 3
-    assert 'version: "0.1.52"' in plugin
-    assert "wireshark-plugin.js?v=0.1.52" in panel_loader
+    assert 'enabled_tabs: ["led", "config"]' in panel_loader
+    assert "installed_plugins: []" in panel_loader
+    for plugin in ("doser", "wireshark", "ctl", "ruehrer", "heizer"):
+        assert f"/chihiros_plugin_static/{plugin}/" not in panel_loader
 
 
 def test_wireshark_long_capture_saves_periodic_snapshots() -> None:
@@ -790,7 +814,8 @@ def test_led_notification_poll_uses_shared_device_poller() -> None:
     assert 'device_type="led"' in integration
     assert "expected_modes=(0x0A, 0xFE)" in integration
     assert "async_track_notification_poll(hass, _async_poll_runtime)" in integration
-    assert "if not dosing_totals and runtime.client.model.color_channels:" in integration
+    assert "if runtime.client.model.color_channels:" in integration
+    assert "dosing_totals" not in integration
     assert "await runtime.client.query_status_active()" in integration
     assert "const nonLedDeviceKeys =" in panel
     assert '"doser", "dosing", "dose", "dydose", "dytdos", "pump"' in panel

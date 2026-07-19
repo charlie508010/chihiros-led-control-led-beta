@@ -12,13 +12,13 @@ from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
-from .entity import chihiros_device_info, chihiros_entity_name, chihiros_unique_id
-from .models import ChihirosData
-from .packages.doser.entity import DoserExtEntity
-from .packages.doser.storage import async_store_for_device, update_signal
-from .packages.doser.types import DoserSchedule
-from .runtime import ChihirosClient
+from ...const import DOMAIN
+from ...entity import chihiros_device_info, chihiros_entity_name, chihiros_unique_id
+from ...models import ChihirosData
+from ...runtime import ChihirosClient
+from .entity import DoserExtEntity
+from .storage import async_store_for_device, update_signal
+from .types import DoserSchedule
 
 
 async def async_setup_entry(

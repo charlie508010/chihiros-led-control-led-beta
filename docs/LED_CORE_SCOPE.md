@@ -11,7 +11,9 @@ Dieses Repository ist die getrennte Arbeitskopie für die LED-Steuerung.
 - `chihirosctl led` und `chihirosctl template`
 
 Die eigenständigen Bereiche für Doser, Rührer, Heizer, Wireshark und das allgemeine CTL-Dashboard sind nicht Bestandteil
-dieses Repositories. Das gilt für Backend, Protokoll, Home-Assistant-Services, Dashboard, CLI und Tests.
+des LED Core. Optionaler Gerätecode darf im selben Repository ausschließlich unter einem eigenen Pluginverzeichnis
+liegen und wird vom LED Core nicht automatisch importiert oder registriert. Das gilt für Backend, Protokoll,
+Home-Assistant-Services, Dashboard, CLI und Tests.
 
 ## Erweiterungen
 
@@ -25,8 +27,8 @@ Vorgesehene Struktur:
 LED Core
 ├── gemeinsame BLE- und Debug-Schnittstellen
 ├── LED-Protokoll, Services, UI und Tests
-└── Plugin-Schnittstellen
-    ├── Doser (später)
+└── plugins/
+    ├── doser/ (eigenständig, vom LED Core nicht automatisch geladen)
     ├── Rührer (später)
     ├── Heizer (später)
     └── Wireshark/Diagnose (später)
@@ -44,6 +46,8 @@ LED Core
 - Während einer direkten gemeinsamen Arbeit an demselben Stand wird vorher vereinbart, wer den Stand bearbeitet. Der
   andere Entwickler beginnt erst nach Commit und Aktualisierung des gemeinsamen Branches.
 
-Historische Doser-, Rührer-, Heizer-, Wireshark- und allgemeine CTL-Kompatibilitätsdateien im aktuellen Export sind
-Migrationsreste und gehören nicht zum Zielstand. Sie werden abhängigkeitsweise entfernt; bis dahin darf dieser Export
-nicht als vollständig getrennt bezeichnet werden.
+Die Home-Assistant-Doser-Implementierung liegt vollständig unter `custom_components/chihiros/plugins/doser/` und wird
+durch einen Architekturtest von den Core-Modulen getrennt gehalten. Historische Doser-, Rührer-, Heizer-, Wireshark-
+und allgemeine CTL-Anteile in der gemeinsamen Python-Bibliothek, der CLI oder dem Frontend-Host sind weiterhin
+Migrationsreste. Sie werden abhängigkeitsweise in eigene Plugins verschoben; bis dahin darf dieser Export nicht als
+vollständig getrennt bezeichnet werden.

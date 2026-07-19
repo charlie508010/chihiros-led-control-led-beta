@@ -1,7 +1,7 @@
 import "./chihiros-notification-ui.js?v=0.1.0";
-import "./panels/chihiros-led-panel.js?v=0.2.1009";
+import "./panels/chihiros-led-panel.js?v=0.2.1010";
 
-class ChihirosDoserCard extends window.ChihirosLedPanelMixin(HTMLElement) {
+class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
     this.config = config || {};
     this.attachPluginMethods("doser");
@@ -180,7 +180,7 @@ class ChihirosDoserCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   }
 
   uiSettingsKey() {
-    return `chihiros-doser-card-v3:${String(this.deviceAddress || "default").toLowerCase()}:ui`;
+    return `chihiros-led-core-card:${String(this.deviceAddress || "default").toLowerCase()}:ui`;
   }
 
   loadUiSettings() {
@@ -4565,10 +4565,10 @@ class ChihirosDoserCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   }
 }
 
-customElements.define("chihiros-doser-card-v3", ChihirosDoserCard);
+customElements.define("chihiros-led-core-card", ChihirosLedCoreCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "chihiros-doser-card-v3",
-  name: "Chihiros Doser Card V3",
-  description: "Compact Chihiros Doser dashboard card",
+  type: "chihiros-led-core-card",
+  name: "Chihiros LED Core Card",
+  description: "Chihiros LED Core dashboard card",
 });

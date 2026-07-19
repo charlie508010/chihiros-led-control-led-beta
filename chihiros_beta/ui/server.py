@@ -215,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                 200,
                 {
                     "status": "online",
-                    "dashboard": (ROOT / "dashboard" / "chihiros-doser-card-v3.js").is_file(),
+                    "dashboard": (ROOT / "dashboard" / "chihiros-led-core-card.js").is_file(),
                     "plugin_kind": plugin_kind(),
                     "plugin_title": plugin_title(),
                     "enabled_tabs": plugin_tabs(),

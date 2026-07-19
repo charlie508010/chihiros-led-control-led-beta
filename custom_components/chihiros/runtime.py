@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import datetime
 from typing import Protocol
 
 from homeassistant.components import bluetooth
@@ -13,7 +13,6 @@ from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from .dosing import CONF_PUMP_COUNT, normalize_pump_count
 from .fake import create_fake_device, fake_devices_enabled, is_fake_address
 from .vendor.chihiros_led_control import create_device, needs_device_type
 from .vendor.chihiros_led_control.models import DeviceModel
@@ -21,52 +20,6 @@ from .vendor.chihiros_led_control.protocol import ParsedNotification, RuntimeNot
 from .vendor.chihiros_led_control.weekday_encoding import WeekdaySelect
 
 NotificationCallback = Callable[[ParsedNotification], None]
-
-
-class DosingChihirosClient(Protocol):
-    """Home Assistant-facing dosing pump client surface."""
-
-    raw_notifications: list[bytes]
-    last_doser_totals: list[float] | None
-
-    async def dose_ml(self, pump_idx: int, volume_ml: float) -> None:
-        """Dose a volume in mL on a dosing pump channel."""
-
-    async def add_schedule(
-        self,
-        pump_idx: int,
-        schedule_time: time,
-        dose_ml: float,
-        weekdays_mask: int = 0x7F,
-        active: bool = True,
-        next_day_flag: bool = False,
-    ) -> None:
-        """Program one single-dose schedule."""
-
-    async def add_interval_schedule(
-        self,
-        pump_idx: int,
-        interval_minutes: int,
-        dose_ml: float,
-        weekdays_mask: int = 0x7F,
-        active: bool = True,
-        next_day_flag: bool = False,
-    ) -> None:
-        """Program one interval schedule."""
-
-    async def read_auto_totals(self, mode: int = 0x34, *, clear_notifications: bool = True) -> list[float] | None:
-        """Read automatic daily totals directly."""
-
-    async def read_auto_totals_via_dialog(
-        self,
-        mode: int = 0x22,
-        *,
-        clear_notifications: bool = True,
-    ) -> list[float] | None:
-        """Read automatic daily totals using the Doser dialog sequence."""
-
-    async def read_doser_notifications(self, notification_wait: float = 5.0) -> None:
-        """Open the app-like Doser dialog and collect its complete notification burst."""
 
 
 class ChihirosClient(Protocol):
@@ -192,7 +145,7 @@ async def resolve_chihiros_runtime(hass: HomeAssistant, entry: ConfigEntry) -> C
     address: str = entry.unique_id
     if fake_devices_enabled() and is_fake_address(address):
         return ChihirosRuntime(
-            client=create_fake_device(address, normalize_pump_count(entry.data.get(CONF_PUMP_COUNT))),
+            client=create_fake_device(address),
             address=address,
             always_available=True,
         )
