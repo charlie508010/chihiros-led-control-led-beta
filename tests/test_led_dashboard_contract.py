@@ -16,15 +16,14 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_private_addon_update_restarts_into_latest_cloned_led_core() -> None:
-    """The dashboard update action must work with the token-backed private source clone."""
+def test_private_addon_runtime_restart_keeps_the_token_backed_source_clone() -> None:
+    """The add-on runtime restart endpoint must retain the token-backed private source clone."""
     dashboard = source(DASHBOARD)
     index = source(ADDON_INDEX)
     server = source(ADDON_SERVER)
     run = source(ADDON_RUN)
 
     assert 'data-addon-update' in dashboard
-    assert 'typeof api.runAddonUpdate !== "function"' in dashboard
     assert 'fetch("./api/addon-update"' in index
     assert 'if request_path == "/api/addon-update":' in server
     assert 'supervisor_request("GET", "/addons/self/info", token)' in server
@@ -100,6 +99,19 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     assert '/config/custom_components/chihiros_led_core' in run
     assert '/config/.chihiros_led_core/chihiros_state.sqlite3' in run
     assert 'rm -rf /config/custom_components/chihiros' not in run
+
+
+def test_led_core_update_uses_the_supervisor_update_entity_flow() -> None:
+    """Private-source updates retain the proven store refresh and HA update installation flow."""
+    dashboard = source(DASHBOARD)
+    server = source(ADDON_SERVER)
+
+    assert 'const entityId = "update.led_core_update";' in dashboard
+    assert '"/api/states/update.led_core_update"' in server
+    assert 'fetch("./api/addon-refresh"' in dashboard
+    assert 'callService("homeassistant", "update_entity"' in dashboard
+    assert 'callService("update", "install"' in dashboard
+    assert "await this.runAddonUpdate();" in dashboard
 
 
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:

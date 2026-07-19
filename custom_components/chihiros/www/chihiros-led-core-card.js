@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1018";
+import "./panels/chihiros-led-panel.js?v=0.2.1019";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -170,6 +170,120 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       </div>`;
   }
 
+  updateDebug(state, label) {
+    const lines = [label || "Update state"];
+    if (!state) return `${lines[0]}: nicht vorhanden`;
+    const attrs = state.attributes || {};
+    lines.push(`state: ${state.state || ""}`);
+    lines.push(`restored: ${Boolean(attrs.restored)}`);
+    lines.push(`installed_version: ${attrs.installed_version || ""}`);
+    lines.push(`latest_version: ${attrs.latest_version || ""}`);
+    lines.push(`in_progress: ${Boolean(attrs.in_progress)}`);
+    return lines.join("\n");
+  }
+
+  async runAddonUpdate() {
+    const entityId = "update.led_core_update";
+    const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const debug = [];
+    const readState = async () => {
+      if (this._hass && typeof this._hass.callApi === "function") {
+        try {
+          return await this._hass.callApi("GET", `states/${entityId}`);
+        } catch (error) {
+          debug.push(`State source callApi failed: ${error && error.message ? error.message : error}`);
+        }
+      }
+      return this._hass && this._hass.states ? this._hass.states[entityId] : null;
+    };
+    const versionInfo = (state) => {
+      const attrs = state && state.attributes ? state.attributes : {};
+      return {
+        state: state ? String(state.state || "") : "",
+        installed: String(attrs.installed_version || ""),
+        latest: String(attrs.latest_version || ""),
+        inProgress: Boolean(attrs.in_progress),
+      };
+    };
+
+    this.dialogState = {
+      type: "debug",
+      channel: 1,
+      output: "OK\nUpdate wird vorbereitet...\nchihiros_led_core",
+      running: true,
+      noChannel: true,
+      level: "pending",
+    };
+    this.render();
+    try {
+      if (!this._hass) throw new Error("Home-Assistant-Verbindung fehlt");
+      const refreshResponse = await fetch("./api/addon-refresh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ addon: "chihiros_led_core" }),
+      });
+      const refreshData = await refreshResponse.json().catch(() => ({}));
+      debug.push(String(refreshData.output || `Addon store reload: ${refreshResponse.status}`));
+      await this._hass.callService("homeassistant", "update_entity", { entity_id: entityId });
+      debug.push(`homeassistant.update_entity ${entityId}: OK`);
+
+      let state = await readState();
+      let info = versionInfo(state);
+      debug.push(this.updateDebug(state, "Nach update_entity poll 1"));
+      for (let poll = 1; poll < 60 && info.state !== "on"; poll += 1) {
+        await sleep(1000);
+        state = await readState();
+        info = versionInfo(state);
+        debug.push(this.updateDebug(state, `Nach update_entity poll ${poll + 1}`));
+      }
+      if (info.state !== "on") {
+        const versions = info.installed || info.latest
+          ? `Installiert: ${info.installed || "?"}\nLatest: ${info.latest || "?"}`
+          : "Update-Entity nicht gefunden.";
+        this.dialogState = {
+          type: "debug",
+          channel: 1,
+          output: `OK\nKein Update verfügbar.\n${entityId}\n${versions}\n\n${debug.join("\n\n")}`,
+          running: false,
+          noChannel: true,
+          level: "ok",
+        };
+        this.render();
+        return;
+      }
+
+      await this._hass.callService("update", "install", { backup: false }, { entity_id: entityId });
+      debug.push("update.install: OK");
+      for (let poll = 0; poll < 30; poll += 1) {
+        await sleep(1000);
+        state = await readState();
+        info = versionInfo(state);
+        debug.push(this.updateDebug(state, `update.install poll ${poll + 1}`));
+        if (info.state !== "on" && !info.inProgress) break;
+      }
+      const completed = Boolean(info.installed && info.latest && info.installed === info.latest);
+      this.dialogState = {
+        type: "debug",
+        channel: 1,
+        output: `OK\n${completed ? "Update abgeschlossen." : "Update gestartet."}\n${entityId}\nInstalliert: ${info.installed || "?"}\nLatest: ${info.latest || "?"}\n\n${debug.join("\n\n")}`,
+        running: false,
+        noChannel: true,
+        level: "ok",
+      };
+      this.render();
+    } catch (error) {
+      this.dialogState = {
+        type: "debug",
+        channel: 1,
+        output: `FAIL\n${error && error.message ? error.message : error}\n\n${debug.join("\n\n")}`,
+        running: false,
+        noChannel: true,
+        level: "error",
+      };
+      this.render();
+    }
+  }
+
   bindCoreEvents() {
     this.querySelectorAll("[data-tab]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -222,13 +336,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     });
     this.querySelectorAll("[data-addon-update]").forEach((button) => {
       button.addEventListener("click", async () => {
-        const api = window.ChihirosAddonApi;
-        if (!api || typeof api.runAddonUpdate !== "function") return;
         const label = button.querySelector("[data-addon-update-label]");
         button.disabled = true;
         if (label) label.textContent = this.tr("updating");
         try {
-          await api.runAddonUpdate();
+          await this.runAddonUpdate();
         } catch (error) {
           button.disabled = false;
           if (label) label.textContent = this.tr("update");
