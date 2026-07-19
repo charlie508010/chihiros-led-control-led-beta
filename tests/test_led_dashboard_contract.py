@@ -35,8 +35,8 @@ def test_addon_icon_fallback_renders_real_svg_symbols() -> None:
     assert 'ha-icon::after' not in index
 
 
-def test_private_addon_runtime_restart_keeps_the_token_backed_source_clone() -> None:
-    """The add-on runtime restart endpoint must retain the token-backed private source clone."""
+def test_private_addon_update_installs_the_supervisor_release_or_refreshes_the_runtime() -> None:
+    """The update endpoint must install a release and retain the token-backed runtime fallback."""
     dashboard = source(DASHBOARD)
     index = source(ADDON_INDEX)
     server = source(ADDON_SERVER)
@@ -47,8 +47,9 @@ def test_private_addon_runtime_restart_keeps_the_token_backed_source_clone() -> 
     assert 'if request_path == "/api/addon-update":' in server
     assert 'supervisor_request("GET", "/addons/self/info", token)' in server
     assert "source_commit = github_source_commit()" in server
-    assert 'supervisor_request("POST", "/addons/self/restart", token)' in server
+    assert 'f"/addons/{slug}/update" if update_available else "/addons/self/restart"' in server
     assert 'echo "LED Core source commit: ${SOURCE_COMMIT}"' in run
+    assert 'export CHIHIROS_SOURCE_COMMIT="${SOURCE_COMMIT}"' in run
     assert "cp -a /opt/chihiros-led-core-src/chihiros_beta/ui/. /opt/chihiros-led-core-ui/" in run
 
 
@@ -122,8 +123,8 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     assert 'rm -rf /config/custom_components/chihiros' not in run
 
 
-def test_led_core_update_button_uses_the_direct_addon_restart_flow() -> None:
-    """The visible update button restarts the add-on so it clones the current private source."""
+def test_led_core_update_button_uses_the_supervisor_update_flow() -> None:
+    """The visible update button installs a Supervisor release and waits for ingress to return."""
     dashboard = source(DASHBOARD)
     server = source(ADDON_SERVER)
     index = source(ADDON_INDEX)
@@ -134,7 +135,10 @@ def test_led_core_update_button_uses_the_direct_addon_restart_flow() -> None:
     assert 'if request_path == "/api/addon-update":' in server
     assert "source_commit = github_source_commit()" in server
     assert '"Authorization": f"Bearer {github_token}"' in server
-    assert 'supervisor_request("POST", "/addons/self/restart", token)' in server
+    assert 'for path in ("/store/reload", "/addons/reload"):' in server
+    assert 'supervisor_request("POST", path, token)' in server
+    assert 'f"/addons/{slug}/update" if update_available else "/addons/self/restart"' in server
+    assert "reloadWhenReady();" in index
     assert "await this.runAddonUpdate();" in dashboard
 
 

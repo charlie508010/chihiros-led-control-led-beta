@@ -335,7 +335,23 @@
           const data = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(data.message || `Update fehlgeschlagen (${response.status})`);
           setStatus("Update läuft", true);
-          window.setTimeout(() => window.location.reload(), 5000);
+          const reloadWhenReady = async () => {
+            await sleep(2500);
+            for (let attempt = 0; attempt < 60; attempt += 1) {
+              try {
+                const ready = await fetch(`./api/dashboard-settings?update=${Date.now()}`, { cache: "no-store" });
+                if (ready.ok) {
+                  window.location.reload();
+                  return;
+                }
+              } catch (_err) {
+                // The ingress endpoint is expected to be unavailable while Supervisor replaces the add-on.
+              }
+              await sleep(1500);
+            }
+            window.location.reload();
+          };
+          reloadWhenReady();
           return data;
         },
         refreshDashboard,

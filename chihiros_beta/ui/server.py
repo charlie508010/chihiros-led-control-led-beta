@@ -176,7 +176,7 @@ class Handler(BaseHTTPRequestHandler):
             self.refresh_addon_update_source(self.read_json())
             return
         if request_path == "/api/addon-update":
-            self.restart_addon_for_source_update(self.read_json())
+            self.install_addon_source_update(self.read_json())
             return
         self.send_json(404, {"message": "Not found"})
 
@@ -504,8 +504,8 @@ class Handler(BaseHTTPRequestHandler):
                 results.append(f"{path}: nicht erlaubt ({err})")
         self.send_json(200, {"output": "\n".join(results)})
 
-    def restart_addon_for_source_update(self, body: bytes) -> None:
-        """Restart this add-on so run.sh clones the latest private source."""
+    def install_addon_source_update(self, body: bytes) -> None:
+        """Install an available Supervisor update, or refresh the runtime source as a fallback."""
         try:
             json.loads(body.decode("utf-8") or "{}")
         except json.JSONDecodeError:
@@ -517,28 +517,54 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             source_commit = github_source_commit()
-            supervisor_request("GET", "/addons/self/info", token)
+            for path in ("/store/reload", "/addons/reload"):
+                supervisor_request("POST", path, token)
+            response = supervisor_request("GET", "/addons/self/info", token)
         except ValueError as err:
             self.send_json(502, {"message": str(err)})
             return
 
+        info_obj = response.get("data") if isinstance(response.get("data"), dict) else response
+        info = info_obj if isinstance(info_obj, dict) else {}
+        slug = str(info.get("slug") or "").strip()
+        if not slug or not re.fullmatch(r"[a-z0-9_]+", slug):
+            self.send_json(502, {"message": "LED-Core-Add-on-Slug konnte nicht ermittelt werden"})
+            return
+        installed_version = str(info.get("version") or "").strip()
+        latest_version = str(info.get("version_latest") or "").strip()
+        update_available = info.get("update_available") is True or (
+            bool(installed_version and latest_version) and installed_version != latest_version
+        )
+        runtime_commit = str(os.environ.get("CHIHIROS_SOURCE_COMMIT") or "").strip()
+        action = "update" if update_available else "restart"
+        message = (
+            f"LED Core wird durch Supervisor von {installed_version or '?'} auf {latest_version or '?'} aktualisiert."
+            if update_available
+            else f"Keine neue Add-on-Version gemeldet. Laufzeit wird mit Git-Commit {source_commit} neu geladen."
+        )
+
         self.send_json(
             202,
             {
-                "status": "restarting",
+                "status": "updating" if update_available else "restarting",
+                "action": action,
                 "source_commit": source_commit,
-                "message": f"GitHub-Zugriff geprüft. LED Core wird mit Commit {source_commit} neu gestartet.",
+                "runtime_commit": runtime_commit,
+                "installed_version": installed_version,
+                "latest_version": latest_version,
+                "message": message,
             },
         )
 
-        def restart() -> None:
+        def apply_update() -> None:
             time.sleep(1)
             try:
-                supervisor_request("POST", "/addons/self/restart", token)
+                endpoint = f"/addons/{slug}/update" if update_available else "/addons/self/restart"
+                supervisor_request("POST", endpoint, token)
             except ValueError as err:
-                print(f"LED Core update restart failed: {err}")
+                print(f"LED Core update failed ({action}): {err}")
 
-        threading.Thread(target=restart, name="led-core-source-update", daemon=True).start()
+        threading.Thread(target=apply_update, name="led-core-source-update", daemon=True).start()
 
     def update_debug_output(self, state: object, label: str) -> str:
         lines = [label]
