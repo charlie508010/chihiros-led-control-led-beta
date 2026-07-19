@@ -196,7 +196,7 @@ def addon_info_is_installed(data: dict[str, object]) -> bool:
 def plugin_title() -> str:
     """Return the display title for this add-on."""
     titles = {
-        "core": "Chihiros Core",
+        "core": "LED Core",
         "doser": "Chihiros Doser",
         "ruehrer": "Chihiros Ruehrer",
         "heizer": "Chihiros Heizer",

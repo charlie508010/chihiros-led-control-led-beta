@@ -1,5 +1,5 @@
-name: Chihiros Core
-version: "0.2.1004"
+name: LED Core
+version: "0.2.1005"
 slug: chihiros_beta
 description: One Chihiros integration and dashboard for all supported devices
 url: https://github.com/charlie508010/chihiros-led-control-beta/tree/main/chihiros_beta
@@ -37,4 +37,4 @@ ingress_entry: /
 webui: http://[HOST]:[PORT:8099]/
 panel_admin: false
 panel_icon: mdi:fish
-panel_title: Chihiros Core
+panel_title: LED Core
