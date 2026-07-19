@@ -3,13 +3,14 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-LED_PANEL = ROOT / "custom_components/chihiros/www/panels/chihiros-led-panel.js"
-DASHBOARD = ROOT / "custom_components/chihiros/www/chihiros-led-core-card.js"
+LED_DASHBOARD = ROOT / "custom_components/chihiros/plugins/led/dashboard"
+LED_PANEL = LED_DASHBOARD / "panels/chihiros-led-panel.js"
+DASHBOARD = LED_DASHBOARD / "chihiros-led-core-card.js"
 ADDON_SERVER = ROOT / "chihiros_beta/ui/server.py"
 ADDON_INDEX = ROOT / "chihiros_beta/ui/index.html"
 ADDON_RUN = ROOT / "chihiros_beta/run.sh"
 ADDON_CONFIG = ROOT / "chihiros_beta/config.yaml"
-LED_SERVICES = ROOT / "custom_components/chihiros/packages/led/services.py"
+LED_SERVICES = ROOT / "custom_components/chihiros/plugins/led/services/runtime.py"
 
 
 def source(path: Path) -> str:
@@ -105,9 +106,11 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     """The separated LED integration must coexist with the combined Chihiros integration."""
     manifest = source(ROOT / "custom_components" / "chihiros" / "manifest.json")
     constants = source(ROOT / "custom_components" / "chihiros" / "const.py")
-    integration = source(ROOT / "custom_components" / "chihiros" / "__init__.py")
+    integration = source(
+        ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "integration.py"
+    )
     dashboard = source(DASHBOARD)
-    panel = source(ROOT / "custom_components" / "chihiros" / "www" / "chihiros-panel.js")
+    panel = source(LED_DASHBOARD / "chihiros-panel.js")
     run = source(ADDON_RUN)
 
     assert '"domain": "chihiros_led_core"' in manifest
@@ -309,7 +312,7 @@ def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -
 
 def test_scheduler_reset_debug_keeps_delete_and_verification_operations() -> None:
     """Reset diagnostics include delete frames as well as the final status query."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "led" / "services.py")
+    services = source(LED_SERVICES)
     reset_handler = services.split("async def async_reset_schedule", 1)[1].split("async def async_set_schedule", 1)[0]
 
     assert "debug_last_operation=False" in reset_handler
@@ -352,7 +355,7 @@ def test_new_scheduler_dialog_keeps_entered_times_while_sending() -> None:
 
 def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> None:
     """More than two rows use the device's two visible slots only for the delayed check."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "led" / "services.py")
+    services = source(LED_SERVICES)
 
     assert "await asyncio.sleep(60)" in services
     assert "initialize LED schedule storage" in services
@@ -366,7 +369,7 @@ def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> No
 
 def test_inactive_schedule_delete_only_removes_selected_row() -> None:
     """Deleting a row must not temporarily remove other stored schedules."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "led" / "services.py")
+    services = source(LED_SERVICES)
 
     assert "active = bool(call.data.get(ATTR_ACTIVE, True))" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
@@ -374,8 +377,8 @@ def test_inactive_schedule_delete_only_removes_selected_row() -> None:
 
 def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     """Two rows from one device must retain separate jobs and history results."""
-    services = source(ROOT / "custom_components" / "chihiros" / "packages" / "led" / "services.py")
-    storage = source(ROOT / "custom_components" / "chihiros" / "packages" / "led" / "storage.py")
+    services = source(LED_SERVICES)
+    storage = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "storage" / "runtime.py")
 
     assert "task_key = f\"{device_key}|{target['start']}|{target['end']}\"" in services
     assert "if not cancelled:" in services
@@ -576,7 +579,7 @@ def test_connection_panel_shows_runtime_sensor() -> None:
     assert '<p><b>BLE</b><span>${this.tr("ble_on_action")}</span></p>' not in panel
     assert 'data-action="led-notification-open"' in panel
     assert "ledNotificationDialog()" in panel
-    notification_ui = source(ROOT / "custom_components/chihiros/www/chihiros-notification-ui.js")
+    notification_ui = source(LED_DASHBOARD / "chihiros-notification-ui.js")
     assert "value.value_hex || value.frame || value.raw" in notification_ui
     assert "value.hex || value.parm || value.att_hex" in notification_ui
     assert "Array.isArray(attrs.notifications)" in panel

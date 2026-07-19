@@ -1,17 +1,5 @@
-"""The chihiros integration models."""
+"""Compatibility export for the LED runtime data model."""
 
-from __future__ import annotations
+from .plugins.led.models import ChihirosData
 
-from dataclasses import dataclass
-
-from .coordinator import ChihirosDataUpdateCoordinator
-from .runtime import ChihirosClient
-
-
-@dataclass
-class ChihirosData:
-    """Data for the chihiros integration."""
-
-    title: str
-    device: ChihirosClient
-    coordinator: ChihirosDataUpdateCoordinator
+__all__ = ["ChihirosData"]

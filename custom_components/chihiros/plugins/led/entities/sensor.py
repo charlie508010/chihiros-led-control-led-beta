@@ -18,7 +18,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ....const import DOMAIN
-from ....coordinator import (
+from ..coordinator import (
     ATTR_FIRMWARE_VERSION,
     ATTR_LAST_NOTIFICATION,
     ATTR_RECENT_NOTIFICATIONS,
@@ -28,9 +28,9 @@ from ....coordinator import (
     ATTR_SCHEDULE_POINTS,
     ChihirosDataUpdateCoordinator,
 )
-from ....entity import chihiros_device_info, chihiros_entity_name, chihiros_unique_id
-from ....models import ChihirosData
-from ....runtime import ChihirosClient
+from ..models import ChihirosData
+from ..runtime import ChihirosClient
+from .base import chihiros_device_info, chihiros_entity_name, chihiros_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 MAX_SENSOR_STATE_LENGTH = 255

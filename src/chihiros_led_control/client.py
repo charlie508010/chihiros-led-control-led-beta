@@ -1108,7 +1108,8 @@ class ChihirosDevice:
                     await asyncio.wait_for(self._schedule_notification_event.wait(), timeout=AUTH_NOTIFICATION_WAIT)
                 except TimeoutError as exc:
                     raise TimeoutError(
-                        f"No schedule snapshot notification received within {AUTH_NOTIFICATION_WAIT:.1f}s after authentication"
+                        "No schedule snapshot notification received within "
+                        f"{AUTH_NOTIFICATION_WAIT:.1f}s after authentication"
                     ) from exc
         if self._connection_prelude_commands:
             self._connection_prelude_commands_sent = True

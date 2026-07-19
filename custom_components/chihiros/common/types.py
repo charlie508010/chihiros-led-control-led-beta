@@ -1,12 +1,5 @@
-"""Shared typing helpers for internal device packages."""
+"""Compatibility export for LED service typing."""
 
-from __future__ import annotations
-
-from collections.abc import Callable
-from typing import Any, TypeAlias
-
-from ..models import ChihirosData
-
-ResolveDevice: TypeAlias = Callable[[dict[str, Any]], ChihirosData]
+from ..plugins.led.types import ResolveDevice
 
 __all__ = ["ResolveDevice"]

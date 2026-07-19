@@ -14,11 +14,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ....const import DOMAIN
-from ....coordinator import ChihirosDataUpdateCoordinator
-from ....entity import chihiros_device_info, chihiros_entity_name, chihiros_unique_id
-from ....models import ChihirosData
-from ....runtime import ChihirosClient
+from ..coordinator import ChihirosDataUpdateCoordinator
+from ..models import ChihirosData
+from ..runtime import ChihirosClient
 from ..services import async_enable_led_auto_mode
+from .base import chihiros_device_info, chihiros_entity_name, chihiros_unique_id
 
 _LOGGER = logging.getLogger(__name__)
 

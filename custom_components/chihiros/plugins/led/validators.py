@@ -7,9 +7,6 @@ from typing import Any
 
 from homeassistant.exceptions import HomeAssistantError
 
-from ...models import ChihirosData
-from ...vendor.chihiros_led_control.schedule_validation import normalize_schedule_weekdays
-from ...vendor.chihiros_led_control.weekday_encoding import WeekdaySelect
 from .const import (
     ATTR_BRIGHTNESS,
     ATTR_END,
@@ -17,6 +14,9 @@ from .const import (
     ATTR_START,
     ATTR_WEEKDAYS,
 )
+from .models import ChihirosData
+from .vendor.chihiros_led_control.schedule_validation import normalize_schedule_weekdays
+from .vendor.chihiros_led_control.weekday_encoding import WeekdaySelect
 
 
 def parse_schedule_time(value: str) -> datetime:

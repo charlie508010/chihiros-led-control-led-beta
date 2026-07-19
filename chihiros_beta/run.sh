@@ -57,7 +57,7 @@ export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8109}"
 cp -a /opt/chihiros-led-core-src/chihiros_beta/ui/. /opt/chihiros-led-core-ui/
 rm -rf /opt/chihiros-led-core-ui/dashboard
 mkdir -p /opt/chihiros-led-core-ui/dashboard
-cp -a /opt/chihiros-led-core-src/custom_components/chihiros/www/. /opt/chihiros-led-core-ui/dashboard/
+cp -a /opt/chihiros-led-core-src/custom_components/chihiros/plugins/led/dashboard/. /opt/chihiros-led-core-ui/dashboard/
 echo "Chihiros dashboard assets installed to add-on UI."
 
 if [[ "${INSTALL_INTEGRATION}" == "true" ]]; then

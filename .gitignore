@@ -170,6 +170,7 @@ scripts/deploy_gigapi.py
 
 # Repository-local temporary test files
 .tmp/
+.pytest-run-*/
 
 # Local safety backups
 backups/

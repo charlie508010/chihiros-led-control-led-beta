@@ -11,11 +11,9 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util import dt as dt_util
 
-from ....common.debug import make_service_result
-from ....common.service_runner import response_requested
-from ....common.types import ResolveDevice
 from ....const import DOMAIN
-from ....models import ChihirosData
+from ....core.diagnostics import make_service_result
+from ....core.services import response_requested
 from ..const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
@@ -46,6 +44,7 @@ from ..const import (
     SET_BRIGHTNESS_SCHEMA,
     SET_SCHEDULE_SCHEMA,
 )
+from ..models import ChihirosData
 from ..storage import (
     delete_led_schedule_rows,
     finish_led_schedule_verification,
@@ -55,6 +54,7 @@ from ..storage import (
     record_led_schedule_rows,
     save_led_schedule_verification_job,
 )
+from ..types import ResolveDevice
 from ..validators import (
     brightness_from_service_data,
     normalized_period_weekdays,

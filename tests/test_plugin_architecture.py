@@ -13,7 +13,7 @@ LED_PLUGIN = COMPONENT / "plugins" / "led"
 
 
 def _load_manifest_module():
-    path = COMPONENT / "plugin_loader" / "manifest.py"
+    path = COMPONENT / "core" / "plugin_loader" / "manifest.py"
     spec = importlib.util.spec_from_file_location("test_chihiros_plugin_manifest", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -42,13 +42,15 @@ def test_led_plugin_has_complete_manifest_and_isolated_subsystems() -> None:
 
 def test_integration_uses_led_plugin_as_canonical_domain_implementation() -> None:
     """Core runtime imports must resolve LED constants and services through the plugin."""
-    integration = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
+    integration = (LED_PLUGIN / "integration.py").read_text(encoding="utf-8")
+    domain_entrypoint = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
     light = (COMPONENT / "light.py").read_text(encoding="utf-8")
     sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     switch = (COMPONENT / "switch.py").read_text(encoding="utf-8")
 
-    assert "from .plugins.led.const import (" in integration
-    assert "from .plugins.led.services import async_update_led_services" in integration
+    assert "from .const import (" in integration
+    assert "from .services import async_update_led_services" in integration
+    assert "from .plugins.led.integration import (" in domain_entrypoint
     assert "from .plugins.led.services import async_enable_led_auto_mode" in switch
     assert ".packages.led" not in integration
     assert ".packages.led" not in switch

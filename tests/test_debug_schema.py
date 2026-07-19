@@ -1,7 +1,14 @@
 from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "custom_components" / "chihiros" / "debug_schema.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "custom_components"
+    / "chihiros"
+    / "core"
+    / "diagnostics"
+    / "schema.py"
+)
 SPEC = spec_from_file_location("debug_schema_test_module", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = module_from_spec(SPEC)

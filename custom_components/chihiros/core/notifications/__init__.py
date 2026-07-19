@@ -1,6 +1,6 @@
 """Shared notification polling and dispatch contracts for plugins."""
 
-from ...common.notification_poll import (
+from .runtime import (
     NOTIFICATION_POLL_GAP_SECONDS,
     NOTIFICATION_POLL_INTERVAL,
     NOTIFICATION_POLL_LAST_FINISHED,

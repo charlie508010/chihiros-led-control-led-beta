@@ -37,7 +37,7 @@ try:
     from homeassistant.helpers import storage, translation
     from homeassistant.util import dt as dt_util
 
-    import custom_components.chihiros as chihiros_integration
+    import custom_components.chihiros.plugins.led.integration as chihiros_integration
     from custom_components.chihiros import (
         ATTR_ADDRESS,
         ATTR_END,
@@ -64,8 +64,8 @@ except ImportError as err:
         allow_module_level=True,
     )
 
-from custom_components.chihiros.vendor.chihiros_led_control.models import RGB_CHANNELS, DeviceModel
-from custom_components.chihiros.vendor.chihiros_led_control.protocol import (
+from custom_components.chihiros.plugins.led.vendor.chihiros_led_control.models import RGB_CHANNELS, DeviceModel
+from custom_components.chihiros.plugins.led.vendor.chihiros_led_control.protocol import (
     ParsedNotification,
     RuntimeNotification,
     SchedulePoint,

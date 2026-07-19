@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import voluptuous as vol
 
-from ...vendor.chihiros_led_control.weekday_encoding import WeekdaySelect
+from .vendor.chihiros_led_control.weekday_encoding import WeekdaySelect
 
 SERVICE_ADD_SCHEDULE = "add_schedule"
 SERVICE_ENABLE_AUTO_MODE = "enable_auto_mode"
