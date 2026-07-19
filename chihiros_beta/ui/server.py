@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 
 def _load_normalize_protocol_debug_text():
-    source_root = Path(os.environ.get("CHIHIROS_SOURCE_ROOT", "/opt/chihiros-src"))
+    source_root = Path(os.environ.get("CHIHIROS_SOURCE_ROOT", "/opt/chihiros-led-core-src"))
     candidates = [
         Path(__file__).resolve().parents[2] / "custom_components" / "chihiros" / "debug_schema.py",
         source_root / "custom_components" / "chihiros" / "debug_schema.py",
@@ -55,8 +55,8 @@ def normalize_protocol_debug_text(value: str) -> str:
     return str(value or "").strip()
 
 
-ROOT = Path("/opt/chihiros-addon-ui")
-SOURCE_ROOT = Path(os.environ.get("CHIHIROS_SOURCE_ROOT", "/opt/chihiros-src"))
+ROOT = Path("/opt/chihiros-led-core-ui")
+SOURCE_ROOT = Path(os.environ.get("CHIHIROS_SOURCE_ROOT", "/opt/chihiros-led-core-src"))
 CONFIG_ROOT = Path(os.environ.get("HASS_CONFIG", "/config"))
 DEFAULT_STATE_DB_PATH = Path(
     os.environ.get("CHIHIROS_STATE_DB", str(CONFIG_ROOT / ".chihiros" / "chihiros_state.sqlite3"))
@@ -102,7 +102,8 @@ def plugin_title() -> str:
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/api/status":
+        request_path = f"/{parsed.path.lstrip('/')}"
+        if request_path == "/api/status":
             self.send_json(
                 200,
                 {
@@ -116,63 +117,64 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if parsed.path == "/api/dashboard-state":
+        if request_path == "/api/dashboard-state":
             self.send_json(200, build_dashboard_state())
             return
-        if parsed.path == "/api/ha-state":
+        if request_path == "/api/ha-state":
             params = parse_qs(parsed.query)
             self.read_ha_state(str((params.get("entity_id") or [""])[0]).strip())
             return
-        if parsed.path == "/api/dashboard-settings":
+        if request_path == "/api/dashboard-settings":
             self.send_json(200, dashboard_settings())
             return
-        if parsed.path == "/api/database-status":
+        if request_path == "/api/database-status":
             params = parse_qs(parsed.query)
             device = str((params.get("device") or [""])[0]).strip()
             self.send_json(200, database_diagnostics_status(device))
             return
-        if parsed.path == "/api/led-device-status":
+        if request_path == "/api/led-device-status":
             params = parse_qs(parsed.query)
             device = str((params.get("device") or [""])[0]).strip()
             self.send_json(200, {"status": led_device_status(device)})
             return
-        if parsed.path in ("/api/history", "/api/led-history"):
+        if request_path in ("/api/history", "/api/led-history"):
             params = parse_qs(parsed.query)
             device = str((params.get("device") or [""])[0]).strip()
             limit_text = str((params.get("limit") or ["200"])[0]).strip()
-            scope = "led" if parsed.path == "/api/led-history" else str((params.get("scope") or [""])[0]).strip()
+            scope = "led" if request_path == "/api/led-history" else str((params.get("scope") or [""])[0]).strip()
             try:
                 limit = max(1, min(500, int(limit_text)))
             except ValueError:
                 limit = 200
             self.send_json(200, {"entries": history_action_entries(device, limit, scope)})
             return
-        self.serve_static(parsed.path)
+        self.serve_static(request_path)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/api/ctl":
+        request_path = f"/{parsed.path.lstrip('/')}"
+        if request_path == "/api/ctl":
             self.run_ctl(self.read_json())
             return
-        if parsed.path == "/api/dashboard-settings":
+        if request_path == "/api/dashboard-settings":
             self.save_dashboard_settings(self.read_json())
             return
-        if parsed.path == "/api/ha-service":
+        if request_path == "/api/ha-service":
             self.call_ha_service(self.read_json())
             return
-        if parsed.path == "/api/led-schedule-local":
+        if request_path == "/api/led-schedule-local":
             self.save_led_schedule_local(self.read_json())
             return
-        if parsed.path == "/api/led-device-status":
+        if request_path == "/api/led-device-status":
             self.save_led_device_status(self.read_json())
             return
-        if parsed.path in ("/api/history", "/api/led-history"):
-            self.save_history(self.read_json(), default_scope="led" if parsed.path == "/api/led-history" else "")
+        if request_path in ("/api/history", "/api/led-history"):
+            self.save_history(self.read_json(), default_scope="led" if request_path == "/api/led-history" else "")
             return
-        if parsed.path == "/api/addon-refresh":
+        if request_path == "/api/addon-refresh":
             self.refresh_addon_update_source(self.read_json())
             return
-        if parsed.path == "/api/addon-update":
+        if request_path == "/api/addon-update":
             self.restart_addon_for_source_update(self.read_json())
             return
         self.send_json(404, {"message": "Not found"})
@@ -463,10 +465,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             result = subprocess.run(
                 parts,
-                cwd="/opt/chihiros-src",
+                cwd="/opt/chihiros-led-core-src",
                 env={
                     **os.environ,
-                    "PYTHONPATH": "/opt/chihiros-src/src:/opt/chihiros-src/custom_components/chihiros/vendor:/opt/chihiros-src",
+                    "PYTHONPATH": "/opt/chihiros-led-core-src/src:/opt/chihiros-led-core-src/custom_components/chihiros/vendor:/opt/chihiros-led-core-src",
                 },
                 text=True,
                 capture_output=True,
@@ -1526,7 +1528,7 @@ def sqlite_rows(query: str, params: tuple[object, ...] = ()) -> list[dict[str, o
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("CHIHIROS_UI_PORT") or "8099")
+    port = int(os.environ.get("CHIHIROS_UI_PORT") or "8109")
     threading.Thread(target=led_status_reconcile_loop, name="led-status-reconcile", daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"{plugin_title()} web UI listening on port {port}")

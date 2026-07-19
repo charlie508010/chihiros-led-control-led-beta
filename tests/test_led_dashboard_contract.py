@@ -26,10 +26,10 @@ def test_private_addon_update_restarts_into_latest_cloned_led_core() -> None:
     assert 'data-addon-update' in dashboard
     assert 'typeof api.runAddonUpdate !== "function"' in dashboard
     assert 'fetch("./api/addon-update"' in index
-    assert 'if parsed.path == "/api/addon-update":' in server
+    assert 'if request_path == "/api/addon-update":' in server
     assert 'supervisor_request("GET", "/addons/self/info", token)' in server
     assert 'supervisor_request("POST", f"/addons/{slug}/restart", token)' in server
-    assert "cp -a /opt/chihiros-src/chihiros_beta/ui/. /opt/chihiros-addon-ui/" in run
+    assert "cp -a /opt/chihiros-led-core-src/chihiros_beta/ui/. /opt/chihiros-led-core-ui/" in run
 
 
 def test_led_core_addon_ignores_a_persisted_legacy_source_repository() -> None:
@@ -50,6 +50,34 @@ def test_led_core_addon_uses_its_own_ingress_port() -> None:
     assert "ingress_port: 8109" in config
     assert "webui: http://[HOST]:[PORT:8109]/" in config
     assert 'export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8109}"' in run
+
+
+def test_led_core_server_accepts_double_slash_ingress_api_paths() -> None:
+    """Ingress may forward //api paths, which must reach the normal API handlers."""
+    server = source(ADDON_SERVER)
+
+    assert server.count('request_path = f"/{parsed.path.lstrip(\'/\')}"') == 2
+    assert 'if request_path == "/api/dashboard-state":' in server
+    assert 'if request_path == "/api/dashboard-settings":' in server
+    assert 'if request_path == "/api/ha-service":' in server
+
+
+def test_led_core_uses_dedicated_opt_paths() -> None:
+    """LED Core runtime files must not share generic paths with the combined add-on."""
+    dockerfile = source(ROOT / "chihiros_beta" / "Dockerfile")
+    run = source(ADDON_RUN)
+    server = source(ADDON_SERVER)
+    runner = source(ROOT / "chihiros_beta" / "ui" / "chihirosctl_runner.py")
+    combined = "\n".join((dockerfile, run, server, runner))
+
+    assert "/opt/chihiros-led-core-src" in combined
+    assert "/opt/chihiros-led-core-ui" in combined
+    assert "/opt/chihiros-led-core-venv" in combined
+    assert "/opt/chihiros-src" not in combined
+    assert "/opt/chihiros-addon-ui" not in combined
+    assert "/opt/chihiros-venv" not in combined
+    assert "Chihiros Beta add-on is running." not in run
+    assert 'os.environ.get("CHIHIROS_UI_PORT") or "8109"' in server
 
 
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:
@@ -269,7 +297,7 @@ def test_led_database_diagnostics_is_configurable_and_opens_from_control() -> No
     assert 'name="database_diagnostics_enabled"' in dashboard
     assert 'data.get("database_diagnostics_enabled") === "on"' in dashboard
     assert "fetch(`./api/database-status${suffix}`" in index
-    assert 'if parsed.path == "/api/database-status":' in server
+    assert 'if request_path == "/api/database-status":' in server
     assert "database_diagnostics_status(device)" in server
     assert '"database_diagnostics_enabled": bool(' in server
 

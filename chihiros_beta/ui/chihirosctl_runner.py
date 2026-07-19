@@ -7,7 +7,7 @@ from pathlib import Path
 
 
 def main() -> None:
-    source = Path("/opt/chihiros-src")
+    source = Path("/opt/chihiros-led-core-src")
     src = source / "src"
     vendor = source / "custom_components" / "chihiros" / "vendor"
     for path in (str(src), str(vendor), str(source)):
@@ -19,7 +19,7 @@ def main() -> None:
         runpy.run_module("chihiros_led_control.led_cli", run_name="__main__")
         return
 
-    print("No LED-only chihirosctl entrypoint found in /opt/chihiros-src.")
+    print("No LED-only chihirosctl entrypoint found in /opt/chihiros-led-core-src.")
     raise SystemExit(2)
 
 
