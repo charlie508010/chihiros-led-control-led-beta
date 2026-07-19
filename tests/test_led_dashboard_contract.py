@@ -137,6 +137,7 @@ def test_parallel_led_core_entities_accept_home_assistant_numeric_suffixes() -> 
     assert 'r"(?:_\\d+)?$"' in server
     assert '(red|green|blue|white)(?:_\\d+)?$' in panel
     assert 'const suffix = rawSuffix.replace(/_\\d+$/, "");' in panel
+    assert "isNonLedEntity" not in panel
 
 
 def test_channel_toggle_sends_distinct_on_off_values() -> None:

@@ -141,7 +141,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       .filter(([entityId, state]) => {
         if (!entityId.startsWith("light.")) return false;
         const attrs = state && state.attributes ? state.attributes : {};
-        if (isNonLedEntity(entityId, attrs)) return false;
         return Boolean(entityColor(entityId, attrs));
       })
       .map(([entityId, state]) => {
