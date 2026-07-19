@@ -31,6 +31,16 @@ def test_private_addon_update_restarts_into_latest_cloned_led_core() -> None:
     assert "cp -a /opt/chihiros-src/chihiros_beta/ui/. /opt/chihiros-addon-ui/" in run
 
 
+def test_led_core_addon_ignores_a_persisted_legacy_source_repository() -> None:
+    """An old add-on option must never load the former combined dashboard."""
+    run = source(ADDON_RUN)
+
+    assert 'CANONICAL_SOURCE_REPOSITORY="https://github.com/charlie508010/chihiros-led-control-led-beta.git"' in run
+    assert 'SOURCE_REPOSITORY="${CANONICAL_SOURCE_REPOSITORY}"' in run
+    assert '"CONFIGURED_SOURCE_REPOSITORY": str(' in run
+    assert "Ignoring legacy source_repository" in run
+
+
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:
     """Transient HA state updates and confirmation delays must not retarget LED actions."""
     dashboard = source(DASHBOARD)

@@ -2,7 +2,9 @@
 set -euo pipefail
 
 OPTIONS_FILE="/data/options.json"
-SOURCE_REPOSITORY="https://github.com/charlie508010/chihiros-led-control-led-beta.git"
+CANONICAL_SOURCE_REPOSITORY="https://github.com/charlie508010/chihiros-led-control-led-beta.git"
+SOURCE_REPOSITORY="${CANONICAL_SOURCE_REPOSITORY}"
+CONFIGURED_SOURCE_REPOSITORY="${CANONICAL_SOURCE_REPOSITORY}"
 SOURCE_BRANCH="main"
 GITHUB_TOKEN=""
 INSTALL_INTEGRATION="true"
@@ -15,7 +17,9 @@ import shlex
 from pathlib import Path
 data = json.loads(Path("/data/options.json").read_text())
 values = {
-    "SOURCE_REPOSITORY": str(data.get("source_repository", "https://github.com/charlie508010/chihiros-led-control-led-beta.git")),
+    "CONFIGURED_SOURCE_REPOSITORY": str(
+        data.get("source_repository", "https://github.com/charlie508010/chihiros-led-control-led-beta.git")
+    ),
     "SOURCE_BRANCH": str(data.get("source_branch", "main")),
     "GITHUB_TOKEN": str(data.get("github_token", "")),
     "INSTALL_INTEGRATION": str(data.get("install_integration", True)).lower(),
@@ -25,6 +29,11 @@ for key, value in values.items():
     print(f"{key}={shlex.quote(value)}")
 PY
 )"
+fi
+
+if [[ "${CONFIGURED_SOURCE_REPOSITORY}" != "${CANONICAL_SOURCE_REPOSITORY}" ]]; then
+  echo "Ignoring legacy source_repository '${CONFIGURED_SOURCE_REPOSITORY}'."
+  echo "LED Core always loads '${CANONICAL_SOURCE_REPOSITORY}'."
 fi
 
 rm -rf /opt/chihiros-src
