@@ -6,9 +6,12 @@ SPEC = spec_from_file_location("debug_schema_test_module", MODULE_PATH)
 assert SPEC and SPEC.loader
 MODULE = module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
-
 build_debug_sections = MODULE.build_debug_sections
+
+
 make_debug_data = MODULE.make_debug_data
+
+
 make_service_result = MODULE.make_service_result
 
 
@@ -69,32 +72,3 @@ def test_build_debug_sections_adds_copyable_led_schedule_examples() -> None:
     assert "debug: true" in doc
     assert "python -m chihiros_led_control.cli led add-schedule" in doc
     assert "--red 65 --green 40 --blue 65 --white 50" in doc
-
-
-def test_make_service_result_embeds_debug_data_only_when_requested() -> None:
-    payload = make_service_result(
-        service="set_doser_schedule",
-        ok=True,
-        send_status="ok",
-        send_detail="an Geraet gesendet",
-        debug=True,
-        device="Doser",
-        raw_debug="TX 1\nRX 1",
-        response={"ok": True},
-    )
-
-    assert payload["ok"] is True
-    assert payload["send_status"] == "ok"
-    assert "Service: chihiros.set_doser_schedule" in payload["debug_output"]
-    assert "Raw Debug\nTX 1\nRX 1" in payload["debug_output"]
-    assert payload["debug_data"]["sections"][1]["title"] == "Raw Debug"
-
-    payload_without_debug = make_service_result(
-        service="set_doser_schedule",
-        ok=True,
-        send_status="ok",
-        send_detail="an Geraet gesendet",
-        debug=False,
-    )
-    assert "debug_output" not in payload_without_debug
-    assert "debug_data" not in payload_without_debug

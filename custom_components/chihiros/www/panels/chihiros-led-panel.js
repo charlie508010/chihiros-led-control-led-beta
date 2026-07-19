@@ -87,19 +87,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const colorOrder = new Map(colorMap.map(([key], index) => [key, index]));
     const supportedColors = new Set(colorMap.map(([key]) => key));
     const devicePattern = /^(light|switch|sensor)\.([a-z0-9]*[0-9a-f]{12})_(.+)$/;
-    const nonLedDeviceKeys = ["doser", "dosing", "dose", "dydose", "dytdos", "pump", "mixer", "dymix", "stirrer", "ruehrer", "rührer", "magstirrer", "mag_stirrer"];
-    const isNonLedEntity = (entityId, attrs = {}) => {
-      const text = [
-        entityId,
-        attrs.friendly_name,
-        attrs.device_class,
-        attrs.device_name,
-        attrs.model,
-        attrs.model_name,
-        attrs.device_model,
-      ].filter(Boolean).join(" ").toLowerCase();
-      return nonLedDeviceKeys.some((key) => text.includes(key));
-    };
     const deviceAddress = (slug) => {
       const hex = String(slug || "").match(/[0-9a-f]{12}$/i);
       return hex ? hex[0].match(/.{1,2}/g).join(":").toUpperCase() : "";
@@ -115,7 +102,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const match = String(entityId).toLowerCase().match(devicePattern);
       if (!match) return;
       const attrs = state && state.attributes ? state.attributes : {};
-      if (isNonLedEntity(entityId, attrs)) return;
       const [, domain, deviceSlug, suffix] = match;
       if (!groups.has(deviceSlug)) {
         groups.set(deviceSlug, {
@@ -214,16 +200,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   isLedDeviceConfig(device = {}) {
-    const text = [
-      device.id,
-      device.label,
-      device.name,
-      device.model,
-      device.address,
-      ...(Array.isArray(device.channels) ? device.channels.map((channel) => `${channel.name || ""} ${channel.entity || ""}`) : []),
-    ].filter(Boolean).join(" ");
-    return !["doser", "dosing", "dose", "dydose", "dytdos", "pump", "mixer", "dymix", "stirrer", "ruehrer", "rührer", "magstirrer", "mag_stirrer"]
-      .some((key) => text.toLowerCase().includes(key));
+    return Boolean(device.address || (Array.isArray(device.channels) && device.channels.length));
   }
 
   resolveLedMaxBrightness(device = {}) {
@@ -401,7 +378,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         <button type="button" data-led-device="${this.escapeHtml(device.id)}" class="${device.id === this.activeLedDeviceId ? "active" : ""}">
           ${this.escapeHtml(device.label || device.name)}
         </button>`).join("");
-    return `<nav class="doser-device-tabs" aria-label="LED ${this.escapeHtml(this.tr("device"))}">${tabs}</nav>`;
+    return `<nav class="led-device-tabs" aria-label="LED ${this.escapeHtml(this.tr("device"))}">${tabs}</nav>`;
   }
 
   ledManualScheduleWarningKey() {

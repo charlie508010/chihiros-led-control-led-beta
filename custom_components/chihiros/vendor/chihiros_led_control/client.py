@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import io
 import logging
 from collections.abc import Callable, Mapping, Sequence
-from datetime import datetime, time
-from typing import Any
+from datetime import datetime
 
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
@@ -45,9 +42,7 @@ from .protocol import (
     RuntimeNotification,
     ScheduleSnapshotNotification,
     calculate_checksum,
-    ml_from_25_6,
     next_message_id,
-    parse_doser_totals_frame,
     parse_notification,
 )
 from .weekday_encoding import WeekdaySelect, encode_selected_weekdays
@@ -91,7 +86,6 @@ class ChihirosDevice:
         self.tx_debug_frames: list[bytes] = []
         self.debug_frames: list[dict[str, object]] = []
         self._last_operation_debug_range: tuple[int, int, int, int, int, int] | None = None
-        self.last_doser_totals: list[float] | None = None
         self._last_characteristic_summary = ""
         self._tx_debug_counter = 0
         self._connection_prelude_mode = "standard"
@@ -713,32 +707,9 @@ class ChihirosDevice:
             if levels and all(level == 255 for level in levels):
                 return f"LED-Zeitplan deaktivieren {start}-{end}, Ramp={ramp} min, Wochentage={weekdays}"
             return f"LED-Zeitplan schreiben {start}-{end}, Ramp={ramp} min, Wochentage={weekdays}"
-        if cmd_id == 165 and mode == 4 and len(params) == 1:
-            return f"Doser-Dialog-Bestätigung Befehl={params[0]}"
-        if cmd_id == 165 and mode == 20 and len(params) >= 3:
-            return f"Ruehrer Power {'an' if params[2] else 'aus'}"
-        if cmd_id == 165 and mode == 21 and len(params) >= 6:
-            return f"Timer CH{params[0] + 1}: timer_type={params[1]}, {params[2]:02d}:{params[3]:02d}"
-        if cmd_id == 165 and mode == 27 and len(params) == 5 and params[1] == 0 and params[2] == 0:
-            ml = params[3] * 25.6 + params[4] / 10.0
-            return f"manuelle Dosierung CH{params[0] + 1}: {ml:.1f} ml"
-        if cmd_id == 165 and mode == 27 and len(params) >= 6:
-            enabled = "aktiv" if params[2] else "inaktiv"
-            weekdays = self._weekday_mask_text(params[1])
-            ml = params[4] * 25.6 + params[5] / 10.0
-            return f"Zeitplan CH{params[0] + 1}: {enabled}, weekdays={weekdays}, flag={params[3]}, {ml:.1f} ml"
-        if cmd_id == 165 and mode == 32 and len(params) >= 3:
-            active = "aktiv" if params[2] else "inaktiv"
-            return f"Auto/Schedule CH{params[0] + 1}: {active}, catch_up={params[1]}"
-        if cmd_id == 165 and mode == 42 and len(params) >= 4:
-            return f"Ruehrer Laufzeit/Staerke CH{params[0] + 1}: {params[2]} min, {params[3]}%"
         return ""
 
     def _describe_rx_frame(self, payload: bytes) -> list[str]:
-        if isinstance(self, ChihirosDosingPump) and len(payload) >= 7 and payload[0] == 0x5B and payload[5] == 0xFE:
-            doser_status = self._describe_doser_status_snapshot(list(payload[6:-1]))
-            if doser_status:
-                return doser_status
         if len(payload) >= 7 and payload[0] == 0x5B and payload[5] == 0xFE:
             schedule_curve = self._describe_schedule_curve_snapshot(payload)
             if schedule_curve:
@@ -754,62 +725,7 @@ class ChihirosDevice:
                 level = next(iter(point.levels.values()), 0)
                 lines.append(f"#{index}: {point.hour:02d}:{point.minute:02d} Level={level}%")
             return lines
-        doser_totals = parse_doser_totals_frame(payload)
-        if doser_totals is not None:
-            totals = ", ".join(f"CH{index}={value:.1f} ml" for index, value in enumerate(doser_totals, start=1))
-            if payload[5] == 0x22:
-                return [f"Doser Auto-Tageswerte (bestaetigt) {totals}"]
-            if payload[5] == 0x1E:
-                return [f"Doser Status-/Summenwerte (kein bestaetigter Tageszaehler) {totals}"]
-            return [f"Doser Antwort 0x{payload[5]:02X} (kein bestaetigter Tageszaehler) {totals}"]
         return []
-
-    @staticmethod
-    def _describe_doser_status_snapshot(params: list[int]) -> list[str]:
-        """Decode the confirmed Doser-specific 0xFE channel-block layout."""
-        if len(params) < 43:
-            return []
-        lines = [
-            "Doser-Status-Snapshot 0xFE",
-            f"Header/Status={params[0:3]} (Bitbelegung offen)",
-        ]
-        block_starts = (3, 12, 21, 30)
-        kind_by_marker = {
-            0: "Einzeldosis",
-            1: "24h/Intervall",
-            2: "Timerliste",
-            3: "Benutzerdefiniert",
-        }
-        for channel_index, block_start in enumerate(block_starts):
-            marker = params[block_start]
-            daily_ml = ml_from_25_6(params[block_start + 7], params[block_start + 8])
-            amount_whole_ml = params[39 + channel_index]
-            status = (
-                "inaktiv/leer"
-                if marker == 4
-                else kind_by_marker.get(marker, "Art unbekannt")
-            )
-            details = [f"CH{channel_index + 1}: {status}", f"marker={marker}"]
-            if marker == 0:
-                hour, minute = params[block_start + 1 : block_start + 3]
-                if 0 <= hour <= 23 and 0 <= minute <= 59:
-                    details.append(f"Zeit={hour:02d}:{minute:02d}")
-            elif marker in (2, 3):
-                times = []
-                for offset in (1, 3, 5):
-                    hour, minute = params[block_start + offset : block_start + offset + 2]
-                    if 0 <= hour <= 23 and 0 <= minute <= 59 and (hour or minute):
-                        times.append(f"{hour:02d}:{minute:02d}")
-                if times:
-                    details.append(f"Zeiten={','.join(times)}")
-            details.extend(
-                [
-                    f"Planmenge-Ganzzahl={amount_whole_ml} ml",
-                    f"Auto-heute={daily_ml:.1f} ml",
-                ]
-            )
-            lines.append(", ".join(details))
-        return lines
 
     @staticmethod
     def _describe_schedule_curve_snapshot(payload: bytes) -> list[str]:
@@ -979,9 +895,6 @@ class ChihirosDevice:
                 "payload": bytes(data),
             }
         )
-        doser_totals = parse_doser_totals_frame(data)
-        if doser_totals is not None:
-            self.last_doser_totals = doser_totals
         parsed = parse_notification(data, self.model.color_channels)
         if isinstance(parsed, RuntimeNotification):
             self.last_runtime_notification = parsed
@@ -1155,13 +1068,6 @@ class ChihirosDevice:
                     commands.create_set_date_command(self.get_next_msg_id(), timestamp),
                 ]
             )
-        elif self._connection_prelude_mode == "doser_manual":
-            prelude.extend(
-                [
-                    commands.create_set_time_command(self.get_next_msg_id(), timestamp),
-                    commands.create_doser_year_command(self.get_next_msg_id(), timestamp),
-                ]
-            )
         else:
             prelude.extend(
                 [
@@ -1261,395 +1167,3 @@ class ChihirosDevice:
             except BleakError:
                 self._logger.debug("%s: Failed to stop notifications", self.name, exc_info=True)
         await client.disconnect()
-
-
-class ChihirosDosingPump(ChihirosDevice):
-    """Concrete BLE client for a Chihiros dosing pump."""
-
-    async def dose_ml(self, pump_idx: int, volume_ml: float) -> None:
-        """Trigger an immediate manual dose on one pump channel."""
-        try:
-            self._connection_prelude_mode = "doser_manual"
-            await self._ensure_connected()
-            prelude_commands = [
-                commands.create_dose_auth_1_command(self.get_next_msg_id()),
-                commands.create_dose_auth_2_command(self.get_next_msg_id()),
-            ]
-            manual_command = commands.create_manual_dose_command(self.get_next_msg_id(), pump_idx, volume_ml)
-            for command in prelude_commands:
-                await self._send_command_while_connected([command], 3)
-                await asyncio.sleep(0.15)
-            await asyncio.sleep(0.5)
-            await asyncio.sleep(8.0)
-            await self._send_command_while_connected([manual_command], 3)
-        finally:
-            self._connection_prelude_mode = "standard"
-            await self._execute_disconnect()
-
-    async def set_schedule_active(self, pump_idx: int, active: bool, catch_up_missed: int = 0) -> None:
-        """Enable or disable one dosing pump schedule."""
-        command = commands.create_doser_schedule_active_command(
-            self.get_next_msg_id(),
-            pump_idx,
-            active,
-            catch_up_missed,
-        )
-        await self._send_command(command, 3)
-
-    async def add_schedule(
-        self,
-        pump_idx: int,
-        schedule_time: time,
-        dose_ml: float,
-        weekdays_mask: int = 0x7F,
-        active: bool = True,
-        next_day_flag: bool = False,
-    ) -> None:
-        """Send a single-dose schedule using the sequence observed in the app."""
-        for attempt in range(2):
-            async with self._operation_lock:
-                try:
-                    await self._send_single_dose_schedule_once(
-                        pump_idx,
-                        schedule_time,
-                        dose_ml,
-                        weekdays_mask,
-                        active,
-                        next_day_flag,
-                    )
-                    return
-                except BLEAK_EXCEPTIONS:
-                    if attempt:
-                        raise
-                    self._logger.debug(
-                        "%s: Doser schedule send lost its BLE connection; restarting the app sequence once",
-                        self.name,
-                        exc_info=True,
-                    )
-                finally:
-                    self._connection_prelude_mode = "standard"
-                    await self._execute_disconnect()
-
-    async def _send_single_dose_schedule_once(
-        self,
-        pump_idx: int,
-        schedule_time: time,
-        dose_ml: float,
-        weekdays_mask: int,
-        active: bool,
-        next_day_flag: bool,
-    ) -> None:
-        """Send one connected attempt of the app-observed single-dose sequence."""
-        self._connection_prelude_mode = "doser_manual"
-        await self._ensure_connected()
-        auth_1 = commands.create_dose_auth_1_command(self.get_next_msg_id())
-        auth_2 = commands.create_dose_auth_2_command(self.get_next_msg_id())
-        active_command = commands.create_doser_schedule_active_command(self.get_next_msg_id(), pump_idx, active)
-        amount_command = commands.create_doser_schedule_amount_command(
-            self.get_next_msg_id(),
-            pump_idx,
-            weekdays_mask,
-            dose_ml,
-            active=active,
-            next_day_flag=next_day_flag,
-        )
-        time_command = commands.create_doser_schedule_time_command(
-            self.get_next_msg_id(),
-            pump_idx,
-            schedule_time,
-            timer_type=0,
-        )
-
-        await asyncio.sleep(0.4)
-        await self._send_command_while_connected_once([auth_1])
-        await asyncio.sleep(0.12)
-        await self._send_command_while_connected_once([auth_2])
-        await asyncio.sleep(12.9)
-        await self._send_command_while_connected_once([active_command])
-        await asyncio.sleep(0.175)
-        await self._send_command_while_connected_once([amount_command])
-        await asyncio.sleep(0.143)
-        await self._send_command_while_connected_once([time_command])
-
-    async def _send_command_while_connected_once(self, commands_to_send: list[bytes]) -> None:
-        """Write one step while the caller holds the operation lock."""
-        self._logger.debug(
-            "%s: Sending commands %s",
-            self.name,
-            [command.hex() for command in commands_to_send],
-        )
-        await self._execute_command_locked(commands_to_send)
-
-    async def add_interval_schedule(
-        self,
-        pump_idx: int,
-        interval_minutes: int,
-        dose_ml: float,
-        weekdays_mask: int = 0x7F,
-        active: bool = True,
-        next_day_flag: bool = False,
-    ) -> None:
-        """Send a Doser 24h interval schedule."""
-        if not 0 <= interval_minutes <= 59:
-            raise ValueError("interval_minutes must be 0..59")
-        schedule_time = time(0, interval_minutes)
-        for attempt in range(2):
-            commands_to_send = [
-                commands.create_dose_auth_1_command(self.get_next_msg_id()),
-                commands.create_dose_auth_2_command(self.get_next_msg_id()),
-                commands.create_doser_schedule_amount_command(
-                    self.get_next_msg_id(),
-                    pump_idx,
-                    weekdays_mask,
-                    dose_ml,
-                    active=active,
-                    next_day_flag=next_day_flag,
-                ),
-                commands.create_doser_schedule_time_command(
-                    self.get_next_msg_id(),
-                    pump_idx,
-                    schedule_time,
-                    timer_type=1,
-                ),
-            ]
-            try:
-                await self._send_command(commands_to_send, 3)
-                return
-            except BLEAK_EXCEPTIONS:
-                if attempt:
-                    raise
-                self._logger.debug(
-                    "%s: Doser interval send lost BLE authorization; reconnecting once",
-                    self.name,
-                    exc_info=True,
-                )
-
-    async def read_doser_notifications(self, notification_wait: float = 5.0) -> None:
-        """Open the app-like Doser dialog and collect its notification burst."""
-        wait_seconds = max(0.0, float(notification_wait))
-        for attempt in range(2):
-            async with self._operation_lock:
-                try:
-                    self._connection_prelude_mode = "doser_manual"
-                    await self._ensure_connected()
-                    auth_1 = commands.create_dose_auth_1_command(self.get_next_msg_id())
-                    auth_2 = commands.create_dose_auth_2_command(self.get_next_msg_id())
-                    await asyncio.sleep(0.4)
-                    await self._send_command_while_connected_once([auth_1])
-                    await asyncio.sleep(0.12)
-                    await self._send_command_while_connected_once([auth_2])
-                    await asyncio.sleep(wait_seconds)
-                    return
-                except BLEAK_EXCEPTIONS:
-                    if attempt:
-                        raise
-                    self._logger.debug(
-                        "%s: Doser notification read lost its BLE connection; restarting once",
-                        self.name,
-                        exc_info=True,
-                    )
-                finally:
-                    self._connection_prelude_mode = "standard"
-                    await self._execute_disconnect()
-
-    async def read_auto_totals(self, mode: int = 0x34, *, clear_notifications: bool = True) -> list[float] | None:
-        """Read Doser automatic daily totals if the device reports them."""
-        if clear_notifications:
-            self.raw_notifications.clear()
-            self.debug_frames.clear()
-        self.last_doser_totals = None
-        await self._send_command(commands.create_doser_totals_query_command(self.get_next_msg_id(), mode), 3, 1.5)
-        return self.last_doser_totals
-
-    async def read_auto_totals_via_dialog(
-        self,
-        mode: int = 0x22,
-        *,
-        clear_notifications: bool = True,
-    ) -> list[float] | None:
-        """Read Doser automatic daily totals using the app-like auth dialog."""
-        if clear_notifications:
-            self.raw_notifications.clear()
-            self.debug_frames.clear()
-        self.last_doser_totals = None
-        commands_to_send = [
-            commands.create_dose_auth_1_command(self.get_next_msg_id()),
-            commands.create_dose_auth_2_command(self.get_next_msg_id()),
-            commands.create_doser_totals_query_command(self.get_next_msg_id(), mode),
-        ]
-        await self._send_command(commands_to_send, 3, 2.0)
-        return self.last_doser_totals
-
-
-class DoserScheduleError(RuntimeError):
-    """Raised when schedule programming fails while preserving debug output."""
-
-    def __init__(self, message: str, debug_output: str = "") -> None:
-        super().__init__(message)
-        self.debug_output = debug_output
-
-
-async def add_doser_schedule(
-    *,
-    ble_device: Any,
-    address: str,
-    ch_id: int,
-    ch_ml: float,
-    schedule_kind: str,
-    schedule_time: str,
-    interval_minutes: int | None = None,
-    weekdays_mask: int = 0x7F,
-    valid_from_tomorrow: bool = False,
-    debug: bool = False,
-) -> str:
-    """Program one Doser schedule using the native client implementation."""
-    dev = ChihirosDosingPump(ble_device)
-    if debug:
-        dev.set_log_level(logging.DEBUG)
-        dev.clear_debug_buffers()
-    try:
-        if schedule_kind == "interval":
-            if float(ch_ml) < 5.0:
-                raise ValueError("Intervall-Zeitplaene brauchen mindestens 5.0 mL")
-            await dev.add_interval_schedule(
-                int(ch_id),
-                max(0, min(59, int(interval_minutes if interval_minutes is not None else 0))),
-                float(ch_ml),
-                weekdays_mask=int(weekdays_mask),
-                active=True,
-                next_day_flag=bool(valid_from_tomorrow),
-            )
-        else:
-            hour, minute = [int(part) for part in str(schedule_time).split(":", 1)]
-            await dev.add_schedule(
-                int(ch_id),
-                time(hour, minute),
-                float(ch_ml),
-                weekdays_mask=int(weekdays_mask),
-                active=True,
-                next_day_flag=bool(valid_from_tomorrow),
-            )
-        tx_commands = {0xA5} if schedule_kind == "interval" else {0x5A, 0xA5}
-        return dev.render_protocol_debug(tx_commands=tx_commands, rx_modes={0x22}, dedupe_rx=True) if debug else ""
-    except Exception as ex:
-        tx_commands = {0xA5} if schedule_kind == "interval" else {0x5A, 0xA5}
-        debug_output = (
-            dev.render_protocol_debug(tx_commands=tx_commands, rx_modes={0x22}, dedupe_rx=True) if debug else ""
-        )
-        error_text = str(ex).strip() or type(ex).__name__
-        if debug_output:
-            debug_output = f"{debug_output}\n\nERROR: {type(ex).__name__}: {error_text}"
-            details = getattr(dev, "_last_characteristic_summary", "") or "keine GATT-Details vom Client gesetzt"
-            debug_output = f"{debug_output}\n\nDebug Marker: gatt-diagnostics-v2\nGATT Diagnose:\n{details}"
-        raise DoserScheduleError(error_text, debug_output) from ex
-    finally:
-        await dev.disconnect()
-
-
-async def read_doser_auto_totals(
-    *,
-    ble_device: Any,
-    address: str,
-    mode_5b: int = 0x1E,
-    timeout_s: float = 8.0,
-    debug: bool = False,
-) -> tuple[list[float], str]:
-    """Read automatic daily totals from the physical doser."""
-    output = io.StringIO()
-    dev = ChihirosDosingPump(ble_device)
-    if debug:
-        dev.set_log_level(logging.DEBUG)
-    try:
-        with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
-            print(
-                "HA Doser Daily Debug:",
-                f"address={address}",
-                f"mode=0x{int(mode_5b):02X}",
-                f"timeout={float(timeout_s):.1f}",
-            )
-            values = await asyncio.wait_for(dev.read_auto_totals(mode_5b), timeout=float(timeout_s))
-            if values is None:
-                values = await asyncio.wait_for(
-                    dev.read_auto_totals_via_dialog(mode_5b, clear_notifications=False),
-                    timeout=float(timeout_s),
-                )
-            if values is None:
-                raise TimeoutError("Keine Tageswerte vom Geraet empfangen")
-            values = [round(float(value), 1) for value in values[:4]]
-            if debug:
-                for index, payload in enumerate(dev.raw_notifications, start=1):
-                    print(f"RX {index}: {payload.hex(' ')}")
-            print("Auto Tageswerte:", ", ".join(f"CH{idx + 1}={value:.1f} mL" for idx, value in enumerate(values)))
-            print("OK: daily totals read")
-            return values, output.getvalue()
-    except Exception as ex:
-        debug_output = output.getvalue()
-        if debug_output:
-            debug_output = f"{debug_output}\nERROR: {type(ex).__name__}: {ex}"
-            details = getattr(dev, "_last_characteristic_summary", "") or "keine GATT-Details vom Client gesetzt"
-            debug_output = f"{debug_output}\n\nDebug Marker: gatt-diagnostics-v2\nGATT Diagnose:\n{details}"
-        raise DoserScheduleError(str(ex), debug_output) from ex
-    finally:
-        await dev.disconnect()
-
-
-class ChihirosMagStirrer(ChihirosDevice):
-    """Concrete BLE client for a Chihiros MagStirrer/Ruehrer."""
-
-    async def set_power(self, on: bool) -> None:
-        """Set the MagStirrer run/power candidate state."""
-        commands_to_send = []
-        if on:
-            commands_to_send.extend(
-                [
-                    commands.create_doser_order_confirmation(self.get_next_msg_id(), 90, 4, 1),
-                    commands.create_doser_set_time_command(self.get_next_msg_id()),
-                ]
-            )
-        commands_to_send.append(commands.create_magstirrer_power_command(self.get_next_msg_id(), on))
-        await self._send_command(commands_to_send, 3)
-
-    async def run_for(self, seconds: int) -> None:
-        """Hold the MagStirrer run command for a number of seconds."""
-        await self.set_power(True)
-        await asyncio.sleep(seconds)
-        await self.set_power(False)
-
-    async def set_auto_mode(self, channel_idx: int, active: bool, catch_up: int = 0) -> None:
-        """Enable or disable a MagStirrer channel schedule."""
-        command = commands.create_magstirrer_auto_mode_command(
-            self.get_next_msg_id(),
-            channel_idx,
-            active,
-            catch_up,
-        )
-        await self._send_command(command, 3)
-
-    async def set_runtime_speed(self, channel_idx: int, runtime_minutes: int, speed_percent: int) -> None:
-        """Set MagStirrer runtime and speed."""
-        command = commands.create_magstirrer_runtime_speed_command(
-            self.get_next_msg_id(),
-            channel_idx,
-            runtime_minutes,
-            speed_percent,
-        )
-        await self._send_command(command, 3)
-
-    async def set_timers(
-        self,
-        channel_idx: int,
-        entries: Sequence[tuple[time, int]],
-        active: bool = True,
-        catch_up: int = 0,
-    ) -> None:
-        """Set MagStirrer timer entries."""
-        commands_to_send = [
-            commands.create_doser_order_confirmation(self.get_next_msg_id(), 90, 4, 1),
-            commands.create_doser_set_time_command(self.get_next_msg_id()),
-            commands.create_magstirrer_auto_mode_command(self.get_next_msg_id(), channel_idx, active, catch_up),
-        ]
-        if active:
-            commands_to_send.append(
-                commands.create_magstirrer_timer_command(self.get_next_msg_id(), channel_idx, entries)
-            )
-        await self._send_command(commands_to_send, 3)

@@ -1,123 +1,563 @@
-import "./chihiros-notification-ui.js?v=0.1.0";
-import "./panels/chihiros-led-panel.js?v=0.2.1010";
+import "./chihiros-notification-ui.js?v=0.1.1";
+import "./panels/chihiros-led-panel.js?v=0.2.1011";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
     this.config = config || {};
-    this.attachPluginMethods("doser");
-    const defaultChannels = this.config.channels || [
-      { id: 1, name: "Nitrat", color: "#2ea8ff" },
-      { id: 2, name: "Phosphat", color: "#39d353" },
-      { id: 3, name: "Eisen", color: "#ff9300" },
-      { id: 4, name: "Kalium", color: "#a855f7" },
-    ];
-    this.baseChannels = Array.isArray(defaultChannels) && defaultChannels.length ? defaultChannels : [];
-    this.channels = this.baseChannels.map((channel) => ({ ...channel }));
     const previousLedDeviceId = this.activeLedDeviceId || "";
     const previousLedDevice = this.activeLedDevice || null;
     this.ledDevices = this.resolveLedDevices();
-    const selectedLedDevice = this.ledDevices.find((device) => String(device.id) === String(previousLedDeviceId));
+    const selectedLedDevice = this.ledDevices.find(
+      (device) => String(device.id) === String(previousLedDeviceId),
+    );
     if (selectedLedDevice) {
       this.applyLedDevice(previousLedDeviceId, false);
     } else if (previousLedDeviceId && previousLedDevice) {
       this.ledDevices = [...this.ledDevices, previousLedDevice];
     } else {
       this.activeLedDeviceId = (this.ledDevices[0] && this.ledDevices[0].id) || "";
-      this.applyLedDevice(this.activeLedDeviceId);
+      this.applyLedDevice(this.activeLedDeviceId, false);
     }
     this.uiSettings = this.loadUiSettings();
-    this.uiSettings.plugins = this.uiSettings.plugins || {};
     this.applyChannelNames();
+    this.activeTab = this.enabledCoreTabs().includes(this.uiSettings.activeTab)
+      ? this.uiSettings.activeTab
+      : this.enabledCoreTabs()[0];
     this.dialogState = this.dialogState || null;
     this.ledScheduleEditorOpen = Boolean(this.ledScheduleEditorOpen);
-    this.activeTab = this.ensureEnabledTab(this.uiSettings.activeTab || this.activeTab || this.config.default_tab || "doser");
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (typeof this.resolveLedDevices === "function") {
-      const previousLedDeviceId = this.activeLedDeviceId || "";
-      const previousLedDevice = this.activeLedDevice || null;
-      this.ledDevices = this.resolveLedDevices();
-      const stillAvailable = this.ledDevices.some((device) => String(device.id) === String(previousLedDeviceId));
-      if (stillAvailable) {
-        this.activeLedDeviceId = previousLedDeviceId;
-        if (typeof this.applyLedDevice === "function") this.applyLedDevice(this.activeLedDeviceId, false);
-      } else if (!previousLedDeviceId) {
-        this.activeLedDeviceId = (this.ledDevices[0] && this.ledDevices[0].id) || "";
-        if (typeof this.applyLedDevice === "function") this.applyLedDevice(this.activeLedDeviceId, false);
-      } else if (previousLedDevice) {
-        this.ledDevices = [...this.ledDevices, previousLedDevice];
-      }
+    const previousLedDeviceId = this.activeLedDeviceId || "";
+    const previousLedDevice = this.activeLedDevice || null;
+    this.ledDevices = this.resolveLedDevices();
+    const stillAvailable = this.ledDevices.some(
+      (device) => String(device.id) === String(previousLedDeviceId),
+    );
+    if (stillAvailable) {
+      this.activeLedDeviceId = previousLedDeviceId;
+      this.applyLedDevice(this.activeLedDeviceId, false);
+    } else if (!previousLedDeviceId) {
+      this.activeLedDeviceId = (this.ledDevices[0] && this.ledDevices[0].id) || "";
+      this.applyLedDevice(this.activeLedDeviceId, false);
+    } else if (previousLedDevice) {
+      this.ledDevices = [...this.ledDevices, previousLedDevice];
     }
-    if (this.dialogState) return;
-    this.render();
+    if (!this.dialogState) this.render();
   }
 
   connectedCallback() {
-    if (!this.__ledChannelHistoryCaptureBound) {
-      this.__ledChannelHistoryCaptureBound = true;
-      const openLedChannelHistory = (ev) => {
-        const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
-        const button = path.find((node) => node && typeof node.hasAttribute === "function" && node.hasAttribute("data-led-channel-history"))
-          || (ev.target && typeof ev.target.closest === "function" ? ev.target.closest("[data-led-channel-history]") : null);
-        if (!button) return;
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        this.activeTab = "led";
-        this.ledScheduleEditorOpen = false;
-        this.dialogState = {
-          type: "led-history",
-          channel: Number(button.getAttribute("data-led-channel-history") || 1),
-        };
+    this.render();
+  }
+
+  loadUiSettings() {
+    const defaults = {
+      language: String(this.config?.language || "").toLowerCase().startsWith("en") ? "en" : "de",
+      showMac: this.config?.show_mac !== false,
+      dashboardDebug: false,
+      activeTab: "led",
+      channelNames: {},
+    };
+    try {
+      const raw = window.localStorage.getItem(this.uiSettingsKey());
+      return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+    } catch (_err) {
+      return defaults;
+    }
+  }
+
+  enabledCoreTabs() {
+    const configured = Array.isArray(this.config?.enabled_tabs) ? this.config.enabled_tabs : ["led", "config"];
+    const enabled = configured
+      .map((tab) => String(tab || "").trim())
+      .filter((tab, index, tabs) => ["led", "config"].includes(tab) && tabs.indexOf(tab) === index);
+    return enabled.length ? enabled : ["led"];
+  }
+
+  coreTabIcon(tab) {
+    if (tab === "config") {
+      return `<svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/></svg>`;
+    }
+    return `<svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v8H4z"/><path d="M7 8V5m5 3V5m5 3V5M7 19v-3m5 3v-3m5 3v-3"/></svg>`;
+  }
+
+  coreTabBar() {
+    return `
+      <nav class="device-tabs" aria-label="Chihiros LED Core">
+        ${this.enabledCoreTabs().map((tab) => `
+          <button type="button" data-tab="${tab}" class="${this.activeTab === tab ? "active" : ""}">
+            ${this.coreTabIcon(tab)}
+            <span>${this.tr(tab)}</span>
+          </button>`).join("")}
+      </nav>`;
+  }
+
+  addonDatabasePanel() {
+    if (!this.config?.addon_mode) return "";
+    const database = this.config.addon_database || {};
+    const mode = String(database.mode || "hass");
+    const stateDbPath = String(
+      database.state_db_path || database.hass_state_db_path || "/config/.chihiros/chihiros_state.sqlite3",
+    );
+    const effectiveState = String(database.effective_state_db_path || stateDbPath);
+    const diagnosticsEnabled = Boolean(database.database_diagnostics_enabled);
+    return `
+      <section class="card config-card database-card">
+        <div class="config-card-head">
+          <div><h2>${this.tr("database")}</h2><small>${this.tr("database_subtitle")}</small></div>
+          <span class="db-pill">${mode === "custom" ? this.tr("own_database") : "Home Assistant"}</span>
+        </div>
+        <form data-addon-db-form>
+          <div class="db-mode">
+            <label class="${mode === "hass" ? "active" : ""}">
+              <input type="radio" name="mode" value="hass" ${mode === "hass" ? "checked" : ""}>
+              <span>Home Assistant</span>
+            </label>
+            <label class="${mode === "custom" ? "active" : ""}">
+              <input type="radio" name="mode" value="custom" ${mode === "custom" ? "checked" : ""}>
+              <span>${this.tr("own_database")}</span>
+            </label>
+          </div>
+          <label class="config-row wide">
+            <span>State SQLite</span>
+            <input type="text" name="state_db_path" value="${this.escapeHtml(stateDbPath)}">
+          </label>
+          <div class="db-current"><p><b>${this.tr("active_sqlite")}</b><span>${this.escapeHtml(effectiveState)}</span></p></div>
+          <label class="config-check">
+            <input type="checkbox" name="database_diagnostics_enabled" ${diagnosticsEnabled ? "checked" : ""}>
+            <span><b>${this.tr("database_diagnostics")}</b><small>${this.tr("database_diagnostics_hint")}</small></span>
+          </label>
+          <div class="db-actions">
+            <button type="button" class="link" data-addon-db-refresh>${this.tr("reload").toUpperCase()}</button>
+            <button type="submit" class="primary">${this.tr("save").toUpperCase()}</button>
+          </div>
+        </form>
+      </section>`;
+  }
+
+  configPanel() {
+    const language = this.language();
+    const showMac = this.uiSettings?.showMac !== false;
+    const dashboardDebug = Boolean(this.uiSettings?.dashboardDebug);
+    return `
+      <div class="config-page">
+        ${this.addonDatabasePanel()}
+        <section class="card config-card">
+          <h2>${this.tr("display")}</h2>
+          <label class="config-row">
+            <span>${this.tr("language_label")}</span>
+            <select data-ui-setting="language">
+              <option value="de" ${language === "de" ? "selected" : ""}>${this.tr("language_de")}</option>
+              <option value="en" ${language === "en" ? "selected" : ""}>${this.tr("language_en")}</option>
+            </select>
+          </label>
+          <label class="config-check">
+            <input type="checkbox" data-ui-setting="showMac" ${showMac ? "checked" : ""}>
+            <span>${this.tr("show_mac")}</span>
+          </label>
+          <label class="config-check">
+            <input type="checkbox" data-ui-setting="dashboardDebug" ${dashboardDebug ? "checked" : ""}>
+            <span>${this.tr("dashboard_debug")}</span>
+          </label>
+          <small class="settings-note">${this.tr("dashboard_debug_hint")}</small>
+        </section>
+      </div>`;
+  }
+
+  bindCoreEvents() {
+    this.querySelectorAll("[data-tab]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const tab = String(button.getAttribute("data-tab") || "led");
+        if (!this.enabledCoreTabs().includes(tab)) return;
+        this.activeTab = tab;
+        this.uiSettings = { ...(this.uiSettings || {}), activeTab: tab };
+        this.saveUiSettings();
         this.render();
-        window.requestAnimationFrame(() => {
-          const list = this.querySelector(".led-channel-history-list");
-          if (list) list.scrollTop = 0;
-        });
-      };
-      this.addEventListener("pointerdown", openLedChannelHistory, true);
-      this.addEventListener("click", openLedChannelHistory, true);
-    }
-    if (!this.__notificationDialogCaptureBound) {
-      this.__notificationDialogCaptureBound = true;
-      this.addEventListener("click", (ev) => {
-        const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
-        const button = path.find((node) => {
-          if (!node || typeof node.getAttribute !== "function") return false;
-          const action = String(node.getAttribute("data-action") || "");
-          const notificationOpen = action === "led-notification-open" || action.startsWith("dialog:doser-notification:");
-          const notificationClose = action === "close-dialog"
-            && ["led-notification", "doser-notification"].includes(String(this.dialogState && this.dialogState.type));
-          return notificationOpen || notificationClose;
-        }) || (ev.target && typeof ev.target.closest === "function"
-          ? ev.target.closest('[data-action="led-notification-open"], [data-action^="dialog:doser-notification:"], [data-action="close-dialog"]')
-          : null);
-        if (!button) return;
-        const action = String(button.getAttribute("data-action") || "");
-        if (action === "close-dialog") {
-          if (!["led-notification", "doser-notification"].includes(String(this.dialogState && this.dialogState.type))) return;
-          ev.preventDefault();
-          ev.stopImmediatePropagation();
-          this.closeDialogState();
-          return;
+      });
+    });
+    this.querySelectorAll("[data-ui-setting]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const key = String(input.getAttribute("data-ui-setting") || "");
+        if (!key) return;
+        const value = input.type === "checkbox" ? Boolean(input.checked) : String(input.value || "");
+        this.uiSettings = { ...(this.uiSettings || {}), [key]: value };
+        this.saveUiSettings();
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-addon-db-form]").forEach((form) => {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const api = window.ChihirosAddonApi;
+        if (!api || typeof api.saveDatabaseConfig !== "function") return;
+        const data = new FormData(form);
+        try {
+          await api.saveDatabaseConfig({
+            mode: data.get("mode") || "hass",
+            state_db_path: data.get("state_db_path") || "",
+            database_diagnostics_enabled: data.get("database_diagnostics_enabled") === "on",
+          });
+        } catch (error) {
+          this.dialogState = {
+            type: "debug",
+            output: `FAIL\n${error && error.message ? error.message : error}`,
+            running: false,
+            level: "error",
+          };
+          this.render();
         }
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const isDoser = action.startsWith("dialog:doser-notification:");
-        const channel = isDoser ? Number(action.split(":")[2] || 1) : 1;
-        this.openDialogState(isDoser ? "doser-notification" : "led-notification", channel, {
-          activeTab: isDoser ? "doser" : "led",
+      });
+    });
+    this.querySelectorAll("[data-addon-db-refresh]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const api = window.ChihirosAddonApi;
+        if (api && typeof api.refreshDashboard === "function") await api.refreshDashboard();
+      });
+    });
+  }
+
+  async addCoreHistory(action, detail = "", channel = null, options = {}) {
+    const now = new Date();
+    const overlayKey = String(options.overlayKey || "historyOverlay");
+    const current = Array.isArray(this[overlayKey]) ? this[overlayKey] : [];
+    const params = options.params && typeof options.params === "object" ? options.params : {};
+    const status = Object.prototype.hasOwnProperty.call(options, "status") ? String(options.status || "") : "";
+    const limit = Math.max(1, Math.min(500, Number(options.limit || 200)));
+    const entry = {
+      ts: now.toISOString(),
+      date: now.toISOString().slice(0, 10),
+      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      action,
+      detail,
+      channel,
+      status,
+      params,
+    };
+    this[overlayKey] = [entry, ...current].slice(0, limit);
+    this.render();
+    const persisted = await this.persistCoreHistory(entry, options);
+    if (persisted && typeof options.refresh === "function") await options.refresh();
+    return entry;
+  }
+
+  applyChannelNames() {
+    const names = (this.uiSettings && this.uiSettings.channelNames) || {};
+    const baseChannels = Array.isArray(this.baseChannels) ? this.baseChannels : [];
+    this.channels = baseChannels.map((channel) => ({
+      ...channel,
+      name: String(names[channel.id] || channel.name || "").trim() || channel.name,
+    }));
+  }
+
+  async callAddonServiceWithDialog(service, data = {}, options = {}) {
+    const mergedOptions = {
+      noChannel: true,
+      returnResponse: true,
+      ...options,
+    };
+    const response = await this.callChihirosWithDialog(service, data, mergedOptions);
+    const serviceResponse = this.serviceResponse(response, service);
+    return {
+      ok: this.serviceSendOk(serviceResponse),
+      response,
+      serviceResponse,
+    };
+  }
+
+  async callChihiros(service, data = {}, returnResponse = false) {
+    if (!this._hass) return;
+    const serviceData = {
+      address: this.deviceAddress,
+      ...data,
+    };
+    const isMissingResponseSupport = (err) => {
+      const message = String(err && err.message ? err.message : err || "");
+      const body = String(err && err.body ? err.body : "");
+      const code = Number(err && (err.code ?? err.status_code ?? err.status) || 0);
+      return /Service does not support responses/i.test(message)
+        || /Service does not support responses/i.test(body)
+        || /400:\s*Bad Request/i.test(message)
+        || /400:\s*Bad Request/i.test(body)
+        || (code === 400 && (/Bad Request/i.test(message) || /Bad Request/i.test(body)));
+    };
+    const fallbackResponse = (err) => ({
+      response: {
+        ok: true,
+        send_status: "ok",
+        send_detail: "an Gerät gesendet",
+        debug_output: "",
+        response_fallback: true,
+        response_fallback_error: String((err && err.message) || (err && err.body) || err || "400 Bad Request"),
+      },
+    });
+    try {
+      if (returnResponse && this._hass.connection && this._hass.connection.sendMessagePromise) {
+        return await this._hass.connection.sendMessagePromise({
+          type: "call_service",
+          domain: "chihiros",
+          service,
+          service_data: serviceData,
+          return_response: true,
         });
-      }, true);
+      }
+      return await this._hass.callService("chihiros", service, {
+        ...serviceData,
+      }, undefined, true, returnResponse);
+    } catch (err) {
+      if (!returnResponse || !isMissingResponseSupport(err)) throw err;
+      await this._hass.callService("chihiros", service, { ...serviceData });
+      return fallbackResponse(err);
     }
-    window.setTimeout(() => {
-      if (typeof this.refreshDoserEntities === "function") this.refreshDoserEntities();
-    }, 750);
+  }
+
+  async callChihirosWithDialog(service, data = {}, options = {}) {
+    const channel = Number(options.channel || data.pump || 1);
+    const debug = Boolean(options.debug);
+    const wantsResponse = options.returnResponse !== undefined ? Boolean(options.returnResponse) : false;
+    this.dialogState = { type: "debug", channel, output: this.tr("debug_sending"), running: true, debug, noChannel: Boolean(options.noChannel), level: "pending" };
+    this.render();
+    try {
+      const response = await this.callChihiros(service, data, wantsResponse);
+      const output = this.serviceResultOutput(service, response, debug, options);
+      this.dialogState = {
+        type: "debug",
+        channel,
+        output,
+        debug,
+        noChannel: Boolean(options.noChannel),
+        running: false,
+        level: output.trim().startsWith("FAIL") ? "error" : "ok",
+      };
+      this.render();
+      return response;
+    } catch (err) {
+      this.dialogState = {
+        type: "debug",
+        channel,
+        output: `FAIL\nService: chihiros.${service}\n${err && err.message ? err.message : err}`,
+        debug,
+        noChannel: Boolean(options.noChannel),
+        running: false,
+        level: "error",
+      };
+      this.render();
+      return null;
+    }
+  }
+
+  closeDialog() {
+    return this.closeDialogState();
+  }
+
+  escapeHtml(value = "") {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  async fetchCoreHistory(options = {}) {
+    const deviceKey = String(options.device || "").trim().toUpperCase();
+    const overlayKey = String(options.overlayKey || "historyOverlay");
+    const loadingKey = String(options.loadingKey || `_${overlayKey}LoadingKey`);
+    const scope = String(options.scope || "").trim();
+    const limit = Math.max(1, Math.min(500, Number(options.limit || 200)));
+    const force = Boolean(options.force);
+    if (!deviceKey || (!force && this[loadingKey] === deviceKey)) return false;
+    this[loadingKey] = deviceKey;
+    try {
+      const params = new URLSearchParams({ device: deviceKey, limit: String(limit) });
+      if (scope) params.set("scope", scope);
+      const response = await fetch(`./api/history?${params.toString()}`);
+      if (!response.ok) return false;
+      const data = await response.json();
+      const entries = Array.isArray(data && data.entries) ? data.entries : [];
+      const currentDevice = typeof options.currentDevice === "function"
+        ? String(options.currentDevice() || "").trim().toUpperCase()
+        : deviceKey;
+      if (currentDevice !== deviceKey) return false;
+      this[overlayKey] = entries.filter((entry) => entry && typeof entry === "object").slice(0, limit);
+      this.render();
+      return true;
+    } catch (_err) {
+      return false;
+    } finally {
+      if (this[loadingKey] === deviceKey) this[loadingKey] = "";
+    }
+  }
+
+  filterHistoryEntries(entries = [], scope = "history") {
+    const rows = Array.isArray(entries) ? entries : [];
+    const selected = this.historyCombinedFilterValue(scope);
+    if (selected.startsWith("status:")) {
+      return rows.filter((entry) => this.historyEntryStatus(entry) === selected.slice(7));
+    }
+    if (selected.startsWith("type:")) {
+      return rows.filter((entry) => this.historyEntryType(entry) === selected.slice(5));
+    }
+    return rows;
+  }
+
+  formatDebugJsonBlock(label, value) {
+    if (value === undefined) return "";
+    return `${label}:\n${JSON.stringify(value, null, 2)}`;
+  }
+
+  formatHistoryTimestamp(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    const parsed = new Date(text.includes("T") ? text : text.replace(" ", "T"));
+    if (!Number.isFinite(parsed.getTime())) return text;
+    const configuredTimeZone = String(this._hass && this._hass.config && this._hass.config.time_zone || "").trim();
+    return new Intl.DateTimeFormat(this.language() === "en" ? "en-US" : "de-DE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      ...(configuredTimeZone ? { timeZone: configuredTimeZone } : {}),
+    }).format(parsed);
+  }
+
+  formatSharedDebugData(service, serviceResponse, options = {}) {
+    const debugData = serviceResponse && serviceResponse.debug_data && typeof serviceResponse.debug_data === "object"
+      ? serviceResponse.debug_data
+      : null;
+    const sectionOutput = Array.isArray(debugData && debugData.sections)
+      ? debugData.sections.map((section) => this.formatSharedDebugSection(section)).filter(Boolean).join("\n\n")
+      : "";
+    if (sectionOutput) return sectionOutput;
+    const rawDebug = this.normalizeDebugOutput(
+      debugData && debugData.raw_debug !== undefined
+        ? debugData.raw_debug
+        : (serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "")
+    );
+    const debugService = debugData && debugData.service ? String(debugData.service) : `chihiros.${service}`;
+    const lines = ["Debug", `Service: ${debugService}`];
+    if (debugData && debugData.summary) lines.push(`Summary: ${debugData.summary}`);
+    if (debugData && debugData.device) lines.push(`Device: ${debugData.device}`);
+    if (debugData && debugData.address) lines.push(`Address: ${debugData.address}`);
+    if (debugData && debugData.action) lines.push(`Action: ${debugData.action}`);
+    const blocks = [lines.join("\n")];
+    const responseJson = debugData && Object.prototype.hasOwnProperty.call(debugData, "response")
+      ? debugData.response
+      : serviceResponse;
+    const detailsJson = debugData && Object.prototype.hasOwnProperty.call(debugData, "details")
+      ? debugData.details
+      : undefined;
+    const detailsBlock = this.formatDebugJsonBlock("Details JSON", detailsJson);
+    if (detailsBlock) blocks.push(detailsBlock);
+    if (rawDebug) {
+      const duplicateLines = new Set(["Debug", ...lines.slice(1)].map((line) => String(line || "").trim()).filter(Boolean));
+      const sanitizedRawDebug = this.stripDebugMetaLines(
+        this.stripDebugJsonBlocks(rawDebug, ["Request JSON", "Response JSON", "Details JSON"]),
+        ["Summary", "Device", "Address", "Action", "Service"]
+      );
+      const rawLines = sanitizedRawDebug
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !duplicateLines.has(line) && !/^Protocol Debug$/i.test(line) && !/^Raw Debug$/i.test(line) && !/^[{}]+$/.test(line));
+      const filteredRawDebug = rawLines.join("\n");
+      if (filteredRawDebug) {
+        blocks.push(`Raw Debug:\n${filteredRawDebug}`);
+      }
+    }
+    return blocks.filter(Boolean).join("\n\n");
+  }
+
+  formatSharedDebugSection(section = {}) {
+    if (!section || typeof section !== "object") return "";
+    const title = String(section.title || "").trim();
+    const type = String(section.type || "").trim().toLowerCase();
+    const titleKey = title.toLowerCase();
+    if (type === "json" && Object.prototype.hasOwnProperty.call(section, "value")) {
+      if (titleKey === "request json") return "";
+      if (titleKey === "response json") return "";
+      return this.formatDebugJsonBlock(title || "JSON", section.value);
+    }
+    const value = String(section.value || section.text || "").trim();
+    if (titleKey === "protocol debug") {
+      const normalized = this.normalizeDebugOutput(value);
+      return normalized && normalized.toLowerCase() !== "protocol debug" ? `Raw Debug\n${normalized}` : "";
+    }
+    if (titleKey === "raw debug") {
+      const normalized = this.normalizeDebugOutput(value);
+      return normalized ? `Raw Debug\n${normalized}` : "";
+    }
+    if (!value) return "";
+    return title ? `${title}\n${value}` : value;
   }
 
   getCardSize() {
     return 8;
+  }
+
+  historyCombinedFilterValue(scope = "history") {
+    const value = String((this._historyFilters && this._historyFilters[scope]) || "all").toLowerCase();
+    const allowed = new Set([
+      "all",
+      "status:ok",
+      "status:error",
+      "type:scheduler",
+      "type:device",
+      "type:control",
+      "type:calibration",
+      "type:settings",
+      "type:other",
+    ]);
+    return allowed.has(value) ? value : "all";
+  }
+
+  historyEntryStatus(entry = {}) {
+    const normalized = this.normalizeHistoryEntry(entry);
+    const rawStatus = String(entry && entry.status ? entry.status : "").trim().toLowerCase();
+    const suffixStatus = String(normalized.title || "").match(/\s+(ok|fail|failed|failure|error)$/i)?.[1]?.toLowerCase() || "";
+    const status = rawStatus || suffixStatus;
+    if (["fail", "failed", "failure", "error"].includes(status)) return "error";
+    if (["ok", "success", "successful"].includes(status)) return "ok";
+    return "other";
+  }
+
+  historyEntryType(entry = {}) {
+    const normalized = this.normalizeHistoryEntry(entry);
+    const text = [entry && entry.action, normalized.title]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean)
+      .join(" ");
+    if (/kalibrier|calibrat/.test(text)) return "calibration";
+    if (/beh(?:ä|ae)lter|container|dosierschutz|dosing protection|safety|push|einstellung|setting|(?:ü|ue)berdos|overdos/.test(text)) return "settings";
+    if (/scheduler|schedule|zeitplan|timer|auto[ -]?differenz|automatic dose|automatische dosierung|auto[ -]?mode|automodus/.test(text)) return "scheduler";
+    if (/ger(?:ä|ae)temeld|notification|firmware|laufzeit|runtime|tageswert|daily (?:value|total)|ger(?:ä|ae)teinformation|device information/.test(text)) return "device";
+    if (/manuell|manual|dosier|dose|led gesetzt|led set|an ger(?:ä|ae)t gesendet|device send|einschalten|ausschalten/.test(text)) return "control";
+    return "other";
+  }
+
+  historyFiltersMarkup(scope = "history") {
+    const selected = this.historyCombinedFilterValue(scope);
+    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
+    return `<div class="history-filter-bar">
+      <label class="history-status-filter history-combined-filter">
+        <span>${this.tr("history_filter")}</span>
+        <select data-history-filter="${this.escapeHtml(scope)}">
+          ${option("all", this.tr("all"))}
+          <optgroup label="${this.tr("status")}">
+            ${option("status:ok", "OK")}
+            ${option("status:error", "ERROR / FAIL")}
+          </optgroup>
+          <optgroup label="${this.tr("history_type")}">
+            ${option("type:scheduler", this.tr("history_type_scheduler"))}
+            ${option("type:device", this.tr("history_type_device"))}
+            ${option("type:control", this.tr("history_type_control"))}
+            ${option("type:calibration", this.tr("history_type_calibration"))}
+            ${option("type:settings", this.tr("history_type_settings"))}
+            ${option("type:other", this.tr("history_type_other"))}
+          </optgroup>
+        </select>
+      </label>
+    </div>`;
   }
 
   language() {
@@ -134,75 +574,337 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     return lang.startsWith("en") ? "en" : "de";
   }
 
-  enabledTabs() {
-    const tabs = Array.isArray(this.config.enabled_tabs) ? this.config.enabled_tabs : null;
-    const values = tabs ? tabs.map((item) => String(item || "").trim()).filter(Boolean) : [];
-    return values.length ? values : ["led", "config"];
-  }
-
-  visibleTabs() {
-    const coreTabs = new Set(["led", "config"]);
-    return this.enabledTabs().filter((tab) => coreTabs.has(tab) || this.isPluginInstalled(tab) || this.isPluginLoaded(tab));
-  }
-
-  isTabEnabled(tab) {
-    const requested = String(tab || "");
-    if (!this.enabledTabs().includes(requested)) return false;
-    if (requested === "led" || requested === "config") return true;
-    return this.isPluginInstalled(requested) || this.isPluginLoaded(requested);
-  }
-
-  isPluginInstalled(plugin) {
-    const installed = Array.isArray(this.config.installed_plugins) ? this.config.installed_plugins : [];
-    return installed.includes(String(plugin || ""));
-  }
-
-  isPluginLoaded(plugin) {
-    return !!(window.ChihirosPlugins && window.ChihirosPlugins[String(plugin || "")]);
-  }
-
-  attachPluginMethods(kind) {
-    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[kind];
-    if (!plugin || typeof plugin.attach !== "function") return;
-    plugin.attach(this);
-    const lockedMethods = new Set(["dialog", "openDialog", "closeDialog", "renderPanel", "bindEvents", "attach"]);
-    lockedMethods.forEach((name) => {
-      if (Object.prototype.hasOwnProperty.call(this, name) && typeof window.ChihirosPlugins?.[kind]?.[name] === "function") {
-        delete this[name];
+  localizeLedHistoryText(title = "", detail = "") {
+    const currentSavedTitle = this.tr("led_schedule_saved");
+    const currentSentText = this.tr("led_schedule_sent");
+    const currentLocalText = this.tr("led_schedule_not_sent");
+    const normalizedTitle = String(title || "").trim();
+    const normalizedDetail = String(detail || "").trim();
+    let localizedDetail = normalizedDetail
+      .replace(/\b(?:Alle Tage|Every day)\b/gi, this.tr("all_days"))
+      .replace(/\b(?:Kanal\/Kanaele|Kanal\/Kanäle|Channels?)\b/gi, this.tr("channels"))
+      .replace(/\bZeitplaene\b/gi, "Zeitpläne")
+      .replace(/\bGeraet\b/gi, "Gerät")
+      .replace(/\bgeloescht\b/gi, "gelöscht")
+      .replace(/\bunveraendert\b/gi, "unverändert");
+    localizedDetail = localizedDetail
+      .replace(/^(?:Zeitplan|Schedule)\s+(\d+)\s+(?:gesendet|sent)$/i, (_match, index) => `${this.tr("schedule")} ${index} ${this.tr("led_schedule_sent")}`)
+      .replace(/^(?:Zeitplan|Schedule)\s+(\d+):/i, (_match, index) => `${this.tr("schedule")} ${index}:`)
+      .replace(/Alle Zeitpläne am Gerät gelöscht; lokal unverändert/gi, this.tr("schedules_device_deleted_local_kept"));
+    const detailRowsMatch = localizedDetail.match(/^(\d+)\s+.+?(?:sent to device|an Ger(?:ae|ä)t gesendet|lokal gespeichert, nicht gesendet)$/i);
+    const isSavedTitle = /^(schedule saved|zeitplan gespeichert)$/i.test(normalizedTitle);
+    const isScheduleSavedDetail = /(schedule rows sent to device|zeitplan-zeilen an geraet gesendet)$/i.test(normalizedDetail);
+    const isLocalSavedDetail = /(saved locally, not sent|lokal gespeichert, nicht gesendet)$/i.test(normalizedDetail);
+    if (/^schedule$/i.test(normalizedTitle)) {
+      return { title: this.tr("schedule"), detail: localizedDetail };
+    }
+    if (/^last notification$/i.test(normalizedTitle)) {
+      return { title: this.tr("last_notification"), detail: localizedDetail };
+    }
+    if (/^led notification fetch$/i.test(normalizedTitle)) {
+      const received = normalizedDetail.match(/^(\d+) notification\(s\) received$/i);
+      return {
+        title: this.tr("notification_fetch"),
+        detail: /insufficient authorization/i.test(normalizedDetail)
+          ? this.tr("notification_fetch_unauthorized")
+          : (received
+            ? `${received[1]} ${this.tr("notification_fetch_received")}`
+            : (/^no device notification received$/i.test(normalizedDetail) ? this.tr("notification_fetch_none") : localizedDetail)),
+      };
+    }
+    if (/^led schedule verification$/i.test(normalizedTitle)) {
+      const range = normalizedDetail.match(/^(\d{2}:\d{2}-\d{2}:\d{2}):/);
+      const failed = /:\s*failed$/i.test(normalizedDetail);
+      return {
+        title: this.tr("schedule_verification"),
+        detail: `${range ? `${range[1]} · ` : ""}${this.tr(failed ? "schedule_verification_failed" : "schedule_verification_ok")}`,
+      };
+    }
+    if (/^firmware$/i.test(normalizedTitle)) {
+      return { title: this.tr("firmware"), detail: localizedDetail };
+    }
+    if (/^schedule sensor$/i.test(normalizedTitle)) {
+      return { title: this.tr("schedule_sensor"), detail: localizedDetail };
+    }
+    if (isSavedTitle) {
+      if (detailRowsMatch && isScheduleSavedDetail) {
+        return { title: currentSavedTitle, detail: `${detailRowsMatch[1]} ${this.tr("led_schedule_rows")} ${currentSentText}` };
       }
-    });
+      if (detailRowsMatch && isLocalSavedDetail) {
+        return { title: currentSavedTitle, detail: `${detailRowsMatch[1]} ${this.tr("led_schedule_rows")} ${currentLocalText}` };
+      }
+      if (isScheduleSavedDetail) return { title: currentSavedTitle, detail: currentSentText };
+      if (isLocalSavedDetail) return { title: currentSavedTitle, detail: currentLocalText };
+      return { title: currentSavedTitle, detail: localizedDetail };
+    }
+    if (/^(schedule sent to device|zeitplan an ger(?:ae|ä)t gesendet)(?:\s+(ok|fail))?$/i.test(normalizedTitle)) {
+      const status = normalizedTitle.match(/\s+(ok|fail)$/i)?.[1] || "";
+      return { title: `${this.tr("led_schedule_sent_action")}${status ? ` ${status}` : ""}`, detail: localizedDetail };
+    }
+    if (/^(schedule deleted|zeitplan gel(?:oe|ö)scht)$/i.test(normalizedTitle)) {
+      return { title: this.tr("schedule_deleted"), detail: localizedDetail };
+    }
+    if (/^(led gesetzt|led set)$/i.test(normalizedTitle)) {
+      return { title: this.tr("led_set"), detail: localizedDetail };
+    }
+    if (/^(enable auto mode|auto-modus aktivieren)$/i.test(normalizedTitle)) {
+      return { title: this.tr("enable_auto_mode"), detail: localizedDetail };
+    }
+    if (/^(off|aus)$/i.test(normalizedTitle)) {
+      return { title: this.tr("off"), detail: localizedDetail };
+    }
+    if (/^(on|an)$/i.test(normalizedTitle)) {
+      return { title: this.tr("on"), detail: localizedDetail };
+    }
+    return { title: normalizedTitle, detail: localizedDetail };
   }
 
-  ensureEnabledTab(tab) {
-    const requested = String(tab || "");
-    if (requested && this.isTabEnabled(requested)) return requested;
-    return this.visibleTabs().find((item) => this.isTabEnabled(item)) || "led";
+  normalizeDebugOutput(debugOutput = "") {
+    let text = String(debugOutput || "");
+    for (let index = 0; index < 2; index += 1) {
+      const trimmed = text.trim();
+      if (!(trimmed.startsWith("\"") && trimmed.endsWith("\""))) break;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed !== "string") break;
+        text = parsed;
+      } catch (_err) {
+        break;
+      }
+    }
+    if (text.includes("\\n") || text.includes("\\t") || text.includes("\\r") || text.includes("\\\"")) {
+      const slashPlaceholder = "\uE000";
+      text = text
+        .replace(/\\\\/g, slashPlaceholder)
+        .replace(/\\r\\n/g, "\n")
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\r")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, "\"")
+        .replace(new RegExp(slashPlaceholder, "g"), "\\");
+    }
+    const lines = text.split("\n").map((line) => line.trimEnd());
+    const filtered = [];
+    let skipJsonBlock = false;
+    let jsonDepth = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (!skipJsonBlock) filtered.push(line);
+        continue;
+      }
+      if (/^Service Debug Marker:/i.test(trimmed)) continue;
+      if (/^Response JSON:/i.test(trimmed)) {
+        skipJsonBlock = true;
+        jsonDepth = 0;
+        continue;
+      }
+      if (skipJsonBlock) {
+        jsonDepth += (trimmed.match(/\{/g) || []).length;
+        jsonDepth -= (trimmed.match(/\}/g) || []).length;
+        if (trimmed === "{") {
+          jsonDepth = Math.max(jsonDepth, 1);
+          continue;
+        }
+        if (jsonDepth <= 0 && !trimmed.startsWith("\"")) {
+          skipJsonBlock = false;
+        }
+        if (skipJsonBlock) continue;
+      }
+      filtered.push(line);
+    }
+    const compact = filtered.filter((line) => line.trim());
+    const reordered = [];
+    const pendingDebug = [];
+    let index = 0;
+    while (index < compact.length) {
+      const line = compact[index];
+      const trimmed = line.trim();
+      if (trimmed.startsWith("DEBUG") && trimmed.includes("Sending commands [")) {
+        pendingDebug.push(line);
+        index += 1;
+        continue;
+      }
+      if (!trimmed.startsWith("[TX #")) {
+        reordered.push(line);
+        index += 1;
+        continue;
+      }
+      const txBlock = [line];
+      if (pendingDebug.length) txBlock.unshift(pendingDebug.shift());
+      index += 1;
+      while (index < compact.length) {
+        const current = compact[index];
+        const currentTrimmed = current.trim();
+        const isSeparator = currentTrimmed && [...new Set(currentTrimmed)].length === 1 && currentTrimmed[0] === "-";
+        if (isSeparator) {
+          const next = compact[index + 1] || "";
+          const nextTrimmed = String(next).trim();
+          if (nextTrimmed.startsWith("DEBUG") && nextTrimmed.includes("Sending commands [")) {
+            pendingDebug.push(next);
+            reordered.push(...txBlock, current);
+            index += 2;
+            break;
+          }
+          const debugInside = txBlock.filter((entry) => {
+            const value = String(entry).trim();
+            return value.startsWith("DEBUG") && value.includes("Sending commands [");
+          });
+          const otherInside = txBlock.filter((entry) => {
+            const value = String(entry).trim();
+            return !(value.startsWith("DEBUG") && value.includes("Sending commands ["));
+          });
+          reordered.push(...debugInside, ...otherInside, current);
+          index += 1;
+          break;
+        }
+        txBlock.push(current);
+        index += 1;
+      }
+      if (txBlock.length && (index >= compact.length)) {
+        const debugInside = txBlock.filter((entry) => {
+          const value = String(entry).trim();
+          return value.startsWith("DEBUG") && value.includes("Sending commands [");
+        });
+        const otherInside = txBlock.filter((entry) => {
+          const value = String(entry).trim();
+          return !(value.startsWith("DEBUG") && value.includes("Sending commands ["));
+        });
+        reordered.push(...debugInside, ...otherInside);
+      }
+    }
+    const collapsed = [];
+    let previousSeparator = false;
+    for (const line of reordered) {
+      const trimmed = String(line).trim();
+      const isSeparator = trimmed && [...new Set(trimmed)].length === 1 && trimmed[0] === "-";
+      if (isSeparator && previousSeparator) continue;
+      collapsed.push(line);
+      previousSeparator = Boolean(isSeparator);
+    }
+    return collapsed.join("\n");
   }
 
-  uiSettingsKey() {
-    return `chihiros-led-core-card:${String(this.deviceAddress || "default").toLowerCase()}:ui`;
-  }
-
-  loadUiSettings() {
-    const defaults = {
-      language: String(this.config.language || "").toLowerCase().startsWith("en") ? "en" : "de",
-      showMac: this.config.show_mac !== false,
-      dashboardDebug: false,
-      activeTab: "",
-      channelNames: {},
-      doserSafety: {
-        maxAutoMl: 50.0,
-        maxManualMl: 50.0,
-        maxDailyMl: 250.0,
-      },
+  normalizeHistoryEntry(entry = {}, options = {}) {
+    const source = entry && typeof entry === "object" ? entry : {};
+    const color = String(source.color || options.color || "#03c9ff");
+    const rawTitle = String(
+      source.title
+      || options.title
+      || source.action
+      || "History"
+    );
+    const timestamp = String(
+      source.timestamp
+      || source.ts
+      || [source.date || "", source.time || ""].filter(Boolean).join(" ").trim()
+      || options.timestamp
+      || ""
+    );
+    let detail = String(source.detail || options.detail || "");
+    if (Array.isArray(options.detailParts)) {
+      detail = options.detailParts.filter(Boolean).join(" · ");
+    }
+    const translated = this.localizeLedHistoryText(rawTitle, detail);
+    return {
+      ...source,
+      title: translated.title,
+      detail: translated.detail,
+      timestamp,
+      color,
+      actionTarget: source.actionTarget || options.actionTarget || "",
     };
+  }
+
+  openConfirmDialog(options = {}) {
+    const confirmId = `confirm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this._confirmDialogActions = this._confirmDialogActions || {};
+    this._confirmDialogActions[confirmId] = {
+      onConfirm: typeof options.onConfirm === "function" ? options.onConfirm : null,
+      onCancel: typeof options.onCancel === "function" ? options.onCancel : null,
+    };
+    this.dialogState = {
+      type: "confirm",
+      channel: Number(options.channel || 1),
+      title: String(options.title || this.tr("reset_schedule")),
+      message: String(options.message || ""),
+      detail: String(options.detail || ""),
+      confirmLabel: String(options.confirmLabel || this.tr("reset_schedule_yes")),
+      cancelLabel: String(options.cancelLabel || this.tr("reset_schedule_no")),
+      confirmId,
+      noChannel: Boolean(options.noChannel),
+    };
+    this.render();
+  }
+
+  async persistCoreHistory(entry, options = {}) {
     try {
-      const raw = window.localStorage.getItem(this.uiSettingsKey());
-      if (!raw) return defaults;
-      const parsed = JSON.parse(raw);
-      return { ...defaults, ...parsed };
+      const response = await fetch("./api/history", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          device: String(options.device || "").trim().toUpperCase(),
+          scope: String(options.scope || "").trim(),
+          action: entry && entry.action ? entry.action : "History",
+          detail: entry && entry.detail ? entry.detail : "",
+          channel: entry && entry.channel ? entry.channel : null,
+          status: entry && Object.prototype.hasOwnProperty.call(entry, "status") ? entry.status : "",
+          params: entry && entry.params && typeof entry.params === "object" ? entry.params : {},
+        }),
+      });
+      return response.ok;
     } catch (_err) {
-      return defaults;
+      return false;
+    }
+  }
+
+  async resolveConfirmDialog(confirmed) {
+    const state = this.dialogState;
+    const confirmId = state && state.confirmId ? String(state.confirmId) : "";
+    const actions = (this._confirmDialogActions && confirmId) ? this._confirmDialogActions[confirmId] : null;
+    if (this._confirmDialogActions && confirmId) delete this._confirmDialogActions[confirmId];
+    if (!actions) {
+      this.closeDialog();
+      return;
+    }
+    if (confirmed) {
+      if (actions.onConfirm) await actions.onConfirm();
+      return;
+    }
+    if (actions.onCancel) await actions.onCancel();
+    else this.closeDialog();
+  }
+
+  async runDeviceService({ service = "", data = {}, title = "", debug = false, dialog = false, channel = 1, noChannel = true } = {}) {
+    const serviceData = debug ? { ...data, debug: true } : data;
+    if (dialog && typeof this.callAddonServiceWithDialog === "function") {
+      const result = await this.callAddonServiceWithDialog(service, serviceData, {
+        channel,
+        noChannel,
+        title,
+        payload: serviceData,
+        debug,
+      });
+      return {
+        ok: Boolean(result && result.ok),
+        output: typeof this.serviceResultOutput === "function"
+          ? this.serviceResultOutput(service, result && result.response, debug, { title, payload: serviceData })
+          : `${result && result.ok ? "OK" : "FAIL"}\n${title}`,
+        response: result && result.response,
+        serviceResponse: result && result.serviceResponse,
+      };
+    }
+    if (typeof this.callChihiros !== "function") return { ok: false, output: `${title}\n${this.tr("service_unavailable")}` };
+    try {
+      const response = await this.callChihiros(service, serviceData, true);
+      const serviceResponse = typeof this.serviceResponse === "function" ? this.serviceResponse(response, service) : response;
+      const ok = typeof this.serviceSendOk === "function" ? this.serviceSendOk(serviceResponse) : true;
+      const output = typeof this.serviceResultOutput === "function"
+        ? this.serviceResultOutput(service, response, debug, { title, payload: serviceData })
+        : `${ok ? "OK" : "FAIL"}\n${title}`;
+      return { ok, output, response, serviceResponse };
+    } catch (err) {
+      return { ok: false, output: `FAIL\n${title}\n${err && err.message ? err.message : err}` };
     }
   }
 
@@ -214,13 +916,239 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     }
   }
 
-  applyChannelNames() {
-    const names = (this.uiSettings && this.uiSettings.channelNames) || {};
-    const baseChannels = Array.isArray(this.baseChannels) ? this.baseChannels : [];
-    this.channels = baseChannels.map((channel) => ({
-      ...channel,
-      name: String(names[channel.id] || channel.name || "").trim() || channel.name,
-    }));
+  serviceResponse(response, service = "") {
+    if (!response) return response;
+    const payload = response.response !== undefined ? response.response : response;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+    if (payload.debug_output !== undefined || payload.debug_data !== undefined || payload.send_status !== undefined || payload.ok !== undefined) return payload;
+    const serviceKey = service ? `chihiros.${service}` : "";
+    if (serviceKey && payload[serviceKey]) return payload[serviceKey];
+    if (service && payload[service]) return payload[service];
+    const values = Object.values(payload).filter((value) => value && typeof value === "object" && !Array.isArray(value));
+    const match = values.find((value) => value.debug_output !== undefined || value.debug_data !== undefined || value.send_status !== undefined || value.ok !== undefined);
+    return match || payload;
+  }
+
+  serviceResultOutput(service, response, debug = false, options = {}) {
+    const serviceResponse = this.serviceResponse(response, service);
+    const ok = this.serviceSendOk(serviceResponse);
+    const title = options && options.title ? String(options.title) : "";
+    const serviceLabel = String(service || "").includes(".") ? String(service || "") : `chihiros.${service}`;
+    const status = serviceResponse && serviceResponse.send_status ? String(serviceResponse.send_status) : "";
+    const reply = serviceResponse && serviceResponse.send_detail ? String(serviceResponse.send_detail) : "";
+    const debugOutput = this.normalizeDebugOutput(serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "");
+    const header = [
+      ok ? "OK" : "FAIL",
+      title,
+      status ? `Status: ${status}` : "",
+      reply ? `Antwort: ${reply}` : "",
+    ].filter(Boolean).join("\n");
+    const cleanupFinalDebug = (text) => String(text || "")
+      .split("\n")
+      .filter((line) => line.trim().toLowerCase() !== "protocol debug")
+      .join("\n")
+      .replace(/(?:\n\s*)+Raw Debug:\s*$/i, "")
+      .replace(/(?:\n\s*)+Raw Debug\s*$/i, "")
+      .trim();
+    if (debug && (serviceResponse && serviceResponse.debug_data || debugOutput)) {
+      return cleanupFinalDebug(`${header}\n\n${this.formatSharedDebugData(service, serviceResponse, options)}`);
+    }
+    if (debug && serviceResponse && serviceResponse.response_fallback) {
+      return cleanupFinalDebug(`${header}\n\nDebug\nService: ${serviceLabel}\nHome Assistant nutzt noch die alte Service-Registrierung ohne Response-Support.\nDer Aufruf wurde automatisch ohne return_response wiederholt.`);
+    }
+    if (debug && options && options.payload !== undefined) {
+      return cleanupFinalDebug(`${header}\n\nDebug\nService: ${serviceLabel}\nPayload:\n${JSON.stringify(options.payload, null, 2)}`);
+    }
+    return cleanupFinalDebug(header || this.tr("debug_empty"));
+  }
+
+  serviceSendOk(serviceResponse) {
+    if (!serviceResponse || typeof serviceResponse !== "object") return true;
+    if (serviceResponse.ok === false) return false;
+    if (serviceResponse.ok === true) return true;
+    return !serviceResponse.send_status || serviceResponse.send_status === "ok" || serviceResponse.send_status === "local";
+  }
+
+  setNumber(entity, value) {
+    const number = Number.parseFloat(value);
+    if (!entity || !this._hass || !Number.isFinite(number)) return;
+    this._hass.callService("number", "set_value", { entity_id: entity, value: number });
+  }
+
+  sharedDebugDialog(options = {}) {
+    const levelClass = options.level === "error" ? " error" : "";
+    const title = String(options.title || (options.debug ? this.tr("debug_output") : this.tr("result_output")));
+    const output = String(options.output || "");
+    return this.sharedModalDialog({
+      title,
+      sectionClass: `modal card debug-modal${levelClass}`,
+      bodyHtml: `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`,
+      actions: [
+        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
+      ],
+    });
+  }
+
+  sharedDialogActions(buttons = []) {
+    const items = Array.isArray(buttons) ? buttons : [];
+    return items.map((button) => {
+      const type = String(button && button.type ? button.type : "button");
+      const action = button && button.action ? ` data-action="${this.escapeHtml(String(button.action))}"` : "";
+      const classes = String(button && button.className ? button.className : "").trim();
+      const attrs = String(button && button.attrs ? button.attrs : "");
+      const icon = button && button.icon
+        ? `<ha-icon icon="${this.escapeHtml(String(button.icon))}"></ha-icon>`
+        : "";
+      const label = button && button.label ? `<span>${this.escapeHtml(String(button.label))}</span>` : "";
+      return `<button type="${type}" class="${this.escapeHtml(classes)}"${action}${attrs ? ` ${attrs}` : ""}>${icon}${label}</button>`;
+    }).join("");
+  }
+
+  sharedHistoryIconSymbol(title = "") {
+    const text = String(title || "").toLowerCase();
+    if (text.includes("firmware")) return "&#9881;";
+    if (text.includes("meldung") || text.includes("notification")) return "&#128276;";
+    if (text.includes("laufzeit") || text.includes("runtime")) return "&#9201;";
+    if (text.includes("zeitplan") || text.includes("schedule")) return "&#128197;";
+    if (text.includes("gelöscht") || text.includes("deleted") || text.includes("reset")) return "&#128465;";
+    if (text.includes("gespeichert") || text.includes("saved")) return "&#128190;";
+    if (text.includes("gesendet") || text.includes("sent")) return "&#8599;";
+    if (text.includes("dosier") || text.includes("dose")) return "&#128167;";
+    if (text.includes("auto")) return "&#8635;";
+    if (text.includes("kalibrier") || text.includes("calibrat")) return "&#9881;";
+    if (text.includes("behälter") || text.includes("behaelter") || text.includes("container")) return "&#128167;";
+    return "&#9679;";
+  }
+
+  sharedHistoryTimelineMarkup(entries = [], options = {}) {
+    const rows = Array.isArray(entries) ? entries : [];
+    const emptyLabel = String(options.emptyLabel || this.tr("no_history"));
+    const emptyAction = options.emptyAction ? String(options.emptyAction) : "";
+    const rowAction = typeof options.rowAction === "function" ? options.rowAction : null;
+    const colorFallback = String(options.color || "#03c9ff");
+    const expanded = Boolean(options.expanded);
+    if (!rows.length) {
+      return `
+        <div class="history-empty"${emptyAction ? ` data-action="${this.escapeHtml(emptyAction)}"` : ""}>
+          <ha-icon icon="mdi:history"></ha-icon>
+          <span>${this.escapeHtml(emptyLabel)}</span>
+        </div>`;
+    }
+    const items = rows.map((entry) => {
+      const action = rowAction ? rowAction(entry) : (entry && entry.actionTarget ? String(entry.actionTarget) : "");
+      const normalized = this.normalizeHistoryEntry(entry, {
+        title: entry && entry.action ? entry.action : "History",
+        color: entry && entry.color ? entry.color : colorFallback,
+      });
+      const rawStatus = String(entry && entry.status ? entry.status : "").trim().toLowerCase();
+      const suffixStatus = String(normalized.title || "").match(/\s+(ok|fail|error)$/i)?.[1]?.toLowerCase() || "";
+      const status = rawStatus || suffixStatus;
+      const failed = ["fail", "failed", "failure", "error"].includes(status);
+      const title = String(normalized.title || "History").replace(/\s+(?:ok|fail|error)$/i, "").trim();
+      const detail = String(normalized.detail || "")
+        .replace(/\b(?:light|switch|sensor)\.[a-z0-9_.]+\b/gi, "")
+        .replace(/(?:^|\s*[·;]\s*)Status:\s*(?:ok|fail)(?=\s*[·;]|$)/gi, "")
+        .replace(/\s*[·;]\s*$/, "")
+        .trim();
+      const timestamp = this.formatHistoryTimestamp(normalized.timestamp);
+      const color = failed ? "#ff5b63" : String(normalized.color || colorFallback);
+      return `
+        <article class="led-history-timeline-entry ${failed ? "fail" : ""}"${action ? ` data-action="${this.escapeHtml(action)}"` : ""}>
+          <span class="led-history-timeline-icon" style="color:${this.escapeHtml(color)}" aria-hidden="true">${this.sharedHistoryIconSymbol(title)}</span>
+          <div class="led-history-timeline-copy">
+            <div><strong>${this.escapeHtml(title)}</strong>${status ? `<span class="led-history-status ${failed ? "fail" : status}">${this.escapeHtml(status.toUpperCase())}</span>` : ""}${timestamp ? `<time>${this.escapeHtml(timestamp)}</time>` : ""}</div>
+            ${detail ? `<p>${this.escapeHtml(detail)}</p>` : ""}
+          </div>
+        </article>`;
+    }).join("");
+    return `<div class="led-history-timeline ${expanded ? "expanded" : ""}">${items}</div>`;
+  }
+
+  sharedIconActionButtons(buttons = [], options = {}) {
+    const items = Array.isArray(buttons) ? buttons : [];
+    const wrapperClass = String(options.wrapperClass || "led-schedule-front-actions").trim();
+    const defaultButtonClass = String(options.buttonClass || "mini").trim();
+    const html = items.map((button) => {
+      const type = String(button && button.type ? button.type : "button");
+      const action = button && button.action ? ` data-action="${this.escapeHtml(String(button.action))}"` : "";
+      const attrs = String(button && button.attrs ? button.attrs : "");
+      const classes = [defaultButtonClass, String(button && button.className ? button.className : "").trim()]
+        .filter(Boolean)
+        .join(" ");
+      const title = button && button.title ? ` title="${this.escapeHtml(String(button.title))}"` : "";
+      const icon = button && button.icon
+        ? `<ha-icon icon="${this.escapeHtml(String(button.icon))}"></ha-icon>`
+        : "";
+      const label = button && button.label ? `<span>${this.escapeHtml(String(button.label))}</span>` : "";
+      return `<button class="${this.escapeHtml(classes)}" type="${type}"${action}${title}${attrs ? ` ${attrs}` : ""}>${icon}${label}</button>`;
+    }).join("");
+    return `<div class="${this.escapeHtml(wrapperClass)}">${html}</div>`;
+  }
+
+  sharedModalDialog(options = {}) {
+    const title = String(options.title || "");
+    const sectionClass = String(options.sectionClass || "modal card");
+    const headerHtml = options.headerHtml ? String(options.headerHtml) : `<h2>${this.escapeHtml(title)}</h2>`;
+    const bodyHtml = options.bodyHtml ? String(options.bodyHtml) : "";
+    const footerHtml = options.footerHtml ? String(options.footerHtml) : "";
+    const actionsHtml = Array.isArray(options.actions) && options.actions.length
+      ? `<div class="modal-actions${options.actionsClass ? ` ${this.escapeHtml(String(options.actionsClass))}` : ""}">${this.sharedDialogActions(options.actions)}</div>`
+      : "";
+    return `
+      <div class="modal-backdrop">
+        <section class="${this.escapeHtml(sectionClass)}">
+          ${headerHtml}
+          ${bodyHtml}
+          ${footerHtml || actionsHtml}
+        </section>
+      </div>`;
+  }
+
+  stripDebugJsonBlocks(debugOutput = "", labels = []) {
+    const labelSet = new Set((Array.isArray(labels) ? labels : []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean));
+    if (!labelSet.size) return String(debugOutput || "");
+    const lines = String(debugOutput || "").split("\n");
+    const filtered = [];
+    let skipJsonBlock = false;
+    let jsonDepth = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const normalized = trimmed.toLowerCase();
+      if (!skipJsonBlock && labelSet.has(normalized.replace(/:$/, ""))) {
+        skipJsonBlock = true;
+        jsonDepth = 0;
+        continue;
+      }
+      if (skipJsonBlock) {
+        jsonDepth += (trimmed.match(/\{/g) || []).length;
+        jsonDepth -= (trimmed.match(/\}/g) || []).length;
+        if (trimmed === "{") {
+          jsonDepth = Math.max(jsonDepth, 1);
+          continue;
+        }
+        if (jsonDepth <= 0 && !trimmed.startsWith("\"")) {
+          skipJsonBlock = false;
+        }
+        if (skipJsonBlock) continue;
+        if (!trimmed) continue;
+      }
+      filtered.push(line);
+    }
+    return filtered.join("\n");
+  }
+
+  stripDebugMetaLines(debugOutput = "", labels = []) {
+    const labelSet = new Set((Array.isArray(labels) ? labels : []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean));
+    if (!labelSet.size) return String(debugOutput || "");
+    return String(debugOutput || "")
+      .split("\n")
+      .filter((line) => {
+        const trimmed = String(line || "").trim().toLowerCase();
+        if (!trimmed) return true;
+        if (trimmed === "debug") return false;
+        return ![...labelSet].some((label) => trimmed === label || trimmed.startsWith(`${label}:`));
+      })
+      .join("\n");
   }
 
   tr(key) {
@@ -370,9 +1298,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         current_plan: "Aktueller Plan",
         device: "Gerät",
         led: "LED",
-        doser: "Doser",
-        ruehrer: "Rührer",
-        heizer: "Heizer",
         config: "Config",
         display: "Anzeige",
         language_label: "Sprache",
@@ -446,10 +1371,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         history_type_settings: "Einstellungen",
         history_type_other: "Sonstige",
         led_no_history: "Noch keine LED-Aktionen gespeichert",
-        no_history: "Noch keine Doser-Aktionen gespeichert",
         dose: "Dosieren",
         dose_now: "Direkt dosieren",
-        schedule_title: "Doser Zeitplan",
         channel: "Kanal",
         schedule: "Zeitplan",
         scheduler: "Scheduler",
@@ -531,7 +1454,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         measure_prepare_text: "Messzylinder an das Ende des Dosierschlauchs stellen und danach „Kalibrierung starten“ drücken.",
         start_measure: "Kalibrierung starten",
         start_measure_hint: "Es werden ungefähr 2–4 mL dosiert. Der Vorgang kann bis zu 5 Sekunden dauern.",
-        doser_app_connection_busy: "Das Doser-Gerät ist wahrscheinlich noch mit der Chihiros-App verbunden. Verbindung in der App trennen oder die App vollständig schließen. Danach die Chihiros-Integration neu laden beziehungsweise Home Assistant neu starten und erneut versuchen.",
         fill_duration: "Spüldauer in Sekunden",
         start_sequence: "Startsequenz senden",
         start_sequence_text: "Pumpe laufen lassen, bis die Kalibrier-Menge im Messbecher ist.",
@@ -724,9 +1646,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         current_plan: "Current plan",
         device: "Device",
         led: "LED",
-        doser: "Doser",
-        ruehrer: "Stirrer",
-        heizer: "Heater",
         config: "Config",
         display: "Display",
         language_label: "Language",
@@ -800,10 +1719,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         history_type_settings: "Settings",
         history_type_other: "Other",
         led_no_history: "No LED actions saved yet",
-        no_history: "No doser actions saved yet",
         dose: "Dose",
         dose_now: "Dose now",
-        schedule_title: "Doser schedule",
         channel: "Channel",
         schedule: "Schedule",
         scheduler: "Scheduler",
@@ -885,7 +1802,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         measure_prepare_text: "Place the measuring cylinder at the end of the dosing tube, then press Start calibration.",
         start_measure: "Start calibration",
         start_measure_hint: "Approximately 2–4 mL are dispensed. This process can take up to 5 seconds.",
-        doser_app_connection_busy: "The dosing pump is probably still connected to the Chihiros app. Disconnect it in the app or close the app completely. Then reload the Chihiros integration or restart Home Assistant and try again.",
         fill_duration: "Fill duration in seconds",
         start_sequence: "Send start sequence",
         start_sequence_text: "Run the pump until the calibration amount is in the measuring cup.",
@@ -938,1910 +1854,454 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     return (dict[lang] && dict[lang][key]) || dict.de[key] || key;
   }
 
-  channelSlug(ch) {
-    const channel = this.baseChannels.find((item) => item.id === Number(ch));
-    const name = channel ? channel.name : "";
-    const suffix = name
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_|_$/g, "");
-    return suffix ? `ch${ch}_${suffix}` : `ch${ch}`;
-  }
-
-  entityMap() {
-    if (this.activeDoserDevice && this.activeDoserDevice.entities) return this.activeDoserDevice.entities;
-    return this.config.entities || {};
-  }
-
-  entityPrefix() {
-    return String(
-      (this.activeDoserDevice && this.activeDoserDevice.entity_prefix) ||
-      this.config.entity_prefix ||
-      ""
-    ).toLowerCase();
-  }
-
-  entity(prefix, ch, suffix) {
-    const map = this.entityMap();
-    const key = `${prefix}${ch}_${suffix}`;
-    if (map[key]) return map[key];
-    const mac = this.entityPrefix();
-    if (prefix === "sensor") return `sensor.${mac}_${this.channelSlug(ch)}_${suffix}`;
-    return "";
-  }
-
-  entities(ch) {
-    const map = this.entityMap();
-    const mac = this.entityPrefix();
-    const slug = this.channelSlug(ch);
-    return {
-      daily: this.entity("sensor", ch, "daily_dose"),
-      autoDaily: this.entity("sensor", ch, "auto_daily_dose"),
-      manualDaily: this.entity("sensor", ch, "manual_daily_dose"),
-      remainingSensor: this.entity("sensor", ch, "remaining"),
-      scheduleTimeSensor: this.entity("sensor", ch, "schedule_time"),
-      scheduleDoseSensor: this.entity("sensor", ch, "schedule_amount"),
-      calibrationSensor: this.entity("sensor", ch, "calibration"),
-      active: map[`switch${ch}_active`] || `switch.${mac}_${slug}_schedule_active`,
-      scheduleDose: map[`number${ch}_schedule_amount`] || `number.${mac}_${slug}_schedule_amount`,
-      remaining: map[`number${ch}_remaining`] || `number.${mac}_${slug}_remaining_volume`,
-      manual: map[`number${ch}_manual`] || `number.${mac}_pump_${ch}_dose_volume`,
-      doseNow: map[`button${ch}_dose_now`] || `button.${mac}_dose_pump_${ch}`,
-      reset: map[`button${ch}_reset`] || `button.${mac}_${slug}_reset_schedule`,
-      calibrate: map[`button${ch}_calibrate`] || `button.${mac}_${slug}_start_calibration`,
-    };
-  }
-
-  historyEntity() {
-    const map = this.entityMap();
-    const mac = this.entityPrefix();
-    return map.history || `sensor.${mac}_doser_history`;
-  }
-
-  timerStatusEntity() {
-    const map = this.entityMap();
-    const mac = this.entityPrefix();
-    return map.timer_status || `sensor.${mac}_doser_timer_status`;
-  }
-
-  lowContainerNotificationSwitch() {
-    const map = this.entityMap();
-    const mac = this.entityPrefix();
-    return map.low_container_notification || `switch.${mac}_low_container_notification`;
-  }
-
-  lowContainerPushSettings() {
-    const entity = this.historyEntity();
-    const attrs = this._hass && this._hass.states[entity] ? this._hass.states[entity].attributes : {};
-    const targets = Array.isArray(attrs.low_container_push_targets) ? attrs.low_container_push_targets : [];
-    return {
-      enabled: typeof attrs.low_container_push_enabled === "boolean" ? attrs.low_container_push_enabled : this.isOn(this.lowContainerNotificationSwitch()),
-      targets: targets.map((target) => String(target || "").replace(/^notify\./, "")).filter(Boolean).slice(0, 3),
-      message: String(attrs.low_container_push_message || this.tr("push_message_default")),
-    };
-  }
-
-  notifyServices() {
-    const services = this._hass && this._hass.services && this._hass.services.notify ? this._hass.services.notify : {};
-    return Object.keys(services)
-      .filter((service) => service && service !== "persistent_notification")
-      .sort((a, b) => a.localeCompare(b));
-  }
-
-  notifyOptions(selected = "") {
-    const services = this.notifyServices();
-    const value = String(selected || "").replace(/^notify\./, "");
-    if (value && !services.includes(value)) services.unshift(value);
-    return [
-      `<option value="">${this.tr("no_push_target")}</option>`,
-      ...services.map((service) => `<option value="${this.escapeHtml(service)}" ${service === value ? "selected" : ""}>notify.${this.escapeHtml(service)}</option>`),
-    ].join("");
-  }
-
-  state(entity) {
-    if (!entity || !this._hass || !this._hass.states[entity]) return this.tr("unknown");
-    const obj = this._hass.states[entity];
-    if (obj.state === "unknown" || obj.state === "unavailable") return this.tr("unknown");
-    const unit = obj.attributes.unit_of_measurement || "";
-    return unit ? `${obj.state} ${unit}` : obj.state;
-  }
-
-  stateFallback(entity, fallbackEntity, fallbackText = "0.0 mL") {
-    const value = this.state(entity);
-    if (value !== this.tr("unknown")) return value;
-    if (fallbackEntity) {
-      const fallback = this.state(fallbackEntity);
-      if (fallback !== this.tr("unknown")) return fallback;
-    }
-    return fallbackText;
-  }
-
-  numericState(entity, fallback = "1.0") {
-    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
-    const value = Number.parseFloat(this._hass.states[entity].state);
-    return Number.isFinite(value) ? value.toFixed(1) : fallback;
-  }
-
-  numericValue(entity, fallback = 0) {
-    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
-    const value = Number.parseFloat(this._hass.states[entity].state);
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  autoLimitReached(e) {
-    const safety = this.doserSafetySettings();
-    return this.numericValue(e.autoDaily, 0) >= safety.maxAutoMl;
-  }
-
-  rawState(entity, fallback = "") {
-    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
-    const value = this._hass.states[entity].state;
-    if (value === "unknown" || value === "unavailable") return fallback;
-    return value;
-  }
-
-  stateAttr(entity, attr, fallback = "") {
-    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
-    const value = this._hass.states[entity].attributes[attr];
-    if (value === undefined || value === null || value === "") return fallback;
-    return String(value);
-  }
-
-  scheduleKindFromId(timeEntity) {
-    const typeId = Number.parseInt(this.stateAttr(timeEntity, "schedule_type_id", "1"), 10);
-    const kinds = {
-      1: "single_dose",
-      2: "interval",
-      3: "timer",
-      4: "window",
-    };
-    return kinds[typeId] || "single_dose";
-  }
-
-  scheduleKindLabel(timeEntity) {
-    const value = this.scheduleKindFromId(timeEntity);
-    const labels = {
-      single_dose: this.tr("single_dose"),
-      interval: this.tr("interval"),
-      timer: this.tr("timer_list"),
-      window: this.tr("time_window"),
-    };
-    return labels[value] || value || this.tr("single_dose");
-  }
-
-  setNumber(entity, value) {
-    const number = Number.parseFloat(value);
-    if (!entity || !this._hass || !Number.isFinite(number)) return;
-    this._hass.callService("number", "set_value", { entity_id: entity, value: number });
-  }
-
-  isOn(entity) {
-    return this._hass && this._hass.states[entity] && this._hass.states[entity].state === "on";
-  }
-
-  press(entity) {
-    if (!entity || !this._hass) return;
-    const [domain] = entity.split(".");
-    if (domain === "button") {
-      this._hass.callService("button", "press", { entity_id: entity });
-    } else if (domain === "switch") {
-      this._hass.callService("switch", "toggle", { entity_id: entity });
-    } else if (domain === "light") {
-      this._hass.callService("light", "toggle", { entity_id: entity });
-    }
-  }
-
-  async callChihiros(service, data = {}, returnResponse = false) {
-    if (!this._hass) return;
-    const serviceData = {
-      address: this.deviceAddress,
-      ...data,
-    };
-    const isMissingResponseSupport = (err) => {
-      const message = String(err && err.message ? err.message : err || "");
-      const body = String(err && err.body ? err.body : "");
-      const code = Number(err && (err.code ?? err.status_code ?? err.status) || 0);
-      return /Service does not support responses/i.test(message)
-        || /Service does not support responses/i.test(body)
-        || /400:\s*Bad Request/i.test(message)
-        || /400:\s*Bad Request/i.test(body)
-        || (code === 400 && (/Bad Request/i.test(message) || /Bad Request/i.test(body)));
-    };
-    const fallbackResponse = (err) => ({
-      response: {
-        ok: true,
-        send_status: "ok",
-        send_detail: "an Gerät gesendet",
-        debug_output: "",
-        response_fallback: true,
-        response_fallback_error: String((err && err.message) || (err && err.body) || err || "400 Bad Request"),
-      },
-    });
-    try {
-      if (returnResponse && this._hass.connection && this._hass.connection.sendMessagePromise) {
-        return await this._hass.connection.sendMessagePromise({
-          type: "call_service",
-          domain: "chihiros",
-          service,
-          service_data: serviceData,
-          return_response: true,
-        });
-      }
-      return await this._hass.callService("chihiros", service, {
-        ...serviceData,
-      }, undefined, true, returnResponse);
-    } catch (err) {
-      if (!returnResponse || !isMissingResponseSupport(err)) throw err;
-      await this._hass.callService("chihiros", service, { ...serviceData });
-      return fallbackResponse(err);
-    }
-  }
-
-  serviceResponse(response, service = "") {
-    if (!response) return response;
-    const payload = response.response !== undefined ? response.response : response;
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
-    if (payload.debug_output !== undefined || payload.debug_data !== undefined || payload.send_status !== undefined || payload.ok !== undefined) return payload;
-    const serviceKey = service ? `chihiros.${service}` : "";
-    if (serviceKey && payload[serviceKey]) return payload[serviceKey];
-    if (service && payload[service]) return payload[service];
-    const values = Object.values(payload).filter((value) => value && typeof value === "object" && !Array.isArray(value));
-    const match = values.find((value) => value.debug_output !== undefined || value.debug_data !== undefined || value.send_status !== undefined || value.ok !== undefined);
-    return match || payload;
-  }
-
-  serviceSendOk(serviceResponse) {
-    if (!serviceResponse || typeof serviceResponse !== "object") return true;
-    if (serviceResponse.ok === false) return false;
-    if (serviceResponse.ok === true) return true;
-    return !serviceResponse.send_status || serviceResponse.send_status === "ok" || serviceResponse.send_status === "local";
-  }
-
-  normalizeDebugOutput(debugOutput = "") {
-    let text = String(debugOutput || "");
-    for (let index = 0; index < 2; index += 1) {
-      const trimmed = text.trim();
-      if (!(trimmed.startsWith("\"") && trimmed.endsWith("\""))) break;
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed !== "string") break;
-        text = parsed;
-      } catch (_err) {
-        break;
-      }
-    }
-    if (text.includes("\\n") || text.includes("\\t") || text.includes("\\r") || text.includes("\\\"")) {
-      const slashPlaceholder = "\uE000";
-      text = text
-        .replace(/\\\\/g, slashPlaceholder)
-        .replace(/\\r\\n/g, "\n")
-        .replace(/\\n/g, "\n")
-        .replace(/\\r/g, "\r")
-        .replace(/\\t/g, "\t")
-        .replace(/\\"/g, "\"")
-        .replace(new RegExp(slashPlaceholder, "g"), "\\");
-    }
-    const lines = text.split("\n").map((line) => line.trimEnd());
-    const filtered = [];
-    let skipJsonBlock = false;
-    let jsonDepth = 0;
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) {
-        if (!skipJsonBlock) filtered.push(line);
-        continue;
-      }
-      if (/^Service Debug Marker:/i.test(trimmed)) continue;
-      if (/^Response JSON:/i.test(trimmed)) {
-        skipJsonBlock = true;
-        jsonDepth = 0;
-        continue;
-      }
-      if (skipJsonBlock) {
-        jsonDepth += (trimmed.match(/\{/g) || []).length;
-        jsonDepth -= (trimmed.match(/\}/g) || []).length;
-        if (trimmed === "{") {
-          jsonDepth = Math.max(jsonDepth, 1);
-          continue;
-        }
-        if (jsonDepth <= 0 && !trimmed.startsWith("\"")) {
-          skipJsonBlock = false;
-        }
-        if (skipJsonBlock) continue;
-      }
-      filtered.push(line);
-    }
-    const compact = filtered.filter((line) => line.trim());
-    const reordered = [];
-    const pendingDebug = [];
-    let index = 0;
-    while (index < compact.length) {
-      const line = compact[index];
-      const trimmed = line.trim();
-      if (trimmed.startsWith("DEBUG") && trimmed.includes("Sending commands [")) {
-        pendingDebug.push(line);
-        index += 1;
-        continue;
-      }
-      if (!trimmed.startsWith("[TX #")) {
-        reordered.push(line);
-        index += 1;
-        continue;
-      }
-      const txBlock = [line];
-      if (pendingDebug.length) txBlock.unshift(pendingDebug.shift());
-      index += 1;
-      while (index < compact.length) {
-        const current = compact[index];
-        const currentTrimmed = current.trim();
-        const isSeparator = currentTrimmed && [...new Set(currentTrimmed)].length === 1 && currentTrimmed[0] === "-";
-        if (isSeparator) {
-          const next = compact[index + 1] || "";
-          const nextTrimmed = String(next).trim();
-          if (nextTrimmed.startsWith("DEBUG") && nextTrimmed.includes("Sending commands [")) {
-            pendingDebug.push(next);
-            reordered.push(...txBlock, current);
-            index += 2;
-            break;
-          }
-          const debugInside = txBlock.filter((entry) => {
-            const value = String(entry).trim();
-            return value.startsWith("DEBUG") && value.includes("Sending commands [");
-          });
-          const otherInside = txBlock.filter((entry) => {
-            const value = String(entry).trim();
-            return !(value.startsWith("DEBUG") && value.includes("Sending commands ["));
-          });
-          reordered.push(...debugInside, ...otherInside, current);
-          index += 1;
-          break;
-        }
-        txBlock.push(current);
-        index += 1;
-      }
-      if (txBlock.length && (index >= compact.length)) {
-        const debugInside = txBlock.filter((entry) => {
-          const value = String(entry).trim();
-          return value.startsWith("DEBUG") && value.includes("Sending commands [");
-        });
-        const otherInside = txBlock.filter((entry) => {
-          const value = String(entry).trim();
-          return !(value.startsWith("DEBUG") && value.includes("Sending commands ["));
-        });
-        reordered.push(...debugInside, ...otherInside);
-      }
-    }
-    const collapsed = [];
-    let previousSeparator = false;
-    for (const line of reordered) {
-      const trimmed = String(line).trim();
-      const isSeparator = trimmed && [...new Set(trimmed)].length === 1 && trimmed[0] === "-";
-      if (isSeparator && previousSeparator) continue;
-      collapsed.push(line);
-      previousSeparator = Boolean(isSeparator);
-    }
-    return collapsed.join("\n");
-  }
-
-  stripDebugJsonBlocks(debugOutput = "", labels = []) {
-    const labelSet = new Set((Array.isArray(labels) ? labels : []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean));
-    if (!labelSet.size) return String(debugOutput || "");
-    const lines = String(debugOutput || "").split("\n");
-    const filtered = [];
-    let skipJsonBlock = false;
-    let jsonDepth = 0;
-    for (const line of lines) {
-      const trimmed = line.trim();
-      const normalized = trimmed.toLowerCase();
-      if (!skipJsonBlock && labelSet.has(normalized.replace(/:$/, ""))) {
-        skipJsonBlock = true;
-        jsonDepth = 0;
-        continue;
-      }
-      if (skipJsonBlock) {
-        jsonDepth += (trimmed.match(/\{/g) || []).length;
-        jsonDepth -= (trimmed.match(/\}/g) || []).length;
-        if (trimmed === "{") {
-          jsonDepth = Math.max(jsonDepth, 1);
-          continue;
-        }
-        if (jsonDepth <= 0 && !trimmed.startsWith("\"")) {
-          skipJsonBlock = false;
-        }
-        if (skipJsonBlock) continue;
-        if (!trimmed) continue;
-      }
-      filtered.push(line);
-    }
-    return filtered.join("\n");
-  }
-
-  stripDebugMetaLines(debugOutput = "", labels = []) {
-    const labelSet = new Set((Array.isArray(labels) ? labels : []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean));
-    if (!labelSet.size) return String(debugOutput || "");
-    return String(debugOutput || "")
-      .split("\n")
-      .filter((line) => {
-        const trimmed = String(line || "").trim().toLowerCase();
-        if (!trimmed) return true;
-        if (trimmed === "debug") return false;
-        return ![...labelSet].some((label) => trimmed === label || trimmed.startsWith(`${label}:`));
-      })
-      .join("\n");
-  }
-
-  formatDebugJsonBlock(label, value) {
-    if (value === undefined) return "";
-    return `${label}:\n${JSON.stringify(value, null, 2)}`;
-  }
-
-  formatSharedDebugSection(section = {}) {
-    if (!section || typeof section !== "object") return "";
-    const title = String(section.title || "").trim();
-    const type = String(section.type || "").trim().toLowerCase();
-    const titleKey = title.toLowerCase();
-    if (type === "json" && Object.prototype.hasOwnProperty.call(section, "value")) {
-      if (titleKey === "request json") return "";
-      if (titleKey === "response json") return "";
-      return this.formatDebugJsonBlock(title || "JSON", section.value);
-    }
-    const value = String(section.value || section.text || "").trim();
-    if (titleKey === "protocol debug") {
-      const normalized = this.normalizeDebugOutput(value);
-      return normalized && normalized.toLowerCase() !== "protocol debug" ? `Raw Debug\n${normalized}` : "";
-    }
-    if (titleKey === "raw debug") {
-      const normalized = this.normalizeDebugOutput(value);
-      return normalized ? `Raw Debug\n${normalized}` : "";
-    }
-    if (!value) return "";
-    return title ? `${title}\n${value}` : value;
-  }
-
-  formatSharedDebugData(service, serviceResponse, options = {}) {
-    const debugData = serviceResponse && serviceResponse.debug_data && typeof serviceResponse.debug_data === "object"
-      ? serviceResponse.debug_data
-      : null;
-    const sectionOutput = Array.isArray(debugData && debugData.sections)
-      ? debugData.sections.map((section) => this.formatSharedDebugSection(section)).filter(Boolean).join("\n\n")
-      : "";
-    if (sectionOutput) return sectionOutput;
-    const rawDebug = this.normalizeDebugOutput(
-      debugData && debugData.raw_debug !== undefined
-        ? debugData.raw_debug
-        : (serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "")
-    );
-    const debugService = debugData && debugData.service ? String(debugData.service) : `chihiros.${service}`;
-    const lines = ["Debug", `Service: ${debugService}`];
-    if (debugData && debugData.summary) lines.push(`Summary: ${debugData.summary}`);
-    if (debugData && debugData.device) lines.push(`Device: ${debugData.device}`);
-    if (debugData && debugData.address) lines.push(`Address: ${debugData.address}`);
-    if (debugData && debugData.action) lines.push(`Action: ${debugData.action}`);
-    const blocks = [lines.join("\n")];
-    const responseJson = debugData && Object.prototype.hasOwnProperty.call(debugData, "response")
-      ? debugData.response
-      : serviceResponse;
-    const detailsJson = debugData && Object.prototype.hasOwnProperty.call(debugData, "details")
-      ? debugData.details
-      : undefined;
-    const detailsBlock = this.formatDebugJsonBlock("Details JSON", detailsJson);
-    if (detailsBlock) blocks.push(detailsBlock);
-    if (rawDebug) {
-      const duplicateLines = new Set(["Debug", ...lines.slice(1)].map((line) => String(line || "").trim()).filter(Boolean));
-      const sanitizedRawDebug = this.stripDebugMetaLines(
-        this.stripDebugJsonBlocks(rawDebug, ["Request JSON", "Response JSON", "Details JSON"]),
-        ["Summary", "Device", "Address", "Action", "Service"]
-      );
-      const rawLines = sanitizedRawDebug
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line && !duplicateLines.has(line) && !/^Protocol Debug$/i.test(line) && !/^Raw Debug$/i.test(line) && !/^[{}]+$/.test(line));
-      const filteredRawDebug = rawLines.join("\n");
-      if (filteredRawDebug) {
-        blocks.push(`Raw Debug:\n${filteredRawDebug}`);
-      }
-    }
-    return blocks.filter(Boolean).join("\n\n");
-  }
-
-  serviceResultOutput(service, response, debug = false, options = {}) {
-    const serviceResponse = this.serviceResponse(response, service);
-    const ok = this.serviceSendOk(serviceResponse);
-    const title = options && options.title ? String(options.title) : "";
-    const serviceLabel = String(service || "").includes(".") ? String(service || "") : `chihiros.${service}`;
-    const status = serviceResponse && serviceResponse.send_status ? String(serviceResponse.send_status) : "";
-    const reply = serviceResponse && serviceResponse.send_detail ? String(serviceResponse.send_detail) : "";
-    const debugOutput = this.normalizeDebugOutput(serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "");
-    const header = [
-      ok ? "OK" : "FAIL",
-      title,
-      status ? `Status: ${status}` : "",
-      reply ? `Antwort: ${reply}` : "",
-    ].filter(Boolean).join("\n");
-    const cleanupFinalDebug = (text) => String(text || "")
-      .split("\n")
-      .filter((line) => line.trim().toLowerCase() !== "protocol debug")
-      .join("\n")
-      .replace(/(?:\n\s*)+Raw Debug:\s*$/i, "")
-      .replace(/(?:\n\s*)+Raw Debug\s*$/i, "")
-      .trim();
-    if (debug && (serviceResponse && serviceResponse.debug_data || debugOutput)) {
-      return cleanupFinalDebug(`${header}\n\n${this.formatSharedDebugData(service, serviceResponse, options)}`);
-    }
-    if (debug && serviceResponse && serviceResponse.response_fallback) {
-      return cleanupFinalDebug(`${header}\n\nDebug\nService: ${serviceLabel}\nHome Assistant nutzt noch die alte Service-Registrierung ohne Response-Support.\nDer Aufruf wurde automatisch ohne return_response wiederholt.`);
-    }
-    if (debug && options && options.payload !== undefined) {
-      return cleanupFinalDebug(`${header}\n\nDebug\nService: ${serviceLabel}\nPayload:\n${JSON.stringify(options.payload, null, 2)}`);
-    }
-    return cleanupFinalDebug(header || this.tr("debug_empty"));
-  }
-
-  async callChihirosWithDialog(service, data = {}, options = {}) {
-    const channel = Number(options.channel || data.pump || 1);
-    const debug = Boolean(options.debug);
-    const wantsResponse = options.returnResponse !== undefined ? Boolean(options.returnResponse) : false;
-    this.dialogState = { type: "debug", channel, output: this.tr("debug_sending"), running: true, debug, noChannel: Boolean(options.noChannel), level: "pending" };
-    this.render();
-    try {
-      const response = await this.callChihiros(service, data, wantsResponse);
-      const output = this.serviceResultOutput(service, response, debug, options);
-      this.dialogState = {
-        type: "debug",
-        channel,
-        output,
-        debug,
-        noChannel: Boolean(options.noChannel),
-        running: false,
-        level: output.trim().startsWith("FAIL") ? "error" : "ok",
-      };
-      this.render();
-      return response;
-    } catch (err) {
-      this.dialogState = {
-        type: "debug",
-        channel,
-        output: `FAIL\nService: chihiros.${service}\n${err && err.message ? err.message : err}`,
-        debug,
-        noChannel: Boolean(options.noChannel),
-        running: false,
-        level: "error",
-      };
-      this.render();
-      return null;
-    }
-  }
-
-  async callAddonServiceWithDialog(service, data = {}, options = {}) {
-    const mergedOptions = {
-      noChannel: true,
-      returnResponse: true,
-      ...options,
-    };
-    const response = await this.callChihirosWithDialog(service, data, mergedOptions);
-    const serviceResponse = this.serviceResponse(response, service);
-    return {
-      ok: this.serviceSendOk(serviceResponse),
-      response,
-      serviceResponse,
-    };
-  }
-
-  async runDeviceService({ service = "", data = {}, title = "", debug = false, dialog = false, channel = 1, noChannel = true } = {}) {
-    const serviceData = debug ? { ...data, debug: true } : data;
-    if (dialog && typeof this.callAddonServiceWithDialog === "function") {
-      const result = await this.callAddonServiceWithDialog(service, serviceData, {
-        channel,
-        noChannel,
-        title,
-        payload: serviceData,
-        debug,
-      });
-      return {
-        ok: Boolean(result && result.ok),
-        output: typeof this.serviceResultOutput === "function"
-          ? this.serviceResultOutput(service, result && result.response, debug, { title, payload: serviceData })
-          : `${result && result.ok ? "OK" : "FAIL"}\n${title}`,
-        response: result && result.response,
-        serviceResponse: result && result.serviceResponse,
-      };
-    }
-    if (typeof this.callChihiros !== "function") return { ok: false, output: `${title}\n${this.tr("service_unavailable")}` };
-    try {
-      const response = await this.callChihiros(service, serviceData, true);
-      const serviceResponse = typeof this.serviceResponse === "function" ? this.serviceResponse(response, service) : response;
-      const ok = typeof this.serviceSendOk === "function" ? this.serviceSendOk(serviceResponse) : true;
-      const output = typeof this.serviceResultOutput === "function"
-        ? this.serviceResultOutput(service, response, debug, { title, payload: serviceData })
-        : `${ok ? "OK" : "FAIL"}\n${title}`;
-      return { ok, output, response, serviceResponse };
-    } catch (err) {
-      return { ok: false, output: `FAIL\n${title}\n${err && err.message ? err.message : err}` };
-    }
-  }
-
-  async refreshEntities(entityIds = [], options = {}) {
-    const ids = [...new Set((Array.isArray(entityIds) ? entityIds : [entityIds]).filter(Boolean))];
-    if (!this._hass || !ids.length) return;
-    const lockKey = String(options.lockKey || "_entityRefreshRunning");
-    if (this[lockKey]) return;
-    this[lockKey] = true;
-    try {
-      await this._hass.callService("homeassistant", "update_entity", { entity_id: ids });
-      if (!this.dialogState || options.renderWithDialog) {
-        window.setTimeout(() => this.render(), Number(options.renderDelay || 250));
-      }
-    } catch (_err) {
-      // Ignore refresh failures; Home Assistant keeps the last pushed state.
-    } finally {
-      this[lockKey] = false;
-    }
-  }
-
-  addOverlayEntries(field, entries, limit = 8) {
-    const current = Array.isArray(this[field]) ? this[field] : [];
-    this[field] = [...entries, ...current].slice(0, limit);
-  }
-
-  nowOverlayEntry(action, detail = "", extra = {}) {
-    const now = new Date();
-    return {
-      ts: now.toISOString(),
-      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      date: now.toISOString().slice(0, 10),
-      action,
-      detail,
-      ...extra,
-    };
-  }
-
-  openConfirmDialog(options = {}) {
-    const confirmId = `confirm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    this._confirmDialogActions = this._confirmDialogActions || {};
-    this._confirmDialogActions[confirmId] = {
-      onConfirm: typeof options.onConfirm === "function" ? options.onConfirm : null,
-      onCancel: typeof options.onCancel === "function" ? options.onCancel : null,
-    };
-    this.dialogState = {
-      type: "confirm",
-      channel: Number(options.channel || 1),
-      title: String(options.title || this.tr("reset_schedule")),
-      message: String(options.message || ""),
-      detail: String(options.detail || ""),
-      confirmLabel: String(options.confirmLabel || this.tr("reset_schedule_yes")),
-      cancelLabel: String(options.cancelLabel || this.tr("reset_schedule_no")),
-      confirmId,
-      noChannel: Boolean(options.noChannel),
-    };
-    this.render();
-  }
-
-  async resolveConfirmDialog(confirmed) {
-    const state = this.dialogState;
-    const confirmId = state && state.confirmId ? String(state.confirmId) : "";
-    const actions = (this._confirmDialogActions && confirmId) ? this._confirmDialogActions[confirmId] : null;
-    if (this._confirmDialogActions && confirmId) delete this._confirmDialogActions[confirmId];
-    if (!actions) {
-      this.closeDialog();
-      return;
-    }
-    if (confirmed) {
-      if (actions.onConfirm) await actions.onConfirm();
-      return;
-    }
-    if (actions.onCancel) await actions.onCancel();
-    else this.closeDialog();
-  }
-
-  async fetchCoreHistory(options = {}) {
-    const deviceKey = String(options.device || "").trim().toUpperCase();
-    const overlayKey = String(options.overlayKey || "historyOverlay");
-    const loadingKey = String(options.loadingKey || `_${overlayKey}LoadingKey`);
-    const scope = String(options.scope || "").trim();
-    const limit = Math.max(1, Math.min(500, Number(options.limit || 200)));
-    const force = Boolean(options.force);
-    if (!deviceKey || (!force && this[loadingKey] === deviceKey)) return false;
-    this[loadingKey] = deviceKey;
-    try {
-      const params = new URLSearchParams({ device: deviceKey, limit: String(limit) });
-      if (scope) params.set("scope", scope);
-      const response = await fetch(`./api/history?${params.toString()}`);
-      if (!response.ok) return false;
-      const data = await response.json();
-      const entries = Array.isArray(data && data.entries) ? data.entries : [];
-      const currentDevice = typeof options.currentDevice === "function"
-        ? String(options.currentDevice() || "").trim().toUpperCase()
-        : deviceKey;
-      if (currentDevice !== deviceKey) return false;
-      this[overlayKey] = entries.filter((entry) => entry && typeof entry === "object").slice(0, limit);
-      this.render();
-      return true;
-    } catch (_err) {
-      return false;
-    } finally {
-      if (this[loadingKey] === deviceKey) this[loadingKey] = "";
-    }
-  }
-
-  async persistCoreHistory(entry, options = {}) {
-    try {
-      const response = await fetch("./api/history", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          device: String(options.device || "").trim().toUpperCase(),
-          scope: String(options.scope || "").trim(),
-          action: entry && entry.action ? entry.action : "History",
-          detail: entry && entry.detail ? entry.detail : "",
-          channel: entry && entry.channel ? entry.channel : null,
-          status: entry && Object.prototype.hasOwnProperty.call(entry, "status") ? entry.status : "",
-          params: entry && entry.params && typeof entry.params === "object" ? entry.params : {},
-        }),
-      });
-      return response.ok;
-    } catch (_err) {
-      return false;
-    }
-  }
-
-  async addCoreHistory(action, detail = "", channel = null, options = {}) {
-    const now = new Date();
-    const overlayKey = String(options.overlayKey || "historyOverlay");
-    const current = Array.isArray(this[overlayKey]) ? this[overlayKey] : [];
-    const params = options.params && typeof options.params === "object" ? options.params : {};
-    const status = Object.prototype.hasOwnProperty.call(options, "status") ? String(options.status || "") : "";
-    const limit = Math.max(1, Math.min(500, Number(options.limit || 200)));
-    const entry = {
-      ts: now.toISOString(),
-      date: now.toISOString().slice(0, 10),
-      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      action,
-      detail,
-      channel,
-      status,
-      params,
-    };
-    this[overlayKey] = [entry, ...current].slice(0, limit);
-    this.render();
-    const persisted = await this.persistCoreHistory(entry, options);
-    if (persisted && typeof options.refresh === "function") await options.refresh();
-    return entry;
-  }
-
-  sharedHistoryRowsMarkup(entries = [], options = {}) {
-    return this.sharedHistoryTimelineMarkup(entries, options);
-  }
-
-  formatHistoryTimestamp(value) {
-    const text = String(value || "").trim();
-    if (!text) return "";
-    const parsed = new Date(text.includes("T") ? text : text.replace(" ", "T"));
-    if (!Number.isFinite(parsed.getTime())) return text;
-    const configuredTimeZone = String(this._hass && this._hass.config && this._hass.config.time_zone || "").trim();
-    return new Intl.DateTimeFormat(this.language() === "en" ? "en-US" : "de-DE", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      ...(configuredTimeZone ? { timeZone: configuredTimeZone } : {}),
-    }).format(parsed);
-  }
-
-  sharedHistoryIconSymbol(title = "") {
-    const text = String(title || "").toLowerCase();
-    if (text.includes("firmware")) return "&#9881;";
-    if (text.includes("meldung") || text.includes("notification")) return "&#128276;";
-    if (text.includes("laufzeit") || text.includes("runtime")) return "&#9201;";
-    if (text.includes("zeitplan") || text.includes("schedule")) return "&#128197;";
-    if (text.includes("gelöscht") || text.includes("deleted") || text.includes("reset")) return "&#128465;";
-    if (text.includes("gespeichert") || text.includes("saved")) return "&#128190;";
-    if (text.includes("gesendet") || text.includes("sent")) return "&#8599;";
-    if (text.includes("dosier") || text.includes("dose")) return "&#128167;";
-    if (text.includes("auto")) return "&#8635;";
-    if (text.includes("kalibrier") || text.includes("calibrat")) return "&#9881;";
-    if (text.includes("behälter") || text.includes("behaelter") || text.includes("container")) return "&#128167;";
-    return "&#9679;";
-  }
-
-  sharedHistoryTimelineMarkup(entries = [], options = {}) {
-    const rows = Array.isArray(entries) ? entries : [];
-    const emptyLabel = String(options.emptyLabel || this.tr("no_history"));
-    const emptyAction = options.emptyAction ? String(options.emptyAction) : "";
-    const rowAction = typeof options.rowAction === "function" ? options.rowAction : null;
-    const colorFallback = String(options.color || "#03c9ff");
-    const expanded = Boolean(options.expanded);
-    if (!rows.length) {
-      return `
-        <div class="history-empty"${emptyAction ? ` data-action="${this.escapeHtml(emptyAction)}"` : ""}>
-          <ha-icon icon="mdi:history"></ha-icon>
-          <span>${this.escapeHtml(emptyLabel)}</span>
-        </div>`;
-    }
-    const items = rows.map((entry) => {
-      const action = rowAction ? rowAction(entry) : (entry && entry.actionTarget ? String(entry.actionTarget) : "");
-      const normalized = this.normalizeHistoryEntry(entry, {
-        title: entry && entry.action ? entry.action : "History",
-        color: entry && entry.color ? entry.color : colorFallback,
-      });
-      const rawStatus = String(entry && entry.status ? entry.status : "").trim().toLowerCase();
-      const suffixStatus = String(normalized.title || "").match(/\s+(ok|fail|error)$/i)?.[1]?.toLowerCase() || "";
-      const status = rawStatus || suffixStatus;
-      const failed = ["fail", "failed", "failure", "error"].includes(status);
-      const title = String(normalized.title || "History").replace(/\s+(?:ok|fail|error)$/i, "").trim();
-      const detail = String(normalized.detail || "")
-        .replace(/\b(?:light|switch|sensor)\.[a-z0-9_.]+\b/gi, "")
-        .replace(/(?:^|\s*[·;]\s*)Status:\s*(?:ok|fail)(?=\s*[·;]|$)/gi, "")
-        .replace(/\s*[·;]\s*$/, "")
-        .trim();
-      const timestamp = this.formatHistoryTimestamp(normalized.timestamp);
-      const color = failed ? "#ff5b63" : String(normalized.color || colorFallback);
-      return `
-        <article class="led-history-timeline-entry ${failed ? "fail" : ""}"${action ? ` data-action="${this.escapeHtml(action)}"` : ""}>
-          <span class="led-history-timeline-icon" style="color:${this.escapeHtml(color)}" aria-hidden="true">${this.sharedHistoryIconSymbol(title)}</span>
-          <div class="led-history-timeline-copy">
-            <div><strong>${this.escapeHtml(title)}</strong>${status ? `<span class="led-history-status ${failed ? "fail" : status}">${this.escapeHtml(status.toUpperCase())}</span>` : ""}${timestamp ? `<time>${this.escapeHtml(timestamp)}</time>` : ""}</div>
-            ${detail ? `<p>${this.escapeHtml(detail)}</p>` : ""}
-          </div>
-        </article>`;
-    }).join("");
-    return `<div class="led-history-timeline ${expanded ? "expanded" : ""}">${items}</div>`;
-  }
-
-  historyStatusFilterValue(scope = "history") {
-    const value = String((this._historyStatusFilters && this._historyStatusFilters[scope]) || "all").toLowerCase();
-    return ["all", "ok", "error"].includes(value) ? value : "all";
-  }
-
-  historyEntryStatus(entry = {}) {
-    const normalized = this.normalizeHistoryEntry(entry);
-    const rawStatus = String(entry && entry.status ? entry.status : "").trim().toLowerCase();
-    const suffixStatus = String(normalized.title || "").match(/\s+(ok|fail|failed|failure|error)$/i)?.[1]?.toLowerCase() || "";
-    const status = rawStatus || suffixStatus;
-    if (["fail", "failed", "failure", "error"].includes(status)) return "error";
-    if (["ok", "success", "successful"].includes(status)) return "ok";
-    return "other";
-  }
-
-  historyTypeFilterValue(scope = "history") {
-    const value = String((this._historyTypeFilters && this._historyTypeFilters[scope]) || "all").toLowerCase();
-    return ["all", "scheduler", "device", "control", "calibration", "settings", "other"].includes(value)
-      ? value
-      : "all";
-  }
-
-  historyEntryType(entry = {}) {
-    const normalized = this.normalizeHistoryEntry(entry);
-    const text = [entry && entry.action, normalized.title]
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter(Boolean)
-      .join(" ");
-    if (/kalibrier|calibrat/.test(text)) return "calibration";
-    if (/beh(?:ä|ae)lter|container|dosierschutz|dosing protection|safety|push|einstellung|setting|(?:ü|ue)berdos|overdos/.test(text)) return "settings";
-    if (/scheduler|schedule|zeitplan|timer|auto[ -]?differenz|automatic dose|automatische dosierung|auto[ -]?mode|automodus/.test(text)) return "scheduler";
-    if (/ger(?:ä|ae)temeld|notification|firmware|laufzeit|runtime|tageswert|daily (?:value|total)|ger(?:ä|ae)teinformation|device information/.test(text)) return "device";
-    if (/manuell|manual|dosier|dose|led gesetzt|led set|an ger(?:ä|ae)t gesendet|device send|einschalten|ausschalten/.test(text)) return "control";
-    return "other";
-  }
-
-  historyCombinedFilterValue(scope = "history") {
-    const value = String((this._historyFilters && this._historyFilters[scope]) || "all").toLowerCase();
-    const allowed = new Set([
-      "all",
-      "status:ok",
-      "status:error",
-      "type:scheduler",
-      "type:device",
-      "type:control",
-      "type:calibration",
-      "type:settings",
-      "type:other",
-    ]);
-    return allowed.has(value) ? value : "all";
-  }
-
-  filterHistoryEntries(entries = [], scope = "history") {
-    const rows = Array.isArray(entries) ? entries : [];
-    const selected = this.historyCombinedFilterValue(scope);
-    if (selected.startsWith("status:")) {
-      return rows.filter((entry) => this.historyEntryStatus(entry) === selected.slice(7));
-    }
-    if (selected.startsWith("type:")) {
-      return rows.filter((entry) => this.historyEntryType(entry) === selected.slice(5));
-    }
-    return rows;
-  }
-
-  historyStatusFilterMarkup(scope = "history") {
-    const selected = this.historyStatusFilterValue(scope);
-    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
-    return `<label class="history-status-filter">
-      <span>${this.tr("status")}</span>
-      <select data-history-status-filter="${this.escapeHtml(scope)}">
-        ${option("all", this.tr("all"))}
-        ${option("ok", "OK")}
-        ${option("error", "ERROR / FAIL")}
-      </select>
-    </label>`;
-  }
-
-  historyTypeFilterMarkup(scope = "history") {
-    const selected = this.historyTypeFilterValue(scope);
-    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
-    return `<label class="history-status-filter history-type-filter">
-      <span>${this.tr("history_type")}</span>
-      <select data-history-type-filter="${this.escapeHtml(scope)}">
-        ${option("all", this.tr("all"))}
-        ${option("scheduler", this.tr("history_type_scheduler"))}
-        ${option("device", this.tr("history_type_device"))}
-        ${option("control", this.tr("history_type_control"))}
-        ${option("calibration", this.tr("history_type_calibration"))}
-        ${option("settings", this.tr("history_type_settings"))}
-        ${option("other", this.tr("history_type_other"))}
-      </select>
-    </label>`;
-  }
-
-  historyFiltersMarkup(scope = "history") {
-    const selected = this.historyCombinedFilterValue(scope);
-    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
-    return `<div class="history-filter-bar">
-      <label class="history-status-filter history-combined-filter">
-        <span>${this.tr("history_filter")}</span>
-        <select data-history-filter="${this.escapeHtml(scope)}">
-          ${option("all", this.tr("all"))}
-          <optgroup label="${this.tr("status")}">
-            ${option("status:ok", "OK")}
-            ${option("status:error", "ERROR / FAIL")}
-          </optgroup>
-          <optgroup label="${this.tr("history_type")}">
-            ${option("type:scheduler", this.tr("history_type_scheduler"))}
-            ${option("type:device", this.tr("history_type_device"))}
-            ${option("type:control", this.tr("history_type_control"))}
-            ${option("type:calibration", this.tr("history_type_calibration"))}
-            ${option("type:settings", this.tr("history_type_settings"))}
-            ${option("type:other", this.tr("history_type_other"))}
-          </optgroup>
-        </select>
-      </label>
-    </div>`;
-  }
-
-  normalizeHistoryEntry(entry = {}, options = {}) {
-    const source = entry && typeof entry === "object" ? entry : {};
-    const color = String(source.color || options.color || "#03c9ff");
-    const rawTitle = String(
-      source.title
-      || options.title
-      || source.action
-      || "History"
-    );
-    const timestamp = String(
-      source.timestamp
-      || source.ts
-      || [source.date || "", source.time || ""].filter(Boolean).join(" ").trim()
-      || options.timestamp
-      || ""
-    );
-    let detail = String(source.detail || options.detail || "");
-    if (Array.isArray(options.detailParts)) {
-      detail = options.detailParts.filter(Boolean).join(" · ");
-    }
-    const translated = this.localizeLedHistoryText(rawTitle, detail);
-    return {
-      ...source,
-      title: translated.title,
-      detail: translated.detail,
-      timestamp,
-      color,
-      actionTarget: source.actionTarget || options.actionTarget || "",
-    };
-  }
-
-  localizeLedHistoryText(title = "", detail = "") {
-    const currentSavedTitle = this.tr("led_schedule_saved");
-    const currentSentText = this.tr("led_schedule_sent");
-    const currentLocalText = this.tr("led_schedule_not_sent");
-    const normalizedTitle = String(title || "").trim();
-    const normalizedDetail = String(detail || "").trim();
-    let localizedDetail = normalizedDetail
-      .replace(/\b(?:Alle Tage|Every day)\b/gi, this.tr("all_days"))
-      .replace(/\b(?:Kanal\/Kanaele|Kanal\/Kanäle|Channels?)\b/gi, this.tr("channels"))
-      .replace(/\bZeitplaene\b/gi, "Zeitpläne")
-      .replace(/\bGeraet\b/gi, "Gerät")
-      .replace(/\bgeloescht\b/gi, "gelöscht")
-      .replace(/\bunveraendert\b/gi, "unverändert");
-    localizedDetail = localizedDetail
-      .replace(/^(?:Zeitplan|Schedule)\s+(\d+)\s+(?:gesendet|sent)$/i, (_match, index) => `${this.tr("schedule")} ${index} ${this.tr("led_schedule_sent")}`)
-      .replace(/^(?:Zeitplan|Schedule)\s+(\d+):/i, (_match, index) => `${this.tr("schedule")} ${index}:`)
-      .replace(/Alle Zeitpläne am Gerät gelöscht; lokal unverändert/gi, this.tr("schedules_device_deleted_local_kept"));
-    const detailRowsMatch = localizedDetail.match(/^(\d+)\s+.+?(?:sent to device|an Ger(?:ae|ä)t gesendet|lokal gespeichert, nicht gesendet)$/i);
-    const isSavedTitle = /^(schedule saved|zeitplan gespeichert)$/i.test(normalizedTitle);
-    const isScheduleSavedDetail = /(schedule rows sent to device|zeitplan-zeilen an geraet gesendet)$/i.test(normalizedDetail);
-    const isLocalSavedDetail = /(saved locally, not sent|lokal gespeichert, nicht gesendet)$/i.test(normalizedDetail);
-    if (/^schedule$/i.test(normalizedTitle)) {
-      return { title: this.tr("schedule"), detail: localizedDetail };
-    }
-    if (/^last notification$/i.test(normalizedTitle)) {
-      return { title: this.tr("last_notification"), detail: localizedDetail };
-    }
-    if (/^led notification fetch$/i.test(normalizedTitle)) {
-      const received = normalizedDetail.match(/^(\d+) notification\(s\) received$/i);
-      return {
-        title: this.tr("notification_fetch"),
-        detail: /insufficient authorization/i.test(normalizedDetail)
-          ? this.tr("notification_fetch_unauthorized")
-          : (received
-            ? `${received[1]} ${this.tr("notification_fetch_received")}`
-            : (/^no device notification received$/i.test(normalizedDetail) ? this.tr("notification_fetch_none") : localizedDetail)),
-      };
-    }
-    if (/^led schedule verification$/i.test(normalizedTitle)) {
-      const range = normalizedDetail.match(/^(\d{2}:\d{2}-\d{2}:\d{2}):/);
-      const failed = /:\s*failed$/i.test(normalizedDetail);
-      return {
-        title: this.tr("schedule_verification"),
-        detail: `${range ? `${range[1]} · ` : ""}${this.tr(failed ? "schedule_verification_failed" : "schedule_verification_ok")}`,
-      };
-    }
-    if (/^firmware$/i.test(normalizedTitle)) {
-      return { title: this.tr("firmware"), detail: localizedDetail };
-    }
-    if (/^schedule sensor$/i.test(normalizedTitle)) {
-      return { title: this.tr("schedule_sensor"), detail: localizedDetail };
-    }
-    if (isSavedTitle) {
-      if (detailRowsMatch && isScheduleSavedDetail) {
-        return { title: currentSavedTitle, detail: `${detailRowsMatch[1]} ${this.tr("led_schedule_rows")} ${currentSentText}` };
-      }
-      if (detailRowsMatch && isLocalSavedDetail) {
-        return { title: currentSavedTitle, detail: `${detailRowsMatch[1]} ${this.tr("led_schedule_rows")} ${currentLocalText}` };
-      }
-      if (isScheduleSavedDetail) return { title: currentSavedTitle, detail: currentSentText };
-      if (isLocalSavedDetail) return { title: currentSavedTitle, detail: currentLocalText };
-      return { title: currentSavedTitle, detail: localizedDetail };
-    }
-    if (/^(schedule sent to device|zeitplan an ger(?:ae|ä)t gesendet)(?:\s+(ok|fail))?$/i.test(normalizedTitle)) {
-      const status = normalizedTitle.match(/\s+(ok|fail)$/i)?.[1] || "";
-      return { title: `${this.tr("led_schedule_sent_action")}${status ? ` ${status}` : ""}`, detail: localizedDetail };
-    }
-    if (/^(schedule deleted|zeitplan gel(?:oe|ö)scht)$/i.test(normalizedTitle)) {
-      return { title: this.tr("schedule_deleted"), detail: localizedDetail };
-    }
-    if (/^(led gesetzt|led set)$/i.test(normalizedTitle)) {
-      return { title: this.tr("led_set"), detail: localizedDetail };
-    }
-    if (/^(enable auto mode|auto-modus aktivieren)$/i.test(normalizedTitle)) {
-      return { title: this.tr("enable_auto_mode"), detail: localizedDetail };
-    }
-    if (/^(off|aus)$/i.test(normalizedTitle)) {
-      return { title: this.tr("off"), detail: localizedDetail };
-    }
-    if (/^(on|an)$/i.test(normalizedTitle)) {
-      return { title: this.tr("on"), detail: localizedDetail };
-    }
-    return { title: normalizedTitle, detail: localizedDetail };
-  }
-
-  sharedHistoryPanel(options = {}) {
-    const title = String(options.title || this.tr("history_total"));
-    const action = String(options.action || "");
-    const emptyLabel = String(options.emptyLabel || this.tr("no_history"));
-    const rows = Array.isArray(options.entries) ? options.entries : [];
-    const content = this.sharedHistoryRowsMarkup(rows, {
-      emptyLabel,
-      emptyAction: action,
-      rowAction: typeof options.rowAction === "function" ? options.rowAction : null,
-      color: options.color || "#03c9ff",
-    });
-    return `<section class="card history-card ${options.className ? this.escapeHtml(String(options.className)) : ""}">
-      <h2 class="card-title-action">
-        <span>${this.escapeHtml(title)}</span>
-        ${action ? `<button class="mini eye-action" data-action="${this.escapeHtml(action)}" title="${this.escapeHtml(title)}"><ha-icon icon="mdi:eye"></ha-icon></button>` : ""}
-      </h2>
-      <div class="front-history-list">
-        ${content}
-      </div>
-    </section>`;
-  }
-
-  sharedHistoryDialog(options = {}) {
-    const title = String(options.title || this.tr("history"));
-    const statusScope = this.dialogState && this.dialogState.type === "history-all" ? "doser" : "";
-    const entries = statusScope
-      ? this.filterHistoryEntries(options.entries || [], statusScope)
-      : (options.entries || []);
-    const rowsMarkup = this.sharedHistoryRowsMarkup(entries, { ...options, expanded: true });
-    const filterHtml = statusScope ? this.historyFiltersMarkup(statusScope) : "";
-    const bodyHtml = options.bodyHtml ? String(options.bodyHtml) : "";
-    const headerHtml = statusScope ? `
-      <header class="led-channel-history-head">
-        <h2>${this.escapeHtml(title)}</h2>
-        <div class="history-dialog-head-actions">
-          ${filterHtml}
-          <button type="button" class="led-channel-history-close" data-action="close-dialog" title="${this.escapeHtml(this.tr("close"))}" aria-label="${this.escapeHtml(this.tr("close"))}"><span aria-hidden="true">&#10005;</span></button>
-        </div>
-      </header>` : "";
-    return this.sharedModalDialog({
-      title,
-      sectionClass: "modal card history-modal",
-      headerHtml,
-      bodyHtml: `${bodyHtml}<div class="dialog-history-list all-history-list">${rowsMarkup}</div>`,
-      actions: statusScope ? [] : [
-        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
-      ],
-    });
-  }
-
-  sharedDialogActions(buttons = []) {
-    const items = Array.isArray(buttons) ? buttons : [];
-    return items.map((button) => {
-      const type = String(button && button.type ? button.type : "button");
-      const action = button && button.action ? ` data-action="${this.escapeHtml(String(button.action))}"` : "";
-      const classes = String(button && button.className ? button.className : "").trim();
-      const attrs = String(button && button.attrs ? button.attrs : "");
-      const icon = button && button.icon
-        ? `<ha-icon icon="${this.escapeHtml(String(button.icon))}"></ha-icon>`
-        : "";
-      const label = button && button.label ? `<span>${this.escapeHtml(String(button.label))}</span>` : "";
-      return `<button type="${type}" class="${this.escapeHtml(classes)}"${action}${attrs ? ` ${attrs}` : ""}>${icon}${label}</button>`;
-    }).join("");
-  }
-
-  sharedIconActionButtons(buttons = [], options = {}) {
-    const items = Array.isArray(buttons) ? buttons : [];
-    const wrapperClass = String(options.wrapperClass || "led-schedule-front-actions").trim();
-    const defaultButtonClass = String(options.buttonClass || "mini").trim();
-    const html = items.map((button) => {
-      const type = String(button && button.type ? button.type : "button");
-      const action = button && button.action ? ` data-action="${this.escapeHtml(String(button.action))}"` : "";
-      const attrs = String(button && button.attrs ? button.attrs : "");
-      const classes = [defaultButtonClass, String(button && button.className ? button.className : "").trim()]
-        .filter(Boolean)
-        .join(" ");
-      const title = button && button.title ? ` title="${this.escapeHtml(String(button.title))}"` : "";
-      const icon = button && button.icon
-        ? `<ha-icon icon="${this.escapeHtml(String(button.icon))}"></ha-icon>`
-        : "";
-      const label = button && button.label ? `<span>${this.escapeHtml(String(button.label))}</span>` : "";
-      return `<button class="${this.escapeHtml(classes)}" type="${type}"${action}${title}${attrs ? ` ${attrs}` : ""}>${icon}${label}</button>`;
-    }).join("");
-    return `<div class="${this.escapeHtml(wrapperClass)}">${html}</div>`;
-  }
-
-  sharedDebugDialog(options = {}) {
-    const levelClass = options.level === "error" ? " error" : "";
-    const title = String(options.title || (options.debug ? this.tr("debug_output") : this.tr("result_output")));
-    const output = String(options.output || "");
-    return this.sharedModalDialog({
-      title,
-      sectionClass: `modal card debug-modal${levelClass}`,
-      bodyHtml: `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`,
-      actions: [
-        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
-      ],
-    });
-  }
-
-  sharedModalDialog(options = {}) {
-    const title = String(options.title || "");
-    const sectionClass = String(options.sectionClass || "modal card");
-    const headerHtml = options.headerHtml ? String(options.headerHtml) : `<h2>${this.escapeHtml(title)}</h2>`;
-    const bodyHtml = options.bodyHtml ? String(options.bodyHtml) : "";
-    const footerHtml = options.footerHtml ? String(options.footerHtml) : "";
-    const actionsHtml = Array.isArray(options.actions) && options.actions.length
-      ? `<div class="modal-actions${options.actionsClass ? ` ${this.escapeHtml(String(options.actionsClass))}` : ""}">${this.sharedDialogActions(options.actions)}</div>`
-      : "";
-    return `
-      <div class="modal-backdrop">
-        <section class="${this.escapeHtml(sectionClass)}">
-          ${headerHtml}
-          ${bodyHtml}
-          ${footerHtml || actionsHtml}
-        </section>
-      </div>`;
-  }
-
-  addonUpdateTargets() {
-    const registry = {
-      core: {
-        key: "core",
-        slug: "chihiros_beta",
-        updateEntity: "update.chihiros_beta_update",
-        title: "Chihiros Core",
-      },
-      chihiros_beta: {
-        key: "core",
-        slug: "chihiros_beta",
-        updateEntity: "update.chihiros_beta_update",
-        title: "Chihiros Core",
-      },
-    };
-    const plugins = window.ChihirosPlugins || {};
-    Object.entries(plugins).forEach(([kind, plugin]) => {
-      const slug = plugin && plugin.addonSlug ? String(plugin.addonSlug).trim() : "";
-      if (!slug) return;
-      const target = {
-        key: String(kind || "").trim() || slug,
-        slug,
-        updateEntity: plugin && plugin.updateEntity ? String(plugin.updateEntity).trim() : "",
-        title: plugin && plugin.title ? String(plugin.title).trim() : slug,
-      };
-      registry[target.key] = target;
-      registry[target.slug] = target;
-    });
-    return registry;
-  }
-
-  resolveAddonUpdateTarget(addon = "chihiros_beta") {
-    const requested = String(addon || "chihiros_beta").trim().toLowerCase() || "chihiros_beta";
-    const registry = this.addonUpdateTargets();
-    return registry[requested] || {
-      key: requested,
-      slug: requested,
-      updateEntity: "",
-      title: requested,
-    };
-  }
-
-  async runAddonUpdate(addon = "chihiros_beta") {
-    const resolvedTarget = this.resolveAddonUpdateTarget(addon);
-    const target = resolvedTarget.slug;
-    const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-    const refreshAddonUpdateSource = async () => {
-      try {
-        const response = await fetch("./api/addon-refresh", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ addon: target }),
-        });
-        const raw = await response.text();
-        let data = {};
-        if (raw) {
-          try {
-            data = JSON.parse(raw);
-          } catch (_err) {
-            data = { output: raw };
-          }
-        }
-        this._lastAddonRefresh = response.ok && data && typeof data === "object" ? data : null;
-        return response.ok
-          ? String(data.output || "Addon store reload: OK")
-          : `Addon store reload: ${response.status} ${data.message || data.output || raw || ""}`.trim();
-      } catch (err) {
-        this._lastAddonRefresh = null;
-        return `Add-on-Store-Neuladen übersprungen: ${err && err.message ? err.message : err}`;
-      }
-    };
-    const runHomeAssistantUpdate = async (entityId) => {
-      const debug = [];
-      const readState = async () => {
-        if (this._hass && typeof this._hass.callApi === "function") {
-          try {
-            return { source: "callApi", state: await this._hass.callApi("GET", `states/${entityId}`) };
-          } catch (err) {
-            const message = err && err.message ? err.message : String(err);
-            if (message.includes("502") || message.toLowerCase().includes("bad gateway")) {
-              return {
-                source: "addon-restart",
-                state: null,
-                transient: true,
-                message: "Add-on/Ingress startet gerade neu; warte auf erneute Verbindung.",
-              };
-            }
-            debug.push(`State source callApi failed: ${message}`);
-          }
-        }
-        if (this._hass && this._hass.connection && this._hass.connection.sendMessagePromise) {
-          try {
-            const states = await this._hass.connection.sendMessagePromise({ type: "get_states" });
-            if (Array.isArray(states)) {
-              return { source: "get_states", state: states.find((item) => item && item.entity_id === entityId) || null };
-            }
-          } catch (err) {
-            debug.push(`State source get_states failed: ${err && err.message ? err.message : err}`);
-          }
-        }
-        return { source: "hass.states", state: this._hass && this._hass.states ? this._hass.states[entityId] : null };
-      };
-      const versionInfo = (state) => {
-        const attrs = state && state.attributes ? state.attributes : {};
-        return {
-          state: state ? String(state.state || "") : "",
-          installed: attrs.installed_version ? String(attrs.installed_version) : "",
-          latest: attrs.latest_version ? String(attrs.latest_version) : "",
-          inProgress: Boolean(attrs.in_progress),
-        };
-      };
-      debug.push(await refreshAddonUpdateSource());
-      await this._hass.callService("homeassistant", "update_entity", { entity_id: entityId });
-      debug.push(`homeassistant.update_entity ${entityId}: OK`);
-      let read = await readState();
-      let state = read.state;
-      let info = versionInfo(state);
-      debug.push(`State source: ${read.source}`);
-      debug.push(this.updateDebug(state, "Nach update_entity poll 1"));
-      for (let poll = 1; poll < 60 && info.state !== "on"; poll += 1) {
-        await sleep(1000);
-        read = await readState();
-        if (read.transient) {
-          debug.push(`Nach update_entity poll ${poll + 1}: ${read.message}`);
-          continue;
-        }
-        state = read.state;
-        info = versionInfo(state);
-        debug.push(`State source: ${read.source}`);
-        debug.push(this.updateDebug(state, `Nach update_entity poll ${poll + 1}`));
-      }
-      if (info.state !== "on") {
-        const line = info.installed || info.latest ? `Installiert: ${info.installed || "?"}\nLatest: ${info.latest || "?"}` : "Kein Update verfügbar.";
-        return {
-          output: `OK\nKein Update verfügbar.\n${entityId}\n${line}\n\n${debug.join("\n\n")}`,
-        };
-      }
-      let startError = "";
-      try {
-        await this._hass.callService("update", "install", { backup: false }, { entity_id: entityId });
-        debug.push("update.install: OK");
-      } catch (err) {
-        startError = err && err.message ? err.message : String(err);
-        debug.push(`update.install: Startantwort ignoriert (${startError})`);
-      }
-      for (let poll = 0; poll < 30; poll += 1) {
-        await sleep(1000);
-        try {
-          read = await readState();
-        } catch (err) {
-          const message = err && err.message ? err.message : String(err);
-          debug.push(`update.install poll ${poll + 1}: ${message}`);
-          if (message.includes("502") || message.toLowerCase().includes("bad gateway")) {
-            continue;
-          }
-          throw err;
-        }
-        if (read.transient) {
-          debug.push(`update.install poll ${poll + 1}: ${read.message}`);
-          continue;
-        }
-        state = read.state;
-        debug.push(`State source: ${read.source}`);
-        debug.push(this.updateDebug(state, `update.install poll ${poll + 1}`));
-        info = versionInfo(state);
-        if (info.state !== "on" && !info.inProgress) break;
-      }
-      if (info.installed && info.latest && info.installed === info.latest && info.state !== "on") {
-        return {
-          output: `OK\nUpdate abgeschlossen.\n${entityId}\nInstalliert: ${info.installed}\nLatest: ${info.latest}\n\n${debug.join("\n\n")}`,
-        };
-      }
-      if (startError) {
-        throw new Error(`update.install fehlgeschlagen: ${startError}\n\n${debug.join("\n\n")}`);
-      }
-      return {
-        output: `OK\nUpdate gestartet.\n${entityId}\n${info.installed || "?"} -> ${info.latest || "?"}\n\n${debug.join("\n\n")}`,
-      };
-    };
-    const api = window.ChihirosAddonApi;
-    this.dialogState = {
-      type: "debug",
-      channel: 1,
-      output: `OK\nUpdate wird vorbereitet...\n${target}`,
-      running: true,
-      noChannel: true,
-      level: "pending",
-    };
-    this.render();
-    try {
-      if (!resolvedTarget.updateEntity) throw new Error(`Update-Entity fehlt für ${target}`);
-      if (!this._hass) throw new Error("Home-Assistant-Verbindung fehlt für Update-Entity-Refresh");
-      const result = await runHomeAssistantUpdate(resolvedTarget.updateEntity);
-      const output = String(result && result.output ? result.output : "Update angefordert.");
-      this.dialogState = {
-        type: "debug",
-        channel: 1,
-        output: `OK\n${output}`,
-        running: false,
-        noChannel: true,
-        level: "ok",
-      };
-      this.render();
-      return result;
-    } catch (err) {
-      this.dialogState = {
-        type: "debug",
-        channel: 1,
-        output: `FAIL\n${err && err.message ? err.message : err}`,
-        running: false,
-        noChannel: true,
-        level: "error",
-      };
-      this.render();
-      return null;
-    }
-  }
-
-  updateDebug(state, label) {
-    const lines = [label || "Update state"];
-    if (!state) return `${lines[0]}: nicht vorhanden`;
-    lines.push(`state: ${state.state}`);
-    lines.push(`restored: ${Boolean(state.attributes && state.attributes.restored)}`);
-    lines.push(`installed_version: ${state.attributes && state.attributes.installed_version ? state.attributes.installed_version : ""}`);
-    lines.push(`latest_version: ${state.attributes && state.attributes.latest_version ? state.attributes.latest_version : ""}`);
-    lines.push(`in_progress: ${Boolean(state.attributes && state.attributes.in_progress)}`);
-    lines.push(`supported_features: ${state.attributes && state.attributes.supported_features !== undefined ? state.attributes.supported_features : ""}`);
-    lines.push(`release_url: ${state.attributes && state.attributes.release_url !== undefined ? state.attributes.release_url : ""}`);
-    return lines.join("\n");
-  }
-
-  openDialog(type, channel = 1) {
-    if (String(type || "").startsWith("led-")) {
-      return this.openDialogState(type, channel, { activeTab: "led" });
-    }
-    return this.openDialogState(type, channel);
-  }
-
-  testLedScheduleDialog() {
-    return `
-      <div class="modal-backdrop">
-        <section class="modal card debug-modal">
-          <h2>Test Dialog</h2>
-          <div class="debug-output">OK\nLED dialog path works.\nWenn du das hier siehst, funktioniert das Oeffnen eines Dialogs.</div>
-          <div class="modal-actions">
-            <button type="button" class="link" data-action="close-dialog">${this.tr("close")}</button>
-          </div>
-        </section>
-      </div>`;
-  }
-
-  closeDialog() {
-    return this.closeDialogState();
-  }
-
-  escapeHtml(value = "") {
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  moreInfo(entity) {
-    if (!entity) return;
-    const event = new Event("hass-more-info", { bubbles: true, composed: true });
-    event.detail = { entityId: entity };
-    this.dispatchEvent(event);
-  }
-
-  actionButton(label, icon, action, accent = false) {
-    return `
-      <button class="tile ${accent ? "accent" : ""}" data-action="${action}">
-        <ha-icon icon="${icon}"></ha-icon>
-        <span>${label}</span>
-      </button>`;
-  }
-
-  row(icon, label, value, action = "") {
-    const attr = action ? ` data-action="${action}"` : "";
-    return `
-      <div class="row"${attr}>
-        <ha-icon icon="${icon}"></ha-icon>
-        <span>${label}</span>
-        <strong>${value}</strong>
-      </div>`;
-  }
-
-  scheduleToggle(entity) {
-    const on = this.isOn(entity);
-    return `
-      <button class="schedule-toggle ${on ? "on" : ""}" data-action="press:${entity}" title="${this.tr("active")}">
-        <span class="toggle ${on ? "on" : ""}"></span>
-        <span>${on ? this.tr("on") : this.tr("off")}</span>
-      </button>`;
-  }
-
-  formatTimerTime(value) {
-    if (!value || value === "-") return "-";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
-  topActions() {
-    const mac = this.entityPrefix();
-    const read = this.config.read_button || `button.${mac}_${this.channelSlug(1)}_read_daily_values`;
-    const timerStatus = this.timerStatusEntity();
-    const nextBaseline = this.stateAttr(timerStatus, "next_baseline", "-");
-    const nextResult = this.stateAttr(timerStatus, "next_result", "-");
-    const timerRange = `${this.escapeHtml(this.formatTimerTime(nextBaseline))} -> ${this.escapeHtml(this.formatTimerTime(nextResult))}`;
-    const calibrationRows = this.channels.map((ch) => `
-        <button class="action-row" data-action="dialog:calibration:${ch.id}">
-          <ha-icon icon="mdi:scale-balance"></ha-icon>
-          <span>CH${ch.id} ${this.tr("calibrate_channel")}</span>
-          <b>${this.tr("start")}</b>
-        </button>`).join("");
-    return `
-      <section class="card top-card tools-card">
-        <h2>${this.tr("fetch_data")}</h2>
-        <button class="action-row" data-press="${read}">
-          <ha-icon icon="mdi:download-circle"></ha-icon>
-          <span>${this.tr("read_daily")}</span>
-          <b>${this.tr("press")}</b>
-        </button>
-        <h2 class="sub-head">${this.tr("catch_up")}</h2>
-        <button class="action-row" data-action="more:${timerStatus}">
-          <ha-icon icon="mdi:timer-cog-outline"></ha-icon>
-          <span>${this.tr("catch_up_timer_status")}<small class="timer-range">${timerRange}</small></span>
-          <b>${this.state(timerStatus)}</b>
-        </button>
-        <button class="action-row" data-action="more:${read}">
-          <ha-icon icon="mdi:pencil"></ha-icon>
-          <span>${this.tr("catch_up_edit")}</span>
-          <b>${this.tr("change")}</b>
-        </button>
-        <h2 class="sub-head">${this.tr("calibrate")}</h2>
-        ${calibrationRows}
-      </section>`;
-  }
-
-  deviceTabs() {
-    const tab = this.ensureEnabledTab(this.activeTab);
-    this.activeTab = tab;
-    const coreTabs = new Set(["led", "config"]);
-    const pluginTabs = this.visibleTabs().filter((id) => !coreTabs.has(id) && this.isPluginLoaded(id));
-    const item = (id, label) => `
-        <button type="button" data-tab="${id}" class="${tab === id ? "active" : ""}">
-          ${this.tabIcon(id)}
-          <span>${label}</span>
-        </button>`;
-    const maybeItem = (id, label) => this.isTabEnabled(id) ? item(id, label) : "";
-    return `
-      <nav class="device-tabs" aria-label="Chihiros Bereiche">
-        ${maybeItem("led", this.tr("led"))}
-        ${pluginTabs.map((id) => item(id, this.pluginTitle(id))).join("")}
-        ${maybeItem("config", this.tr("config"))}
-        ${this.config.addon_mode ? `<button type="button" class="addon-update-button" data-addon-update="chihiros_beta">${this.tabIcon("update")}<span>Update</span></button>` : ""}
-      </nav>`;
-  }
-
-  pluginTitle(id) {
-    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[id];
-    return (plugin && plugin.title) || String(id || "").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-  }
-
-  tabIcon(id) {
-    const common = `class="tab-icon tab-icon-${id}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"`;
-    const icons = {
-      led: `<path d="M4 8h16v8H4z"/><path d="M7 8V5m5 3V5m5 3V5M7 19v-3m5 3v-3m5 3v-3"/>`,
-      doser: `<path d="M12 3c3 4 5 6.5 5 10a5 5 0 0 1-10 0c0-3.5 2-6 5-10z"/><path d="M9 14c.7 1.4 1.8 2.1 3.4 2.1"/>`,
-      ruehrer: `<circle cx="12" cy="12" r="2"/><path d="M12 4c2.2 1.9 2.7 4.1 1.5 6.4M20 13c-2.7 1-4.8.5-6.3-1.5M7 19c.5-2.8 2-4.5 4.7-5"/>`,
-      heizer: `<path d="M8 4v10a4 4 0 1 0 8 0V4"/><path d="M8 8h8M8 12h8"/>`,
-      ctl: `<path d="M6 7h12M6 12h8M6 17h10"/><path d="M16 12h2m-2 0 1.4-1.4M16 12l1.4 1.4"/>`,
-      config: `<circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/>`,
-      update: `<path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4v5h-5"/>`,
-    };
-    return `<svg ${common}>${icons[id] || icons.update}</svg>`;
-  }
-
-  iconSvg(icon, extraClass = "ui-icon") {
-    const key = String(icon || "").trim();
-    const paths = {
-      "mdi:calendar-check": `<path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z"/><path d="m8 14 2.2 2.2L16 10.5"/>`,
-      "mdi:calendar-remove": `<path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z"/><path d="m9 12 6 6m0-6-6 6"/>`,
-      "mdi:calendar-sync": `<path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z"/><path d="M9 14a3 3 0 0 1 5-2.2l1 1M15 10v3h-3m3 2a3 3 0 0 1-5 2.2l-1-1m0 2v-3h3"/>`,
-      "mdi:bug-outline": `<path d="M8 7V5m8 2V5M7 11H4m16 0h-3M7 15H4m16 0h-3"/><path d="M8 9h8v7a4 4 0 0 1-8 0z"/><path d="M9 9a3 3 0 0 1 6 0M10 13h.01M14 13h.01"/>`,
-      "mdi:chip": `<path d="M8 8h8v8H8z"/><path d="M4 10h4m8 0h4M4 14h4m8 0h4M10 4v4m4-4v4m-4 8v4m4-4v4"/>`,
-      "mdi:clock-outline": `<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>`,
-      "mdi:cog": `<circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/>`,
-      "mdi:plus": `<path d="M12 5v14M5 12h14"/>`,
-      "mdi:console": `<path d="M4 5h16v14H4z"/><path d="M7 9l3 3-3 3m6 0h4"/>`,
-      "mdi:content-copy": `<path d="M8 8h10v12H8z"/><path d="M6 16H4V4h10v2"/>`,
-      "mdi:content-save-all-outline": `<path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/><path d="M3 7v15h15"/>`,
-      "mdi:content-save-outline": `<path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/>`,
-      "mdi:cup-water": `<path d="M6 5h12l-1.2 15H7.2z"/><path d="M8 10c2 1.2 5 1.2 8 0"/>`,
-      "mdi:download": `<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>`,
-      "mdi:download-circle": `<circle cx="12" cy="12" r="9"/><path d="M12 6v9m-4-4 4 4 4-4"/>`,
-      "mdi:delete-outline": `<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/><path d="M10 10v7m4-7v7"/>`,
-      "mdi:eye": `<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="3"/>`,
-      "mdi:eye-outline": `<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="3"/>`,
-      "mdi:fan": `<circle cx="12" cy="12" r="2"/><path d="M12 4c2.2 1.9 2.7 4.1 1.5 6.4M20 13c-2.7 1-4.8.5-6.3-1.5M7 19c.5-2.8 2-4.5 4.7-5"/>`,
-      "mdi:fish": `<path d="M4 12c3-4 8-5 14-2l3-3v10l-3-3c-6 3-11 2-14-2z"/><circle cx="15" cy="11" r=".7"/>`,
-      "mdi:gesture-tap-button": `<path d="M6 17h12v4H6z"/><path d="M12 17V8m0 0-2 2m2-2 2 2"/><circle cx="12" cy="6" r="3"/>`,
-      "mdi:hand-water": `<path d="M7 12V5a2 2 0 0 1 4 0v5m0-3a2 2 0 0 1 4 0v5m0-3a2 2 0 0 1 4 0v7c0 3-2 5-6 5H9c-3 0-5-2-5-5v-4a2 2 0 0 1 3-1"/><path d="M18 3c1.5 1.8 2.2 3 2.2 4a2.2 2.2 0 0 1-4.4 0c0-1 .7-2.2 2.2-4z"/>`,
-      "mdi:history": `<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 5v5h5M12 7v5l3 2"/>`,
-      "mdi:lightbulb": `<path d="M9 18h6M10 22h4M8 14a6 6 0 1 1 8 0c-.8.8-1 1.7-1 3H9c0-1.3-.2-2.2-1-3z"/>`,
-      "mdi:lock-outline": `<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>`,
-      "mdi:numeric": `<path d="M8 7v10M6 9l2-2 2 2M14 7h2a2 2 0 0 1 0 4h-2v6h5"/>`,
-      "mdi:open-in-new": `<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v7H4V6h7"/>`,
-      "mdi:pencil": `<path d="M4 20h4l11-11-4-4L4 16z"/><path d="m13 7 4 4"/>`,
-      "mdi:play-circle": `<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/>`,
-      "mdi:radiator": `<path d="M8 4v16m4-16v16m4-16v16M5 6h14v12H5z"/><path d="M7 21h10"/>`,
-      "mdi:scale-balance": `<path d="M12 3v18M6 6h12M8 6l-4 7h8zm8 0-4 7h8z"/>`,
-      "mdi:share-variant": `<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"/>`,
-      "mdi:toggle-switch": `<rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="3"/>`,
-      "mdi:timer-cog-outline": `<circle cx="12" cy="13" r="8"/><path d="M12 13V8m-3-5h6M9 2h6"/><circle cx="16" cy="16" r="2"/><path d="M16 13v1m0 4v1m-3-3h1m4 0h1"/>`,
-      "mdi:weather-sunset": `<path d="M4 19h16M6 15a6 6 0 0 1 12 0"/><path d="M12 4v4M4 12h3m10 0h3M6.5 6.5l2.1 2.1m6.8 0 2.1-2.1"/>`,
-      "mdi:white-balance-sunny": `<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1m0-15.6-2.1 2.1M6.3 17.7l-2.1 2.1"/>`,
-      "mdi:brightness-7": `<circle cx="12" cy="12" r="5"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1m0-15.6-2.1 2.1M6.3 17.7l-2.1 2.1"/>`,
-      "mdi:bottle-tonic-outline": `<path d="M9 3h6v4l2 3v10H7V10l2-3z"/><path d="M9 7h6M9 13h6"/>`,
-    };
-    const body = paths[key] || paths["mdi:chip"];
-    return `<svg class="${extraClass}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${body}</svg>`;
-  }
-
-  replaceHaIcons() {
-    this.querySelectorAll("ha-icon").forEach((node) => {
-      const holder = document.createElement("span");
-      holder.innerHTML = this.iconSvg(node.getAttribute("icon"));
-      const svg = holder.firstElementChild;
-      if (svg) node.replaceWith(svg);
-    });
-  }
-
-  setTab(tab) {
-    this.activeTab = this.ensureEnabledTab(tab);
-    this.uiSettings.activeTab = this.activeTab;
-    this.saveUiSettings();
-    this.render();
-  }
-
-  entityLabel(entityId, state) {
-    return (state && state.attributes && state.attributes.friendly_name) || entityId;
-  }
-
-  entityValue(entityId, state) {
-    if (!state || state.state === "unknown" || state.state === "unavailable") return this.tr("unknown");
-    const unit = state.attributes.unit_of_measurement || "";
-    return unit ? `${state.state} ${unit}` : state.state;
-  }
-
-  entityIcon(entityId, state) {
-    if (state && state.attributes && state.attributes.icon) return state.attributes.icon;
-    const domain = entityId.split(".")[0];
-    if (domain === "light") return "mdi:lightbulb";
-    if (domain === "switch") return "mdi:toggle-switch";
-    if (domain === "button") return "mdi:gesture-tap-button";
-    if (domain === "number") return "mdi:numeric";
-    if (domain === "sensor") return "mdi:eye";
-    return "mdi:chip";
-  }
-
-  findEntities(kind) {
-    const configured = this.config[`${kind}_entities`];
-    if (Array.isArray(configured) && configured.length) return configured;
-    if (!this._hass) return [];
-    const patterns = {
-      led: ["led", "light", "wrgb", "rgb", "dyu1000", "chihiros"],
-      ruehrer: ["ruehrer", "rührer", "stirrer", "magstirrer", "mix", "dymix"],
-      heizer: ["heizer", "heater", "heat", "thermostat", "temperature"],
-    }[kind] || [];
-    const allowed = new Set(["light", "switch", "button", "number", "sensor", "binary_sensor", "climate"]);
-    return Object.entries(this._hass.states)
-      .filter(([entityId, state]) => {
-        const domain = entityId.split(".")[0];
-        if (!allowed.has(domain)) return false;
-        const haystack = `${entityId} ${this.entityLabel(entityId, state)}`.toLowerCase();
-        return patterns.some((pattern) => haystack.includes(pattern));
-      })
-      .map(([entityId]) => entityId)
-      .slice(0, 48);
-  }
-
-  entityRow(entityId) {
-    const state = this._hass && this._hass.states[entityId];
-    const domain = entityId.split(".")[0];
-    const action = domain === "button" || domain === "switch" || domain === "light"
-      ? `press:${entityId}`
-      : `more:${entityId}`;
-    const value = domain === "button" ? this.tr("press") : this.entityValue(entityId, state);
-    return `
-      <button class="entity-row" data-action="${action}">
-        <ha-icon icon="${this.entityIcon(entityId, state)}"></ha-icon>
-        <span>${this.entityLabel(entityId, state)}</span>
-        <b>${value}</b>
-      </button>`;
-  }
-
-  haDevicePanel(kind, title) {
-    const entities = this.findEntities(kind);
-    const rows = entities.length
-      ? entities.map((entityId) => this.entityRow(entityId)).join("")
-      : `<div class="empty-note">${this.tr("no_entities")}</div>`;
-    return `
-      <div class="ha-tab-page">
-        ${this.pageHeader(title, `${entities.length} Entities`, kind === "ruehrer" ? "mdi:fan" : "mdi:radiator")}
-        <section class="card ha-entities-card">
-          <h2>${title}</h2>
-          <div class="entity-grid">${rows}</div>
-        </section>
-      </div>`;
-  }
-
-  pageHeader(title, subtitle = "", icon = "mdi:fish") {
-    return `
-      <section class="page-hero">
-        <div class="page-hero-icon"><ha-icon icon="${icon}"></ha-icon></div>
-        <div>
-          <h1>${this.escapeHtml(title)}</h1>
-          ${subtitle ? `<p>${this.escapeHtml(subtitle)}</p>` : ""}
-        </div>
-      </section>`;
-  }
-
-  tabContent() {
-    this.activeTab = this.ensureEnabledTab(this.activeTab);
-    if (this.activeTab === "led") return this.ledPanel();
-    if (this.activeTab === "config") return this.configPanel();
-    const pluginPanel = this.pluginPanel(this.activeTab);
-    if (pluginPanel !== null) return pluginPanel;
-    return `<section class="card"><h2>${this.escapeHtml(this.pluginTitle(this.activeTab))}</h2><div class="empty-note">Plugin is not installed.</div></section>`;
-  }
-
-  pluginPanel(id) {
-    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[id];
-    if (!plugin) return null;
-    if (typeof plugin.renderPanel === "function") return plugin.renderPanel(this);
-    return `<section class="card"><h2>${this.escapeHtml(this.pluginTitle(id))}</h2><div class="empty-note">Plugin ist nicht geladen.</div></section>`;
-  }
-
-  addonDatabasePanel() {
-    if (!this.config.addon_mode) return "";
-    const db = this.config.addon_database || {};
-    const mode = String(db.mode || "hass");
-    const stateDbPath = String(db.state_db_path || db.hass_state_db_path || "/config/.chihiros/chihiros_state.sqlite3");
-    const effectiveState = String(db.effective_state_db_path || stateDbPath);
-    const diagnosticsEnabled = Boolean(db.database_diagnostics_enabled);
-    return `
-        <section class="card config-card database-card">
-          <div class="config-card-head">
-            <div>
-              <h2>${this.tr("database")}</h2>
-              <small>${this.tr("database_subtitle")}</small>
-            </div>
-            <span class="db-pill">${mode === "custom" ? this.tr("own_database") : "Home Assistant"}</span>
-          </div>
-          <form data-addon-db-form>
-            <div class="db-mode">
-              <label class="${mode === "hass" ? "active" : ""}">
-                <input type="radio" name="mode" value="hass" ${mode === "hass" ? "checked" : ""}>
-                <span>Home Assistant</span>
-              </label>
-              <label class="${mode === "custom" ? "active" : ""}">
-                <input type="radio" name="mode" value="custom" ${mode === "custom" ? "checked" : ""}>
-                <span>${this.tr("own_database")}</span>
-              </label>
-            </div>
-            <label class="config-row wide">
-              <span>State SQLite</span>
-              <input type="text" name="state_db_path" value="${this.escapeHtml(stateDbPath)}" placeholder="/config/.chihiros/chihiros_state.sqlite3">
-            </label>
-            <div class="db-current">
-              <p><b>${this.tr("active_sqlite")}</b><span>${this.escapeHtml(effectiveState)}</span></p>
-            </div>
-            <label class="config-check">
-              <input type="checkbox" name="database_diagnostics_enabled" ${diagnosticsEnabled ? "checked" : ""}>
-              <span><b>${this.tr("database_diagnostics")}</b><small>${this.tr("database_diagnostics_hint")}</small></span>
-            </label>
-            <div class="db-actions">
-              <button type="button" class="link" data-addon-db-refresh>${this.tr("reload").toUpperCase()}</button>
-              <button type="submit" class="primary">${this.tr("save").toUpperCase()}</button>
-            </div>
-          </form>
-        </section>`;
-  }
-
-  pluginConfigPanels() {
-    if (!this.config.addon_mode) return "";
-    const plugins = window.ChihirosPlugins || {};
-    return this.visibleTabs().map((id) => {
-      const plugin = plugins[id];
-      if (!plugin || typeof plugin.renderConfig !== "function" || !this.isPluginLoaded(id)) return "";
-      return plugin.renderConfig(this);
-    }).join("");
-  }
-
-  configPanel() {
-    const lang = this.language();
-    const showMac = this.uiSettings && this.uiSettings.showMac !== false;
-    const dashboardDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
-    const channelNameRows = this.visibleTabs().includes("doser") ? this.channels.map((ch) => `
-          <label class="config-row">
-            <span>CH${ch.id}</span>
-            <input type="text" value="${this.escapeHtml(ch.name)}" data-channel-name="${ch.id}">
-          </label>`).join("") : "";
-    const channelNamePanel = channelNameRows ? `
-          <h2 class="sub-head">${this.tr("channel_names")}</h2>
-          ${channelNameRows}` : "";
-    return `
-      <div class="config-page">
-        ${this.addonDatabasePanel()}
-        ${this.pluginConfigPanels()}
-        <section class="card config-card">
-          <h2>${this.tr("display")}</h2>
-          <label class="config-row">
-            <span>${this.tr("language_label")}</span>
-            <select data-ui-setting="language">
-              <option value="de" ${lang === "de" ? "selected" : ""}>${this.tr("language_de")}</option>
-              <option value="en" ${lang === "en" ? "selected" : ""}>${this.tr("language_en")}</option>
-            </select>
-          </label>
-          <label class="config-check">
-            <input type="checkbox" data-ui-setting="showMac" ${showMac ? "checked" : ""}>
-            <span>${this.tr("show_mac")}</span>
-          </label>
-          <label class="config-check">
-            <input type="checkbox" data-ui-setting="dashboardDebug" ${dashboardDebug ? "checked" : ""}>
-            <span>${this.tr("dashboard_debug")}</span>
-          </label>
-          <small class="settings-note">${this.tr("dashboard_debug_hint")}</small>
-          ${channelNamePanel}
-        </section>
-      </div>`;
+  uiSettingsKey() {
+    return `chihiros-led-core-card:${String(this.deviceAddress || "default").toLowerCase()}:ui`;
   }
 
   dialog() {
-    if (this.dialogState && this.dialogState.type === "debug") {
-      return this.sharedDebugDialog({
-        title: this.dialogState.title || (this.dialogState.debug ? this.tr("debug_output") : this.tr("result_output")),
-        output: this.dialogState.output || "",
-        debug: Boolean(this.dialogState.debug),
-        level: this.dialogState.level || "",
-      });
-    }
-    if (this.dialogState && this.dialogState.type === "confirm") {
-      return this.sharedModalDialog({
-        title: this.dialogState.title || this.tr("reset_schedule"),
-        sectionClass: "modal card debug-modal",
-        bodyHtml: `<div class="debug-output">${this.escapeHtml([this.dialogState.message || "", this.dialogState.detail || ""].filter(Boolean).join("\n\n"))}</div>`,
-        actions: [
-          { action: "confirm-dialog-no", label: this.dialogState.cancelLabel || this.tr("reset_schedule_no"), className: "link", type: "button" },
-          { action: "confirm-dialog-yes", label: this.dialogState.confirmLabel || this.tr("reset_schedule_yes"), className: "primary", type: "button" },
-        ],
-      });
-    }
-    if (this.dialogState && this.dialogState.type === "test-led-schedule" && typeof this.testLedScheduleDialog === "function") {
-      return this.testLedScheduleDialog();
-    }
-    if (this.ledScheduleEditorOpen && typeof this.ledScheduleDialog === "function") {
-      return this.ledScheduleDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-history-all" && typeof this.ledHistoryAllDialog === "function") {
-      return this.ledHistoryAllDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-history" && typeof this.ledChannelHistoryDialog === "function") {
-      return this.ledChannelHistoryDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-notification" && typeof this.ledNotificationDialog === "function") {
-      return this.ledNotificationDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-database-status" && typeof this.databaseStatusDialog === "function") {
-      return this.databaseStatusDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-template-editor" && typeof this.ledTemplateDialog === "function") {
-      return this.ledTemplateDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-template-share" && typeof this.ledTemplateShareDialog === "function") {
-      return this.ledTemplateShareDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-schedule-share" && typeof this.ledScheduleShareDialog === "function") {
-      return this.ledScheduleShareDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-auto-mode-editor" && typeof this.ledAutoModeDialog === "function") {
-      return this.ledAutoModeDialog();
-    }
-    if (this.dialogState && this.dialogState.type === "led-device-power-editor" && typeof this.ledDevicePowerDialog === "function") {
-      return this.ledDevicePowerDialog();
-    }
-    const plugins = window.ChihirosPlugins || {};
-    const dialogType = this.dialogState && this.dialogState.type;
-    const plugin = Object.values(plugins).find((item) => item && typeof item.dialog === "function" && typeof item.canHandleDialog === "function" && item.canHandleDialog(dialogType));
-    if (plugin) {
-      return plugin.dialog(this);
-    }
+    if (this.dialogState?.type === "debug") return this.sharedDebugDialog({
+      title: this.dialogState.title || (this.dialogState.debug ? this.tr("debug_output") : this.tr("result_output")),
+      output: this.dialogState.output || "",
+      debug: Boolean(this.dialogState.debug),
+      level: this.dialogState.level || "",
+    });
+    if (this.dialogState?.type === "confirm") return this.sharedModalDialog({
+      title: this.dialogState.title || this.tr("reset_schedule"),
+      sectionClass: "modal card debug-modal",
+      bodyHtml: `<div class="debug-output">${this.escapeHtml([this.dialogState.message || "", this.dialogState.detail || ""].filter(Boolean).join("\n\n"))}</div>`,
+      actions: [
+        { action: "confirm-dialog-no", label: this.dialogState.cancelLabel || this.tr("reset_schedule_no"), className: "link", type: "button" },
+        { action: "confirm-dialog-yes", label: this.dialogState.confirmLabel || this.tr("reset_schedule_yes"), className: "primary", type: "button" },
+      ],
+    });
+    if (this.ledScheduleEditorOpen) return this.ledScheduleDialog();
+    const type = String(this.dialogState?.type || "");
+    if (type === "led-history-all") return this.ledHistoryAllDialog();
+    if (type === "led-history") return this.ledChannelHistoryDialog();
+    if (type === "led-notification") return this.ledNotificationDialog();
+    if (type === "led-database-status") return this.databaseStatusDialog();
+    if (type === "led-template-editor") return this.ledTemplateDialog();
+    if (type === "led-template-share") return this.ledTemplateShareDialog();
+    if (type === "led-schedule-share") return this.ledScheduleShareDialog();
+    if (type === "led-auto-mode-editor") return this.ledAutoModeDialog();
+    if (type === "led-device-power-editor") return this.ledDevicePowerDialog();
     return "";
   }
+
+  bindLedEvents() {
+    this.querySelectorAll("[data-led-device]").forEach((el) => {
+      el.addEventListener("click", () => this.setLedDevice(el.getAttribute("data-led-device")));
+    });
+    this.querySelectorAll("[data-led-schedule-edit]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const rowIndex = Number(el.getAttribute("data-led-schedule-edit"));
+        this.openLedScheduleDialog(Number.isInteger(rowIndex) ? rowIndex : null);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-new]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.openNewLedScheduleDialog();
+      });
+    });
+    this.querySelectorAll("[data-led-number]").forEach((el) => {
+      const syncLedChannelControls = () => {
+        const rawValue = String(el.value ?? "").trim();
+        if (!rawValue || !Number.isFinite(Number(rawValue))) return null;
+        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
+        const value = Math.max(0, Math.min(max, Math.round(Number(rawValue))));
+        el.value = String(value);
+        const channel = Number(el.getAttribute("data-led-device-channel"));
+        this.querySelectorAll(`[data-led-device-channel="${channel}"][data-led-number]`).forEach((peer) => {
+          if (peer !== el) peer.value = String(value);
+          if (el.type === "range" && peer.type === "number") delete peer.dataset.ledDirty;
+        });
+        return value;
+      };
+      const save = () => {
+        if (el.type === "number" && el.dataset.ledDirty !== "1") return;
+        const inputValue = syncLedChannelControls();
+        if (inputValue === null) return;
+        const entity = el.getAttribute("data-led-number");
+        const channel = Number(el.getAttribute("data-led-device-channel"));
+        let value = inputValue;
+        const pendingKey = `${entity || "local"}:${channel}`;
+        const pending = this._ledChannelInputValues && this._ledChannelInputValues[pendingKey];
+        if (pending && Number.isFinite(Number(pending.value)) && Date.now() - Number(pending.at || 0) < 2500) {
+          value = Number(pending.value);
+        }
+        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
+        value = Math.max(0, Math.min(max, Math.round(value)));
+        delete el.dataset.ledDirty;
+        if (entity) {
+          this._ledChannelSaveTimers = this._ledChannelSaveTimers || {};
+          const key = `${entity}:${channel}`;
+          if (this._ledChannelSaveTimers[key]) window.clearTimeout(this._ledChannelSaveTimers[key]);
+          this._ledChannelSaveTimers[key] = window.setTimeout(() => {
+            delete this._ledChannelSaveTimers[key];
+            if (entity.startsWith("light.")) this.setLedBrightness(entity, value);
+            else this.setNumber(entity, value);
+          }, 120);
+          return;
+        }
+        const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
+        if (ledChannel) ledChannel.value = value;
+        this.render();
+      };
+      el.addEventListener("change", save);
+      el.addEventListener("keydown", (ev) => {
+        if (el.type === "number" && ev.key === "Enter") {
+          el.dataset.ledDirty = "1";
+          save();
+        }
+      });
+      el.addEventListener("input", () => {
+        if (el.type === "number") el.dataset.ledDirty = "1";
+        const value = syncLedChannelControls();
+        if (value === null) return;
+        const channel = Number(el.getAttribute("data-led-device-channel"));
+        const entity = el.getAttribute("data-led-number");
+        this._ledChannelInputValues = this._ledChannelInputValues || {};
+        this._ledChannelInputValues[`${entity || "local"}:${channel}`] = { value, at: Date.now() };
+        const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
+        if (ledChannel) ledChannel.value = value;
+        if (typeof this.updateLedWattDisplays === "function") this.updateLedWattDisplays();
+      });
+    });
+    this.querySelectorAll("[data-led-channel-action]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const channelId = Number(el.getAttribute("data-led-device-channel"));
+        const mode = String(el.getAttribute("data-led-channel-action") || "").trim().toLowerCase();
+        const channel = (this.ledChannels || []).find((item) => Number(item.id) === channelId);
+        if (!channel || (mode !== "on" && mode !== "off")) return;
+        const saveTimerKey = `${channel.entity || "local"}:${channelId}`;
+        if (this._ledChannelSaveTimers && this._ledChannelSaveTimers[saveTimerKey]) {
+          window.clearTimeout(this._ledChannelSaveTimers[saveTimerKey]);
+          delete this._ledChannelSaveTimers[saveTimerKey];
+        }
+        if (this._ledChannelInputValues) delete this._ledChannelInputValues[saveTimerKey];
+        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
+        const current = typeof this.ledChannelValue === "function" ? this.ledChannelValue(channel) : Number(channel.value || 0);
+        this._ledChannelLastOnValues = this._ledChannelLastOnValues || {};
+        if (mode === "on") {
+          const restore = Number(this._ledChannelLastOnValues[channelId] || channel.value || max);
+          const value = Number.isFinite(restore) && restore > 0 ? restore : max;
+          if (channel.entity) {
+            const ok = await this.setLedBrightness(channel.entity, value, false, {
+              action: "LED Kanal AN",
+              sourceId: `channel-switch-on-ch${channelId}`,
+              params: { source_id: `channel-switch-on-ch${channelId}`, source_type: "channel_switch", mode: "on", channel_id: channelId },
+            });
+            if (ok) {
+              this.setLedManualScheduleWarning(true);
+              this.render();
+            }
+          }
+          else {
+            channel.value = value;
+            this.render();
+          }
+          return;
+        }
+        if (current > 0) this._ledChannelLastOnValues[channelId] = current;
+        if (channel.entity) {
+          const ok = await this.setLedBrightness(channel.entity, 0, false, {
+            action: "LED Kanal AUS",
+            sourceId: `channel-switch-off-ch${channelId}`,
+            params: { source_id: `channel-switch-off-ch${channelId}`, source_type: "channel_switch", mode: "off", channel_id: channelId },
+          });
+          if (ok) {
+            this.setLedManualScheduleWarning(true);
+            this.render();
+          }
+        }
+        else {
+          channel.value = 0;
+          this.render();
+        }
+      });
+    });
+    this.querySelectorAll("[data-number]").forEach((el) => {
+      el.addEventListener("change", () => this.setNumber(el.getAttribute("data-number"), el.value));
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") this.setNumber(el.getAttribute("data-number"), el.value);
+      });
+    });
+    this.querySelectorAll("[data-led-channel-history]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const channel = Number(el.getAttribute("data-led-channel-history") || 1);
+        this.openDialogState("led-history", channel, { activeTab: "led" });
+        window.requestAnimationFrame(() => {
+          const list = this.querySelector(".led-channel-history-list");
+          if (list) list.scrollTop = 0;
+        });
+      });
+    });
+    this.querySelectorAll("[data-action]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        const action = el.getAttribute("data-action") || "";
+        const [kind, entity, extra] = action.split(":");
+        if (kind === "press") this.press(entity);
+        if (kind === "more") this.moreInfo(entity);
+        if (kind === "debug-test-led-schedule") {
+          this.dialogState = {
+            type: "debug",
+            channel: 1,
+            output: "OK\nTest Dialog\nWenn du das hier siehst, funktioniert der Klick- und Debug-Dialogpfad.",
+            running: false,
+            noChannel: true,
+            level: "ok",
+          };
+          this.render();
+        }
+        if (kind === "led-schedule-edit") this.openLedScheduleDialog();
+        if (kind === "led-schedule-new") this.openNewLedScheduleDialog();
+        if (kind === "led-preset") await this.setLedPreset(entity);
+        if (kind === "led-schedule-add" || kind === "led-schedule-save") await this.addLedSchedule(true);
+        if (kind === "led-schedule-save-local") await this.addLedSchedule(false);
+        if (kind === "led-schedule-delete-row" && typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(entity), true);
+        if (kind === "led-schedule-reset" && typeof this.openLedScheduleResetConfirm === "function") this.openLedScheduleResetConfirm();
+        if (kind === "led-enable-auto-mode" && typeof this.enableLedAutoModeFromFront === "function") await this.enableLedAutoModeFromFront();
+        if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") this.saveLedTemplateFromDialog();
+        if (kind === "led-template-share-save" && typeof this.saveSharedLedTemplate === "function") this.saveSharedLedTemplate();
+        if (kind === "led-schedule-share-save" && typeof this.saveSharedLedSchedule === "function") await this.saveSharedLedSchedule();
+        if (kind === "led-auto-mode-edit" && typeof this.openLedAutoModeDialog === "function") this.openLedAutoModeDialog();
+        if (kind === "led-auto-mode-send" && typeof this.saveLedAutoModeDialog === "function") await this.saveLedAutoModeDialog();
+        if (kind === "led-device-power-edit" && typeof this.openLedDevicePowerDialog === "function") this.openLedDevicePowerDialog();
+        if (kind === "led-device-power-send" && typeof this.saveLedDevicePowerDialog === "function") await this.saveLedDevicePowerDialog();
+        if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
+        if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
+        if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
+        if (kind === "dialog") {
+          if (String(entity || "").startsWith("led-")) {
+            this.openDialogState(entity, Number(extra), { activeTab: "led" });
+          } else {
+            this.openDialog(entity, Number(extra));
+          }
+        }
+        if (kind === "confirm-dialog-yes" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(true);
+        if (kind === "confirm-dialog-no" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(false);
+        if (kind === "close-dialog") this.closeDialog();
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-weekday-all]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const active = !(el.classList.contains("active") || el.getAttribute("aria-pressed") === "true");
+        el.classList.toggle("active", active);
+        el.setAttribute("aria-pressed", active ? "true" : "false");
+        row.querySelectorAll("[data-led-schedule-weekday]").forEach((day) => {
+          day.classList.toggle("active", active);
+          day.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-weekday]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const active = !(el.classList.contains("active") || el.getAttribute("aria-pressed") === "true");
+        el.classList.toggle("active", active);
+        el.setAttribute("aria-pressed", active ? "true" : "false");
+        const days = Array.from(row.querySelectorAll("[data-led-schedule-weekday]"));
+        const all = row.querySelector("[data-led-schedule-weekday-all]");
+        const allActive = days.length > 0 && days.every((day) => day.classList.contains("active") || day.getAttribute("aria-pressed") === "true");
+        if (all) {
+          all.classList.toggle("active", allActive);
+          all.setAttribute("aria-pressed", allActive ? "true" : "false");
+        }
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-control]").forEach((el) => {
+      const sync = () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const name = el.getAttribute("data-led-schedule-control");
+        const kind = el.getAttribute("data-led-schedule-kind") || "";
+        const value = el.value;
+        if (typeof this.syncLedScheduleControl === "function") {
+          this.syncLedScheduleControl(row, name, value, kind);
+        }
+        if (name !== "template" && typeof this.syncLedScheduleTemplate === "function") this.syncLedScheduleTemplate(row);
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      };
+      el.addEventListener("input", sync);
+      el.addEventListener("change", sync);
+    });
+    this.querySelectorAll("[data-led-schedule-template]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        if (typeof this.applyLedScheduleTemplate === "function") {
+          this.applyLedScheduleTemplate(row, el.value);
+        }
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-template-action]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const row = el.closest("[data-led-schedule-row]");
+        const action = el.getAttribute("data-led-template-action");
+        if (action === "add" && typeof this.addLedScheduleTemplate === "function") this.addLedScheduleTemplate(row);
+        if (action === "show" && typeof this.showLedScheduleTemplates === "function") this.showLedScheduleTemplates();
+        if (action === "delete" && typeof this.deleteLedScheduleTemplate === "function") this.deleteLedScheduleTemplate(row);
+      });
+    });
+    this.querySelectorAll("[data-led-template-edit]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.openLedTemplateDialog === "function") this.openLedTemplateDialog(el.getAttribute("data-led-template-edit"));
+      });
+    });
+    this.querySelectorAll("[data-led-template-source]").forEach((el) => {
+      el.addEventListener("change", () => {
+        this._ledTemplateSourceFilter = String(el.value || "standard") === "local" ? "local" : "standard";
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-led-template-delete]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.deleteLedTemplateFromFront === "function") this.deleteLedTemplateFromFront(el.getAttribute("data-led-template-delete"));
+      });
+    });
+    this.querySelectorAll("[data-led-template-share]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.openLedTemplateShareDialog === "function") this.openLedTemplateShareDialog(el.getAttribute("data-led-template-share"));
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-delete]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(el.getAttribute("data-led-schedule-delete")), true);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-send]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.sendLedScheduleRowFromFront === "function") await this.sendLedScheduleRowFromFront(Number(el.getAttribute("data-led-schedule-send")));
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-share]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.openLedScheduleShareDialog === "function") this.openLedScheduleShareDialog(Number(el.getAttribute("data-led-schedule-share")));
+      });
+    });
+    this.querySelectorAll("[data-led-template-control]").forEach((el) => {
+      const sync = () => {
+        const name = el.getAttribute("data-led-template-control");
+        if (name && typeof this.syncLedTemplateControl === "function") {
+          this.syncLedTemplateControl(name, el.value);
+        }
+      };
+      el.addEventListener("input", sync);
+      el.addEventListener("change", sync);
+    });
+    this.querySelectorAll("[data-led-auto-mode-value]").forEach((el) => {
+      el.addEventListener("click", () => {
+        this.querySelectorAll("[data-led-auto-mode-value]").forEach((item) => item.classList.remove("active"));
+        el.classList.add("active");
+      });
+    });
+    this.querySelectorAll("[data-led-device-power-value]").forEach((el) => {
+      el.addEventListener("click", () => {
+        this.querySelectorAll("[data-led-device-power-value]").forEach((item) => item.classList.remove("active"));
+        el.classList.add("active");
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-ramp]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const value = Number(el.getAttribute("data-led-schedule-ramp"));
+        const hidden = row.querySelector('[data-led-schedule-control="ramp"][data-led-schedule-kind="hidden"]');
+        if (hidden) hidden.value = String(value);
+        if (typeof this.syncLedScheduleControl === "function") {
+          this.syncLedScheduleControl(row, "ramp", value, "");
+        }
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-time-picker]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        if (!field) return;
+        const input = field.querySelector("input[type='time']");
+        const [hour = "08", minute = "00"] = String(input && input.value ? input.value : "08:00").split(":");
+        const open = field.classList.contains("open");
+        this.querySelectorAll(".led-schedule-time-field.open").forEach((item) => item.classList.remove("open"));
+        field.dataset.pendingHour = hour;
+        field.dataset.pendingMinute = minute;
+        field.querySelectorAll('[data-led-time-part="hour"]').forEach((button) => {
+          button.classList.toggle("active", button.getAttribute("data-led-time-value") === hour);
+        });
+        field.querySelectorAll('[data-led-time-part="minute"]').forEach((button) => {
+          button.classList.toggle("active", button.getAttribute("data-led-time-value") === minute);
+        });
+        field.classList.toggle("open", !open);
+      });
+    });
+    this.querySelectorAll("[data-led-time-part]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        const input = field && field.querySelector("input[type='time']");
+        if (!input) return;
+        const part = el.getAttribute("data-led-time-part");
+        const value = String(el.getAttribute("data-led-time-value") || "00").padStart(2, "0");
+        if (part === "hour") field.dataset.pendingHour = value;
+        if (part === "minute") field.dataset.pendingMinute = value;
+        field.querySelectorAll(`[data-led-time-part="${part}"]`).forEach((button) => {
+          button.classList.toggle("active", button === el);
+        });
+      });
+    });
+    this.querySelectorAll("[data-led-time-cancel]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        if (field) field.classList.remove("open");
+      });
+    });
+    this.querySelectorAll("[data-led-time-apply]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        const input = field && field.querySelector("input[type='time']");
+        if (!field || !input) return;
+        const [currentHour = "08", currentMinute = "00"] = String(input.value || "08:00").split(":");
+        const hour = String(field.dataset.pendingHour || currentHour).padStart(2, "0");
+        const minute = String(field.dataset.pendingMinute || currentMinute).padStart(2, "0");
+        input.value = `${hour}:${minute}`;
+        field.classList.remove("open");
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-active], [data-led-schedule-debug]").forEach((el) => {
+      el.addEventListener("change", () => {
+        if (el.hasAttribute("data-led-schedule-debug") && this.dialogState && this.dialogState.type === "led-schedule") {
+          this.dialogState.ledScheduleDebug = Boolean(el.checked);
+        }
+        const label = el.closest(".led-schedule-switch");
+        const text = label && label.querySelector("span");
+        if (text) text.textContent = el.checked ? "An" : "Aus";
+      });
+    });  }
 
   render() {
     if (!this._hass) return;
@@ -2856,22 +2316,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .device-tabs button.active { border-color:#03c9ff; color:#03c9ff; background:rgba(0,122,166,.18); font-weight:700; }
         .device-tabs .tab-icon { width:18px; height:18px; flex:0 0 18px; color:currentColor; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
         .device-tabs button[data-tab="led"] .tab-icon { color:#ffd43b; }
-        .device-tabs button[data-tab="doser"] .tab-icon { color:#2ea8ff; }
-        .device-tabs button[data-tab="ruehrer"] .tab-icon { color:#39d353; }
-        .device-tabs button[data-tab="heizer"] .tab-icon { color:#ff7b72; }
-        .device-tabs button[data-tab="wireshark"] .tab-icon { color:#03c9ff; }
-        .device-tabs button[data-tab="ctl"] .tab-icon { color:#ff9300; }
         .device-tabs button[data-tab="config"] .tab-icon { color:#a78bfa; }
         .device-tabs .addon-update-button { margin-left:auto; border-color:rgba(255,147,0,.58); color:#ffc078; background:rgba(255,147,0,.10); }
         .device-tabs .addon-update-button:hover { border-color:#ff9300; background:rgba(255,147,0,.18); }
         .device-tabs .addon-update-button .tab-icon { color:#ff9300; }
-        .plugin-update-row { display:flex; justify-content:flex-end; margin:0 0 8px; }
-        .plugin-update-row button { display:inline-flex; align-items:center; gap:8px; min-height:30px; border:1px solid rgba(255,147,0,.58); border-radius:7px; background:rgba(255,147,0,.10); color:#ffc078; font:inherit; padding:0 11px; cursor:pointer; }
-        .plugin-update-row button:hover { border-color:#ff9300; background:rgba(255,147,0,.18); }
         .device-tabs button.active .tab-icon { filter:drop-shadow(0 0 7px currentColor); }
-        .doser-device-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:-2px 0 12px; }
-        .doser-device-tabs button { min-height:32px; min-width:96px; border:1px solid rgba(81,154,190,.28); border-radius:8px; background:rgba(10,18,21,.72); color:var(--primary-text-color); font:inherit; cursor:pointer; padding:0 12px; }
-        .doser-device-tabs button.active { border-color:#03c9ff; color:#03c9ff; background:rgba(0,122,166,.18); font-weight:700; }
         .page-hero { grid-column:1 / -1; min-height:76px; display:grid; grid-template-columns:52px minmax(0, 1fr); align-items:center; gap:12px; margin:0 0 12px; padding:12px 14px; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:linear-gradient(135deg, rgba(0,122,166,.18), rgba(14,24,27,.92)); }
         .page-hero-icon { width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid rgba(3,201,255,.35); background:rgba(3,201,255,.10); }
         .page-hero-icon ha-icon { --mdc-icon-size:28px; color:#03c9ff; }
@@ -3272,14 +2721,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .db-current span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:rgba(255,255,255,.86); }
         .db-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
         .db-actions .primary { min-height:34px; border:1px solid rgba(3,201,255,.65); border-radius:6px; background:rgba(0,122,166,.18); color:var(--primary-text-color); font:inherit; font-weight:700; cursor:pointer; padding:0 14px; }
-        .plugin-loader-card { grid-column:1 / -1; }
-        .plugin-loader-list { display:grid; gap:8px; }
-        .plugin-loader-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:12px; border:1px solid rgba(81,154,190,.22); border-radius:8px; background:rgba(0,0,0,.14); padding:10px; }
-        .plugin-loader-row strong, .plugin-loader-row span { display:block; }
-        .plugin-loader-row strong { color:rgba(255,255,255,.9); }
-        .plugin-loader-row span { color:rgba(255,255,255,.62); font-size:12px; line-height:1.35; margin-top:2px; }
-        .plugin-loader-row code { display:block; margin-top:5px; color:rgba(255,255,255,.45); font:11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .plugin-loader-row button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-width:120px; }
         .entity-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; align-items:center; gap:10px; min-height:34px; width:100%; padding:0; border:0; border-bottom:1px solid rgba(255,255,255,.07); background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
         .entity-row:last-child { border-bottom:0; }
         .entity-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -3413,12 +2854,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .channel-history-empty { padding:5px 0 4px 34px; color:rgba(255,255,255,.55); font-size:12px; }
         .settings { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
         .settings-stack { display:grid; grid-template-columns:1fr; gap:12px; }
-        .settings.doser-settings-layout { grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); align-items:start; }
-        .doser-settings-main { min-width:0; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; align-items:start; }
-        .doser-connection-card { display:flex; flex-direction:column; gap:3px; align-self:stretch; width:100%; height:100%; padding-top:11px; padding-bottom:11px; }
-        .doser-connection-card h2 { margin:0 0 3px; }
-        .card.doser-connection-card p { flex:0 0 auto; min-height:24px; align-items:center; margin:0; line-height:1.2; }
-        .doser-connection-card p span { text-align:right; overflow-wrap:anywhere; }
         .small { min-height:96px; }
         .small p { display:grid; grid-template-columns:1fr auto; margin:7px 0; }
         .settings-note, .input-hint { color:rgba(255,255,255,.58); font-size:11px; line-height:1.35; }
@@ -3428,72 +2863,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .modal-backdrop { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.58); display:flex; align-items:center; justify-content:center; padding:20px; }
         .modal { width:min(520px, calc(100vw - 40px)); }
         .modal.led-schedule-modal { width:min(680px, calc(100vw - 28px)); max-width:calc(100vw - 28px); min-width:0; }
-        .modal.doser-schedule-modal { width:min(680px, calc(100vw - 28px)); max-width:calc(100vw - 28px); max-height:calc(100vh - 28px); max-height:calc(100dvh - 28px); display:flex; flex-direction:column; overflow:hidden; padding:0; border:1px solid rgba(3,201,255,.22); background:linear-gradient(180deg, rgba(12,20,23,.98), rgba(8,14,17,.99)); box-shadow:0 28px 80px rgba(0,0,0,.52); }
         .modal form { display:grid; gap:12px; }
-        .modal.doser-schedule-modal > h2 { flex:0 0 auto; margin:0; padding:18px 20px 14px; border-bottom:1px solid rgba(255,255,255,.08); background:linear-gradient(180deg, rgba(3,201,255,.10), rgba(0,0,0,0)); font-size:20px; }
-        .modal.doser-schedule-modal > form { min-height:0; display:flex; flex:1 1 auto; flex-direction:column; gap:0; overflow:hidden; }
-        .doser-schedule-unsent-warning { flex:0 0 auto; display:flex; align-items:center; gap:9px; margin:12px 20px 0; padding:10px 12px; border:1px solid #ff5b63; border-radius:7px; background:rgba(255,75,82,.16); color:#ff9da2; line-height:1.25; }
-        .doser-schedule-unsent-warning[hidden] { display:none; }
-        .doser-schedule-unsent-warning ha-icon { flex:0 0 auto; color:#ff5b63; }
-        .doser-schedule-request-status { flex:0 0 auto; display:flex; align-items:flex-start; gap:9px; margin:12px 20px 0; padding:10px 12px; border:1px solid #03c9ff; border-radius:7px; background:rgba(3,201,255,.12); color:#bfefff; line-height:1.25; }
-        .doser-schedule-request-status[hidden] { display:none; }
-        .doser-schedule-request-status > div { min-width:0; display:grid; gap:6px; }
-        .doser-schedule-request-status strong { color:var(--primary-text-color); }
-        .doser-schedule-request-status small { max-height:120px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; color:rgba(255,255,255,.72); font-family:monospace; }
-        .doser-schedule-request-status ha-icon { flex:0 0 auto; color:#03c9ff; animation:doser-schedule-spin 1s linear infinite; }
-        .doser-schedule-request-status.is-error { border-color:#ff5b63; background:rgba(255,75,82,.16); }
-        .doser-schedule-request-status.is-error ha-icon { color:#ff5b63; animation:none; }
-        .doser-schedule-request-status.is-ok { border-color:#2dd45b; background:rgba(45,212,91,.12); }
-        .doser-schedule-request-status.is-ok ha-icon { color:#2dd45b; animation:none; }
-        @keyframes doser-schedule-spin { to { transform:rotate(360deg); } }
-        .doser-schedule-overview { min-height:0; display:grid; flex:1 1 auto; align-content:start; gap:12px; overflow-y:auto; padding:16px 20px 14px; }
-        .doser-schedule-overview[hidden], .doser-schedule-scroll[hidden] { display:none; }
-        .doser-schedule-overview-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,.09); }
-        .doser-schedule-overview-head > div { display:grid; gap:3px; }
-        .doser-schedule-overview-head small { color:rgba(255,255,255,.60); }
-        .doser-schedule-overview-head button.icon { display:inline-flex; width:38px; min-width:38px; height:38px; align-items:center; justify-content:center; padding:0; }
-        .doser-schedule-overview-head button.icon ha-icon { --mdc-icon-size:20px; }
-        .doser-schedule-overview-meta { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
-        .doser-schedule-overview-meta span { display:grid; gap:4px; padding:9px 10px; border:1px solid rgba(81,154,190,.22); border-radius:7px; background:rgba(0,0,0,.16); color:rgba(255,255,255,.60); font-size:11px; }
-        .doser-schedule-overview-meta strong { color:var(--primary-text-color); font-size:13px; overflow-wrap:anywhere; }
-        .doser-schedule-overview-list { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px 8px; }
-        .doser-schedule-overview-row { display:grid; grid-template-columns:24px minmax(0, 1fr) auto; align-items:center; gap:8px; min-height:34px; padding:6px 9px; border:1px solid rgba(255,255,255,.09); border-radius:7px; background:rgba(0,0,0,.14); }
-        .doser-schedule-overview-row b { color:#03c9ff; text-align:center; }
-        .doser-schedule-overview-row span { font-weight:700; }
-        .doser-schedule-overview-row strong { color:rgba(255,255,255,.76); font-size:12px; white-space:nowrap; }
-        .doser-schedule-debug-result { border:1px solid rgba(81,154,190,.26); border-radius:7px; background:rgba(0,0,0,.16); }
-        .doser-schedule-debug-result summary { padding:9px 10px; cursor:pointer; color:#03c9ff; font-weight:700; }
-        .doser-schedule-debug-result pre { max-height:180px; margin:0; padding:10px; overflow:auto; border-top:1px solid rgba(81,154,190,.20); white-space:pre-wrap; overflow-wrap:anywhere; color:rgba(255,255,255,.76); font-size:11px; }
-        .doser-schedule-scroll { min-height:0; display:grid; flex:1 1 auto; gap:12px; overflow-y:auto; padding:16px 20px 14px; }
-        .doser-schedule-dialog-footer { flex:0 0 auto; }
-        .modal.doser-schedule-modal label.doser-schedule-inline { display:grid; grid-template-columns:160px minmax(0, 1fr); align-items:center; }
-        .modal.doser-schedule-modal label.doser-schedule-inline input[type="checkbox"] { justify-self:start; }
-        .modal.doser-schedule-modal label.doser-schedule-inline .input-hint { grid-column:2; margin-left:0; }
-        .doser-weekday-picker { display:grid; gap:9px; padding:10px 12px; border:1px solid rgba(255,255,255,.10); border-radius:8px; background:rgba(255,255,255,.035); }
-        .doser-weekday-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-        .doser-weekday-head label.check { margin:0; }
-        .doser-weekday-buttons { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:7px; }
-        .doser-weekday-buttons button { min-width:0; min-height:34px; padding:0 5px; border:1px solid rgba(81,154,190,.34); border-radius:7px; background:rgba(255,255,255,.06); color:var(--primary-text-color); font:inherit; cursor:pointer; }
-        .doser-weekday-buttons button.active { border-color:#ef4b52; background:rgba(239,75,82,.42); color:#fff; }
-        .doser-weekday-buttons button:disabled { opacity:.42; cursor:not-allowed; }
-        .doser-timer-list { display:grid; gap:10px; padding:12px; border:1px solid rgba(3,201,255,.28); border-radius:9px; background:rgba(3,201,255,.05); }
-        .doser-timer-list[hidden] { display:none; }
-        .doser-window-list { display:grid; gap:10px; padding:12px; border:1px solid rgba(3,201,255,.28); border-radius:9px; background:rgba(3,201,255,.05); }
-        .doser-window-list[hidden] { display:none; }
-        .doser-window-total { color:rgba(255,255,255,.72); font-size:12px; text-align:right; }
-        .doser-window-rows { display:grid; gap:8px; max-height:min(28vh, 240px); overflow:auto; padding-right:3px; }
-        .doser-window-entry { display:grid; grid-template-columns:28px minmax(92px,1fr) minmax(92px,1fr) minmax(90px,.8fr) auto; align-items:end; gap:8px; padding:8px; border:1px solid rgba(255,255,255,.10); border-radius:8px; background:rgba(0,0,0,.16); }
-        .doser-window-entry > b { align-self:center; color:#03c9ff; text-align:center; }
-        .doser-window-entry label { margin:0; }
-        .doser-window-entry label span { display:block; margin-bottom:4px; color:rgba(255,255,255,.66); font-size:11px; }
-        .doser-timer-list-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
-        .doser-timer-list-head small { color:rgba(255,255,255,.62); }
-        .doser-timer-rows { display:grid; gap:8px; max-height:min(26vh, 220px); overflow:auto; padding-right:3px; }
-        .doser-timer-entry { display:grid; grid-template-columns:28px minmax(120px,1fr) minmax(120px,1fr) auto; align-items:end; gap:8px; padding:8px; border:1px solid rgba(255,255,255,.10); border-radius:8px; background:rgba(0,0,0,.16); }
-        .doser-timer-entry > b { align-self:center; color:#03c9ff; text-align:center; }
-        .doser-timer-entry label { margin:0; }
-        .doser-timer-entry label span { display:block; margin-bottom:4px; color:rgba(255,255,255,.66); font-size:11px; }
-        @media (max-width: 640px) { .modal.doser-schedule-modal label.doser-schedule-inline { grid-template-columns:128px minmax(0, 1fr); } .doser-schedule-overview-meta, .doser-schedule-overview-list { grid-template-columns:1fr; } .doser-weekday-buttons { grid-template-columns:repeat(4, minmax(0, 1fr)); } .doser-timer-entry { grid-template-columns:24px 1fr 1fr; } .doser-timer-entry > button { grid-column:2 / -1; } .doser-window-entry { grid-template-columns:24px 1fr 1fr; } .doser-window-entry label:nth-of-type(3), .doser-window-entry > button { grid-column:2 / -1; } }
         .modal label { display:grid; gap:6px; font-weight:600; }
         .modal [data-schedule-time-field][hidden], .modal [data-schedule-amount-field][hidden] { display:none; }
         .modal [data-schedule-ml][readonly] { color:rgba(255,255,255,.72); background:rgba(255,255,255,.04); cursor:not-allowed; }
@@ -3574,18 +2944,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .debug-modal { width:min(760px, calc(100vw - 40px)); }
         .debug-output { max-height:min(62vh, 620px); overflow:auto; white-space:pre-wrap; word-break:break-word; border:1px solid rgba(255,255,255,.12); border-radius:7px; background:rgba(0,0,0,.42); color:var(--primary-text-color); padding:12px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
         .calibration-debug-output { min-height:80px; max-height:min(32vh, 300px); }
-        .wireshark-compare-modal { width:min(1100px, calc(100vw - 80px)); max-height:calc(100vh - 52px); display:grid; grid-template-rows:auto minmax(0, 1fr) auto; gap:8px; background:#eef3f8; color:#111827; border-color:#c7d0db; box-shadow:0 16px 55px rgba(0,0,0,.36); }
-        .wireshark-compare-head { display:grid; gap:8px; }
-        .wireshark-compare-head h2 { margin:0; font-size:13px; font-weight:500; color:#6b7280; }
-        .wireshark-compare-head small { color:#064e9b; font-size:12px; }
-        .wireshark-compare-form { min-height:0; display:grid; grid-auto-rows:auto; gap:5px; overflow:auto; padding-right:4px; }
-        .wireshark-compare-form span { font-size:12px; color:#111827; }
-        .wireshark-compare-form textarea { width:100%; min-width:0; min-height:118px; height:min(18vh, 170px); resize:none; border:1px solid #c7d0db; border-radius:0; background:#fff; color:#000; padding:7px; white-space:pre; overflow:auto; font:12px/1.45 Consolas, "Courier New", monospace; }
-        .wireshark-compare-actions { display:flex; align-items:center; gap:8px; padding-top:4px; }
-        .wireshark-compare-actions .spacer { flex:1; }
-        .wireshark-compare-actions button { min-height:31px; border:1px solid #c7d0db; border-radius:2px; background:#f8fafc; color:#111827; font:12px Arial, sans-serif; padding:0 16px; cursor:pointer; }
-        .wireshark-compare-actions button.primary { background:#1d5eff; border-color:#1d5eff; color:#fff; }
-        .wireshark-compare-actions button:disabled { opacity:.55; cursor:not-allowed; }
         .debug-modal.error { border-color:rgba(255,77,79,.75); box-shadow:0 0 0 1px rgba(255,77,79,.32), 0 18px 60px rgba(0,0,0,.45); }
         .debug-modal.error h2 { color:#ff8a8a; }
         .debug-output.error { border-color:rgba(255,77,79,.78); background:rgba(75,0,0,.46); color:#ffd8d8; }
@@ -3606,962 +2964,18 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .calibration-summary strong { color:#8eeaff; text-align:right; }
         .sticky-actions { position:sticky; bottom:0; z-index:2; margin-top:12px; border-top:1px solid rgba(255,255,255,.10); background:linear-gradient(180deg, rgba(15,25,28,.96), rgba(8,15,18,.99)); padding:12px 0 2px; }
         @media (max-width: 1300px) { .top-four { grid-template-columns:1fr 1fr; } .led-channels { grid-template-columns:repeat(2, minmax(0,1fr)); } }
-        @media (max-width: 1100px) { .top, .channels, .settings, .config-page { grid-template-columns:1fr 1fr; } .settings.doser-settings-layout, .led-page { grid-template-columns:1fr; } .led-connection-card, .led-device-control-card, .led-device-presets-card, .led-template-card { grid-column:1; grid-row:auto; width:100%; } .channels-1 { grid-template-columns:1fr; } .middle { grid-template-columns:1fr; } }
         @media (max-width: 1100px) { .led-schedule-side-card.compact p { font-size:16px; } .led-schedule-color-control { grid-template-columns:minmax(84px, 120px) minmax(0,1fr) 94px; } }
         @media (max-width: 1100px) { .led-schedule-ramp-presets { justify-content:flex-start; } }
         @media (max-width: 1100px) { .led-device-control-card .led-device-edit-box { grid-template-columns:1fr; } .led-device-control-card .led-device-edit-box h2 { grid-column:1; } .led-device-control-card .led-info-list { padding:10px 0 0; border-left:0; border-top:1px solid rgba(255,255,255,.08); } }
         @media (max-width: 900px) { .led-schedule-modal { width:calc(100vw - 18px); } .led-schedule-dialog-head, .led-schedule-dialog-body, .led-schedule-dialog-footer { padding-left:14px; padding-right:14px; } .led-schedule-dialog-footer { grid-template-columns:1fr; } .led-schedule-dialog-actions { width:100%; flex-wrap:wrap; justify-content:stretch; margin-left:0; } .led-schedule-dialog-actions button, .led-schedule-dialog-footer .danger { flex:1 1 auto; } }
-        @media (max-width: 700px) { .wrap { padding:0 8px 8px; } .device-tabs { margin:0 -8px 12px; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); } .device-tabs button { min-width:0; } .device-tabs .addon-update-button { margin-left:0; } .page-hero { grid-template-columns:42px minmax(0,1fr); min-height:66px; padding:10px; } .page-hero-icon { width:36px; height:36px; } .page-hero h1 { font-size:18px; } .top, .channels, .settings, .doser-settings-main, .config-page, .led-page, .led-channels { grid-template-columns:1fr; } .led-connection-card, .led-device-control-card, .led-device-presets-card, .led-template-card { grid-column:1; grid-row:auto; width:100%; } .led-device-control-card .led-device-edit-actions { grid-template-columns:1fr; gap:8px; } .config-row, .config-row.wide, .db-current p, .plugin-loader-row { grid-template-columns:1fr; gap:5px; } .plugin-loader-row button { width:100%; } .plugin-actions { display:grid; grid-template-columns:1fr; } .led-channel-history-head { flex-wrap:wrap; } .history-dialog-head-actions { width:100%; } .history-dialog-head-actions .history-filter-bar { flex:1 1 auto; } .history-dialog-head-actions .history-status-filter { grid-template-columns:auto minmax(0,1fr); width:100%; } .led-schedule-row-head { grid-template-columns:1fr; justify-items:stretch; } .led-schedule-time-icon { justify-self:start; } .led-schedule-active-toggle { justify-self:start; } .led-schedule-color-control, .led-schedule-color-control.color-template, .led-schedule-color-control.color-toggle, .led-schedule-color-control.color-time { grid-template-columns:1fr; } .led-schedule-time-control .led-schedule-row-title { justify-content:flex-start; } .led-time-picker-panel { right:auto; left:0; width:min(244px, calc(100vw - 80px)); } .led-schedule-ramp-presets { grid-template-columns:1fr; } }
       </style>
       <div class="wrap">
-        ${this.deviceTabs()}
-        ${this.tabContent()}
+        ${this.coreTabBar()}
+        ${this.activeTab === "config" ? this.configPanel() : this.ledPanel()}
       </div>
-      ${this.wiresharkCompareDialog()}
       ${this.dialog()}`;
-    this.replaceHaIcons();
-    this.querySelectorAll("[data-history-status-filter]").forEach((el) => {
-      el.addEventListener("change", () => {
-        const scope = String(el.getAttribute("data-history-status-filter") || "history");
-        this._historyStatusFilters = this._historyStatusFilters || {};
-        this._historyStatusFilters[scope] = String(el.value || "all");
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-history-type-filter]").forEach((el) => {
-      el.addEventListener("change", () => {
-        const scope = String(el.getAttribute("data-history-type-filter") || "history");
-        this._historyTypeFilters = this._historyTypeFilters || {};
-        this._historyTypeFilters[scope] = String(el.value || "all");
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-history-filter]").forEach((el) => {
-      el.addEventListener("change", () => {
-        const scope = String(el.getAttribute("data-history-filter") || "history");
-        this._historyFilters = this._historyFilters || {};
-        this._historyFilters[scope] = String(el.value || "all");
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-tab]").forEach((el) => {
-      el.addEventListener("click", () => this.setTab(el.getAttribute("data-tab")));
-    });
-    this.querySelectorAll("[data-wireshark-compare-close]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        this.wiresharkCompareDialogData = null;
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-wireshark-compare-reload]").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const input = this.querySelector("[data-wireshark-compare-paste]");
-        if (input && this.wiresharkCompareDialogData) {
-          this.wiresharkCompareDialogData = {
-            ...this.wiresharkCompareDialogData,
-            pasted: String(input.value || ""),
-          };
-        }
-        await this.runWiresharkCompareFromCore();
-      });
-    });
-    this.querySelectorAll("[data-wireshark-compare-run]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const input = this.querySelector("[data-wireshark-compare-paste]");
-        const pasted = input ? String(input.value || "") : "";
-        const data = this.wiresharkCompareDialogData || {};
-        this.wiresharkCompareDialogData = {
-          ...data,
-          pasted,
-          result: this.buildWiresharkCompareResult(this.wiresharkCompareSourceText(data), pasted),
-        };
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-wireshark-compare-copy]").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const data = this.wiresharkCompareDialogData || {};
-        const input = this.querySelector("[data-wireshark-compare-paste]");
-        const pasted = input ? String(input.value || "") : String(data.pasted || "");
-        const result = data.result || this.buildWiresharkCompareResult(this.wiresharkCompareSourceText(data), pasted);
-        const type = el.getAttribute("data-wireshark-compare-copy");
-        const value = type === "result" ? result : this.wiresharkCompareSourceText(data);
-        if (navigator.clipboard && value) await navigator.clipboard.writeText(value);
-      });
-    });
-    if (this.activeTab === "wireshark") this.patchWiresharkActions();
-    this.querySelectorAll("[data-doser-device]").forEach((el) => {
-      el.addEventListener("click", () => this.setDoserDevice(el.getAttribute("data-doser-device")));
-    });
-    this.querySelectorAll("[data-led-device]").forEach((el) => {
-      el.addEventListener("click", () => this.setLedDevice(el.getAttribute("data-led-device")));
-    });
-    this.querySelectorAll("[data-led-schedule-edit]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const rowIndex = Number(el.getAttribute("data-led-schedule-edit"));
-        this.openLedScheduleDialog(Number.isInteger(rowIndex) ? rowIndex : null);
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-new]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        this.openNewLedScheduleDialog();
-      });
-    });
-    this.querySelectorAll("[data-led-number]").forEach((el) => {
-      const syncLedChannelControls = () => {
-        const rawValue = String(el.value ?? "").trim();
-        if (!rawValue || !Number.isFinite(Number(rawValue))) return null;
-        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
-        const value = Math.max(0, Math.min(max, Math.round(Number(rawValue))));
-        el.value = String(value);
-        const channel = Number(el.getAttribute("data-led-device-channel"));
-        this.querySelectorAll(`[data-led-device-channel="${channel}"][data-led-number]`).forEach((peer) => {
-          if (peer !== el) peer.value = String(value);
-          if (el.type === "range" && peer.type === "number") delete peer.dataset.ledDirty;
-        });
-        return value;
-      };
-      const save = () => {
-        if (el.type === "number" && el.dataset.ledDirty !== "1") return;
-        const inputValue = syncLedChannelControls();
-        if (inputValue === null) return;
-        const entity = el.getAttribute("data-led-number");
-        const channel = Number(el.getAttribute("data-led-device-channel"));
-        let value = inputValue;
-        const pendingKey = `${entity || "local"}:${channel}`;
-        const pending = this._ledChannelInputValues && this._ledChannelInputValues[pendingKey];
-        if (pending && Number.isFinite(Number(pending.value)) && Date.now() - Number(pending.at || 0) < 2500) {
-          value = Number(pending.value);
-        }
-        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
-        value = Math.max(0, Math.min(max, Math.round(value)));
-        delete el.dataset.ledDirty;
-        if (entity) {
-          this._ledChannelSaveTimers = this._ledChannelSaveTimers || {};
-          const key = `${entity}:${channel}`;
-          if (this._ledChannelSaveTimers[key]) window.clearTimeout(this._ledChannelSaveTimers[key]);
-          this._ledChannelSaveTimers[key] = window.setTimeout(() => {
-            delete this._ledChannelSaveTimers[key];
-            if (entity.startsWith("light.")) this.setLedBrightness(entity, value);
-            else this.setNumber(entity, value);
-          }, 120);
-          return;
-        }
-        const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
-        if (ledChannel) ledChannel.value = value;
-        this.render();
-      };
-      el.addEventListener("change", save);
-      el.addEventListener("keydown", (ev) => {
-        if (el.type === "number" && ev.key === "Enter") {
-          el.dataset.ledDirty = "1";
-          save();
-        }
-      });
-      el.addEventListener("input", () => {
-        if (el.type === "number") el.dataset.ledDirty = "1";
-        const value = syncLedChannelControls();
-        if (value === null) return;
-        const channel = Number(el.getAttribute("data-led-device-channel"));
-        const entity = el.getAttribute("data-led-number");
-        this._ledChannelInputValues = this._ledChannelInputValues || {};
-        this._ledChannelInputValues[`${entity || "local"}:${channel}`] = { value, at: Date.now() };
-        const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
-        if (ledChannel) ledChannel.value = value;
-        if (typeof this.updateLedWattDisplays === "function") this.updateLedWattDisplays();
-      });
-    });
-    this.querySelectorAll("[data-led-channel-action]").forEach((el) => {
-      el.addEventListener("click", async () => {
-        const channelId = Number(el.getAttribute("data-led-device-channel"));
-        const mode = String(el.getAttribute("data-led-channel-action") || "").trim().toLowerCase();
-        const channel = (this.ledChannels || []).find((item) => Number(item.id) === channelId);
-        if (!channel || (mode !== "on" && mode !== "off")) return;
-        const saveTimerKey = `${channel.entity || "local"}:${channelId}`;
-        if (this._ledChannelSaveTimers && this._ledChannelSaveTimers[saveTimerKey]) {
-          window.clearTimeout(this._ledChannelSaveTimers[saveTimerKey]);
-          delete this._ledChannelSaveTimers[saveTimerKey];
-        }
-        if (this._ledChannelInputValues) delete this._ledChannelInputValues[saveTimerKey];
-        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
-        const current = typeof this.ledChannelValue === "function" ? this.ledChannelValue(channel) : Number(channel.value || 0);
-        this._ledChannelLastOnValues = this._ledChannelLastOnValues || {};
-        if (mode === "on") {
-          const restore = Number(this._ledChannelLastOnValues[channelId] || channel.value || max);
-          const value = Number.isFinite(restore) && restore > 0 ? restore : max;
-          if (channel.entity) {
-            const ok = await this.setLedBrightness(channel.entity, value, false, {
-              action: "LED Kanal AN",
-              sourceId: `channel-switch-on-ch${channelId}`,
-              params: { source_id: `channel-switch-on-ch${channelId}`, source_type: "channel_switch", mode: "on", channel_id: channelId },
-            });
-            if (ok) {
-              this.setLedManualScheduleWarning(true);
-              this.render();
-            }
-          }
-          else {
-            channel.value = value;
-            this.render();
-          }
-          return;
-        }
-        if (current > 0) this._ledChannelLastOnValues[channelId] = current;
-        if (channel.entity) {
-          const ok = await this.setLedBrightness(channel.entity, 0, false, {
-            action: "LED Kanal AUS",
-            sourceId: `channel-switch-off-ch${channelId}`,
-            params: { source_id: `channel-switch-off-ch${channelId}`, source_type: "channel_switch", mode: "off", channel_id: channelId },
-          });
-          if (ok) {
-            this.setLedManualScheduleWarning(true);
-            this.render();
-          }
-        }
-        else {
-          channel.value = 0;
-          this.render();
-        }
-      });
-    });
-    this.querySelectorAll("[data-number]").forEach((el) => {
-      el.addEventListener("change", () => this.setNumber(el.getAttribute("data-number"), el.value));
-      el.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") this.setNumber(el.getAttribute("data-number"), el.value);
-      });
-    });
-    this.querySelectorAll("[data-led-channel-history]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const channel = Number(el.getAttribute("data-led-channel-history") || 1);
-        this.openDialogState("led-history", channel, { activeTab: "led" });
-      });
-    });
-    this.querySelectorAll("[data-action]").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        const action = el.getAttribute("data-action") || "";
-        const [kind, entity, extra] = action.split(":");
-        const doserActionKinds = new Set(["manual-blocked", "dose-inline", "dialog", "confirm-dialog-yes", "confirm-dialog-no", "calibration-start", "calibration-open-measure", "calibration-start-next", "calibration-prime", "calibration-test", "calibration-test-yes", "calibration-test-retry", "close-dialog"]);
-        if (this.activeTab === "doser" && this.visibleTabs().includes("doser") && doserActionKinds.has(kind)) return;
-        if (kind === "press") this.press(entity);
-        if (kind === "manual-blocked") {
-          const channel = Number(entity);
-          this.dialogState = {
-            type: "debug",
-            channel,
-            output: `FAIL\nUeberdosierungsschutz\nCH${channel}: ${this.tr("manual_blocked")}`,
-            running: false,
-            level: "error",
-          };
-          this.render();
-        }
-        if (kind === "more") this.moreInfo(entity);
-        if (kind === "debug-test-led-schedule") {
-          this.dialogState = {
-            type: "debug",
-            channel: 1,
-            output: "OK\nTest Dialog\nWenn du das hier siehst, funktioniert der Klick- und Debug-Dialogpfad.",
-            running: false,
-            noChannel: true,
-            level: "ok",
-          };
-          this.render();
-        }
-        if (kind === "led-schedule-edit") this.openLedScheduleDialog();
-        if (kind === "led-schedule-new") this.openNewLedScheduleDialog();
-        if (kind === "led-preset") await this.setLedPreset(entity);
-        if (kind === "led-schedule-add" || kind === "led-schedule-save") await this.addLedSchedule(true);
-        if (kind === "led-schedule-save-local") await this.addLedSchedule(false);
-        if (kind === "led-schedule-delete-row" && typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(entity), true);
-        if (kind === "led-schedule-reset" && typeof this.openLedScheduleResetConfirm === "function") this.openLedScheduleResetConfirm();
-        if (kind === "led-enable-auto-mode" && typeof this.enableLedAutoModeFromFront === "function") await this.enableLedAutoModeFromFront();
-        if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") this.saveLedTemplateFromDialog();
-        if (kind === "led-template-share-save" && typeof this.saveSharedLedTemplate === "function") this.saveSharedLedTemplate();
-        if (kind === "led-schedule-share-save" && typeof this.saveSharedLedSchedule === "function") await this.saveSharedLedSchedule();
-        if (kind === "led-auto-mode-edit" && typeof this.openLedAutoModeDialog === "function") this.openLedAutoModeDialog();
-        if (kind === "led-auto-mode-send" && typeof this.saveLedAutoModeDialog === "function") await this.saveLedAutoModeDialog();
-        if (kind === "led-device-power-edit" && typeof this.openLedDevicePowerDialog === "function") this.openLedDevicePowerDialog();
-        if (kind === "led-device-power-send" && typeof this.saveLedDevicePowerDialog === "function") await this.saveLedDevicePowerDialog();
-        if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
-        if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
-        if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
-        if (kind === "dialog") {
-          if (String(entity || "").startsWith("led-")) {
-            this.openDialogState(entity, Number(extra), { activeTab: "led" });
-          } else {
-            this.openDialog(entity, Number(extra));
-          }
-        }
-        if (kind === "confirm-dialog-yes" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(true);
-        if (kind === "confirm-dialog-no" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(false);
-        if (kind === "calibration-start") {
-          await this.runDeviceService({
-            service: "start_doser_calibration",
-            data: { pump: Number(entity) },
-            title: this.tr("calibration"),
-            dialog: true,
-            channel: Number(entity),
-            noChannel: false,
-          });
-        }
-        if (kind === "calibration-start-next") {
-          const channel = Number(entity);
-          await this.callChihiros("start_doser_calibration", { pump: channel }, false);
-          this.dialogState = { type: "calibration", channel, step: 2 };
-          this.render();
-        }
-        if (kind === "close-dialog") this.closeDialog();
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-weekday-all]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const row = el.closest("[data-led-schedule-row]");
-        if (!row) return;
-        const active = !(el.classList.contains("active") || el.getAttribute("aria-pressed") === "true");
-        el.classList.toggle("active", active);
-        el.setAttribute("aria-pressed", active ? "true" : "false");
-        row.querySelectorAll("[data-led-schedule-weekday]").forEach((day) => {
-          day.classList.toggle("active", active);
-          day.setAttribute("aria-pressed", active ? "true" : "false");
-        });
-        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-weekday]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const row = el.closest("[data-led-schedule-row]");
-        if (!row) return;
-        const active = !(el.classList.contains("active") || el.getAttribute("aria-pressed") === "true");
-        el.classList.toggle("active", active);
-        el.setAttribute("aria-pressed", active ? "true" : "false");
-        const days = Array.from(row.querySelectorAll("[data-led-schedule-weekday]"));
-        const all = row.querySelector("[data-led-schedule-weekday-all]");
-        const allActive = days.length > 0 && days.every((day) => day.classList.contains("active") || day.getAttribute("aria-pressed") === "true");
-        if (all) {
-          all.classList.toggle("active", allActive);
-          all.setAttribute("aria-pressed", allActive ? "true" : "false");
-        }
-        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-control]").forEach((el) => {
-      const sync = () => {
-        const row = el.closest("[data-led-schedule-row]");
-        if (!row) return;
-        const name = el.getAttribute("data-led-schedule-control");
-        const kind = el.getAttribute("data-led-schedule-kind") || "";
-        const value = el.value;
-        if (typeof this.syncLedScheduleControl === "function") {
-          this.syncLedScheduleControl(row, name, value, kind);
-        }
-        if (name !== "template" && typeof this.syncLedScheduleTemplate === "function") this.syncLedScheduleTemplate(row);
-        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
-      };
-      el.addEventListener("input", sync);
-      el.addEventListener("change", sync);
-    });
-    this.querySelectorAll("[data-led-schedule-template]").forEach((el) => {
-      el.addEventListener("change", () => {
-        const row = el.closest("[data-led-schedule-row]");
-        if (!row) return;
-        if (typeof this.applyLedScheduleTemplate === "function") {
-          this.applyLedScheduleTemplate(row, el.value);
-        }
-        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
-      });
-    });
-    this.querySelectorAll("[data-led-template-action]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        const row = el.closest("[data-led-schedule-row]");
-        const action = el.getAttribute("data-led-template-action");
-        if (action === "add" && typeof this.addLedScheduleTemplate === "function") this.addLedScheduleTemplate(row);
-        if (action === "show" && typeof this.showLedScheduleTemplates === "function") this.showLedScheduleTemplates();
-        if (action === "delete" && typeof this.deleteLedScheduleTemplate === "function") this.deleteLedScheduleTemplate(row);
-      });
-    });
-    this.querySelectorAll("[data-led-template-edit]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (typeof this.openLedTemplateDialog === "function") this.openLedTemplateDialog(el.getAttribute("data-led-template-edit"));
-      });
-    });
-    this.querySelectorAll("[data-led-template-source]").forEach((el) => {
-      el.addEventListener("change", () => {
-        this._ledTemplateSourceFilter = String(el.value || "standard") === "local" ? "local" : "standard";
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-led-template-delete]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (typeof this.deleteLedTemplateFromFront === "function") this.deleteLedTemplateFromFront(el.getAttribute("data-led-template-delete"));
-      });
-    });
-    this.querySelectorAll("[data-led-template-share]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (typeof this.openLedTemplateShareDialog === "function") this.openLedTemplateShareDialog(el.getAttribute("data-led-template-share"));
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-delete]").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(el.getAttribute("data-led-schedule-delete")), true);
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-send]").forEach((el) => {
-      el.addEventListener("click", async (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (typeof this.sendLedScheduleRowFromFront === "function") await this.sendLedScheduleRowFromFront(Number(el.getAttribute("data-led-schedule-send")));
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-share]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        if (typeof this.openLedScheduleShareDialog === "function") this.openLedScheduleShareDialog(Number(el.getAttribute("data-led-schedule-share")));
-      });
-    });
-    this.querySelectorAll("[data-led-template-control]").forEach((el) => {
-      const sync = () => {
-        const name = el.getAttribute("data-led-template-control");
-        if (name && typeof this.syncLedTemplateControl === "function") {
-          this.syncLedTemplateControl(name, el.value);
-        }
-      };
-      el.addEventListener("input", sync);
-      el.addEventListener("change", sync);
-    });
-    this.querySelectorAll("[data-led-auto-mode-value]").forEach((el) => {
-      el.addEventListener("click", () => {
-        this.querySelectorAll("[data-led-auto-mode-value]").forEach((item) => item.classList.remove("active"));
-        el.classList.add("active");
-      });
-    });
-    this.querySelectorAll("[data-led-device-power-value]").forEach((el) => {
-      el.addEventListener("click", () => {
-        this.querySelectorAll("[data-led-device-power-value]").forEach((item) => item.classList.remove("active"));
-        el.classList.add("active");
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-ramp]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const row = el.closest("[data-led-schedule-row]");
-        if (!row) return;
-        const value = Number(el.getAttribute("data-led-schedule-ramp"));
-        const hidden = row.querySelector('[data-led-schedule-control="ramp"][data-led-schedule-kind="hidden"]');
-        if (hidden) hidden.value = String(value);
-        if (typeof this.syncLedScheduleControl === "function") {
-          this.syncLedScheduleControl(row, "ramp", value, "");
-        }
-        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
-      });
-    });
-    this.querySelectorAll("[data-led-time-picker]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const field = el.closest(".led-schedule-time-field");
-        if (!field) return;
-        const input = field.querySelector("input[type='time']");
-        const [hour = "08", minute = "00"] = String(input && input.value ? input.value : "08:00").split(":");
-        const open = field.classList.contains("open");
-        this.querySelectorAll(".led-schedule-time-field.open").forEach((item) => item.classList.remove("open"));
-        field.dataset.pendingHour = hour;
-        field.dataset.pendingMinute = minute;
-        field.querySelectorAll('[data-led-time-part="hour"]').forEach((button) => {
-          button.classList.toggle("active", button.getAttribute("data-led-time-value") === hour);
-        });
-        field.querySelectorAll('[data-led-time-part="minute"]').forEach((button) => {
-          button.classList.toggle("active", button.getAttribute("data-led-time-value") === minute);
-        });
-        field.classList.toggle("open", !open);
-      });
-    });
-    this.querySelectorAll("[data-led-time-part]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const field = el.closest(".led-schedule-time-field");
-        const input = field && field.querySelector("input[type='time']");
-        if (!input) return;
-        const part = el.getAttribute("data-led-time-part");
-        const value = String(el.getAttribute("data-led-time-value") || "00").padStart(2, "0");
-        if (part === "hour") field.dataset.pendingHour = value;
-        if (part === "minute") field.dataset.pendingMinute = value;
-        field.querySelectorAll(`[data-led-time-part="${part}"]`).forEach((button) => {
-          button.classList.toggle("active", button === el);
-        });
-      });
-    });
-    this.querySelectorAll("[data-led-time-cancel]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const field = el.closest(".led-schedule-time-field");
-        if (field) field.classList.remove("open");
-      });
-    });
-    this.querySelectorAll("[data-led-time-apply]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const field = el.closest(".led-schedule-time-field");
-        const input = field && field.querySelector("input[type='time']");
-        if (!field || !input) return;
-        const [currentHour = "08", currentMinute = "00"] = String(input.value || "08:00").split(":");
-        const hour = String(field.dataset.pendingHour || currentHour).padStart(2, "0");
-        const minute = String(field.dataset.pendingMinute || currentMinute).padStart(2, "0");
-        input.value = `${hour}:${minute}`;
-        field.classList.remove("open");
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-      });
-    });
-    this.querySelectorAll("[data-led-schedule-active], [data-led-schedule-debug]").forEach((el) => {
-      el.addEventListener("change", () => {
-        if (el.hasAttribute("data-led-schedule-debug") && this.dialogState && this.dialogState.type === "led-schedule") {
-          this.dialogState.ledScheduleDebug = Boolean(el.checked);
-        }
-        const label = el.closest(".led-schedule-switch");
-        const text = label && label.querySelector("span");
-        if (text) text.textContent = el.checked ? "An" : "Aus";
-      });
-    });
-    this.querySelectorAll("[data-dialog-form]").forEach((form) => {
-      const type = form.getAttribute("data-dialog-form");
-      const doserFormTypes = new Set(["schedule", "container", "manual", "safety", "auto-fill", "calibration"]);
-      if (this.activeTab === "doser" && this.visibleTabs().includes("doser") && doserFormTypes.has(type)) return;
-      const kind = form.querySelector("[data-schedule-kind]");
-      if (kind) {
-        kind.addEventListener("change", () => this.updateScheduleTimeInput(form));
-        const time = form.querySelector("[data-schedule-time]");
-        const weekdays = form.querySelector("[data-schedule-weekdays]");
-        if (time) time.addEventListener("input", () => this.updateScheduleTimeWarning(form));
-        if (time) time.addEventListener("change", () => this.updateScheduleTimeWarning(form));
-        if (weekdays) weekdays.addEventListener("change", () => this.updateScheduleTimeWarning(form));
-        this.updateScheduleTimeInput(form);
-      }
-      const channel = form.querySelector("[data-dialog-channel-select]");
-      if (channel) {
-        channel.addEventListener("change", () => {
-          this.openDialog(channel.getAttribute("data-dialog-channel-select"), Number(channel.value));
-        });
-      }
-      form.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        if (type === "schedule") await this.saveScheduleDialog(form);
-        if (type === "container") await this.saveContainerDialog(form);
-        if (type === "manual") await this.saveManualDialog(form);
-        if (type === "safety") await this.saveSafetyDialog(form);
-        if (type === "auto-fill") await this.saveAutoFillDialog(form);
-        if (type === "calibration") await this.saveCalibrationDialog(form);
-      });
-    });
-    this.querySelectorAll("[data-press]").forEach((el) => {
-      el.addEventListener("click", () => this.press(el.getAttribute("data-press")));
-    });
-    this.querySelectorAll("[data-ui-setting]").forEach((el) => {
-      el.addEventListener("change", () => {
-        const key = el.getAttribute("data-ui-setting");
-        this.uiSettings = this.uiSettings || {};
-        if (key === "language") this.uiSettings.language = el.value === "en" ? "en" : "de";
-        if (key === "showMac") this.uiSettings.showMac = Boolean(el.checked);
-        if (key === "dashboardDebug") this.uiSettings.dashboardDebug = Boolean(el.checked);
-        this.saveUiSettings();
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-channel-name]").forEach((el) => {
-      const save = () => {
-        const channel = Number(el.getAttribute("data-channel-name"));
-        if (!Number.isFinite(channel)) return;
-        this.uiSettings = this.uiSettings || {};
-        this.uiSettings.channelNames = this.uiSettings.channelNames || {};
-        this.uiSettings.channelNames[channel] = String(el.value || "").trim();
-        this.saveUiSettings();
-        this.applyChannelNames();
-        this.render();
-      };
-      el.addEventListener("change", save);
-      el.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") save();
-      });
-    });
-    this.querySelectorAll("[data-addon-db-form]").forEach((form) => {
-      form.addEventListener("submit", async (ev) => {
-        ev.preventDefault();
-        const api = window.ChihirosAddonApi;
-        if (!api || !api.saveDatabaseConfig) return;
-        const data = new FormData(form);
-        this.dialogState = {
-          type: "debug",
-          channel: 1,
-          output: "Datenbank-Konfiguration wird gespeichert...",
-          running: true,
-        };
-        this.render();
-        try {
-          await api.saveDatabaseConfig({
-            mode: data.get("mode") || "hass",
-            state_db_path: data.get("state_db_path") || "",
-            database_diagnostics_enabled: data.get("database_diagnostics_enabled") === "on",
-          });
-          this.dialogState = {
-            type: "debug",
-            channel: 1,
-            output: "OK\nDatenbank-Konfiguration gespeichert.",
-            running: false,
-          };
-        } catch (err) {
-          this.dialogState = {
-            type: "debug",
-            channel: 1,
-            output: `FAIL\n${err && err.message ? err.message : err}`,
-            running: false,
-            level: "error",
-          };
-        }
-        this.render();
-      });
-    });
-    this.querySelectorAll("[data-addon-db-refresh]").forEach((el) => {
-      el.addEventListener("click", async () => {
-        const api = window.ChihirosAddonApi;
-        if (api && api.refreshDashboard) await api.refreshDashboard();
-      });
-    });
-    this.querySelectorAll("[data-addon-update]").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        this.runAddonUpdate(el.getAttribute("data-addon-update") || "chihiros_beta");
-      });
-    });
-    this.querySelectorAll("[data-plugin-load]").forEach((el) => {
-      el.addEventListener("click", () => {
-        const plugin = el.getAttribute("data-plugin-load");
-        const addon = el.getAttribute("data-plugin-addon-open");
-        if (addon) {
-          window.open(`/hassio/addon/${addon}/info`, "_top");
-          return;
-        }
-        this.uiSettings = this.uiSettings || {};
-        this.uiSettings.plugins = this.uiSettings.plugins || {};
-        if (plugin && this.isTabEnabled(plugin)) this.setTab(plugin);
-      });
-    });
-    this.bindPluginEvents();
-  }
-
-  parseWiresharkCompareLines(text) {
-    const rows = [];
-    String(text || "").split(/\r?\n/).forEach((line) => {
-      const match = line.match(/\[INFO\]\s+(\{.*\})/);
-      if (!match) return;
-      try {
-        const item = JSON.parse(match[1]);
-        rows.push(`${item.cmd}|${item.mode}|${JSON.stringify(item.parm || [])}`);
-      } catch (err) {
-        // Manuell eingefuegte Zeilen ohne JSON werden ignoriert.
-      }
-    });
-    return rows;
-  }
-
-  normalizeWiresharkCompareValue(value) {
-    const text = String(value ?? "").trim();
-    if (/^-?\d+$/.test(text)) return Number(text);
-    return value;
-  }
-
-  normalizeWiresharkCompareParams(value) {
-    if (Array.isArray(value)) return value.map((item) => this.normalizeWiresharkCompareValue(item));
-    if (typeof value === "string") {
-      const text = value.trim();
-      if (!text) return [];
-      if (text.startsWith("[") && text.endsWith("]")) {
-        try {
-          const parsed = JSON.parse(text);
-          if (Array.isArray(parsed)) return parsed.map((item) => this.normalizeWiresharkCompareValue(item));
-        } catch (err) {
-          return text.slice(1, -1).split(",").map((item) => this.normalizeWiresharkCompareValue(item.trim())).filter((item) => String(item).trim() !== "");
-        }
-      }
-      return text.split(/[,\s]+/).map((item) => this.normalizeWiresharkCompareValue(item)).filter((item) => String(item).trim() !== "");
-    }
-    return [];
-  }
-
-  wiresharkFrameCompareLine(frame) {
-    if (!frame || typeof frame !== "object") return "";
-    const raw = frame.raw_json && typeof frame.raw_json === "object" ? frame.raw_json : {};
-    const cmd = raw.cmd ?? frame.command ?? frame.cmd;
-    const mode = raw.mode ?? frame.mode;
-    if (cmd === undefined || cmd === "" || mode === undefined || mode === "") {
-      const att = String(raw.att || frame.parsed_type || "").trim().toLowerCase();
-      const rawHex = String(raw.value_hex || raw.att_hex || raw.hex || frame.hex || "").trim();
-      if (!rawHex || (att !== "notify" && att !== "indicate")) return "";
-      const notification = {
-        time: String(raw.time || frame.timestamp || frame.time || ""),
-        dir: String(raw.dir || frame.direction || "rx"),
-        att,
-        handle: raw.handle || "",
-        hex: rawHex,
-      };
-      return `[INFO NOTIFY]  ${JSON.stringify(notification)}`;
-    }
-    const parm = raw.parm !== undefined ? raw.parm : (frame.params !== undefined ? frame.params : frame.parm);
-    const row = {
-      time: String(raw.time || frame.timestamp || frame.time || ""),
-      dir: String(raw.dir || frame.direction || ""),
-      cmd: this.normalizeWiresharkCompareValue(cmd),
-      mode: this.normalizeWiresharkCompareValue(mode),
-      parm: this.normalizeWiresharkCompareParams(parm),
-    };
-    return `[INFO APP]  ${JSON.stringify(row)}`;
-  }
-
-  wiresharkSelectedCompareText() {
-    const state = this.wiresharkPlugin || {};
-    const frames = state.result && Array.isArray(state.result.frames) ? state.result.frames : [];
-    const indexes = (Array.isArray(state.compareFrameIndexes) ? state.compareFrameIndexes : [])
-      .map((value) => Number(value))
-      .filter((value) => Number.isInteger(value) && value >= 0 && value < frames.length)
-      .sort((left, right) => left - right);
-    const lines = indexes.map((index) => this.wiresharkFrameCompareLine(frames[index])).filter(Boolean);
-    return {
-      count: lines.length,
-      selectedCount: indexes.length,
-      text: lines.join("\n------------------------------------------------------------------------\n"),
-    };
-  }
-
-  wiresharkCompareSourceText(data) {
-    return String((data && (data.compareText || data.selectedText || data.txText)) || "");
-  }
-
-  buildWiresharkCompareResult(currentText, pastedText) {
-    const current = this.parseWiresharkCompareLines(currentText);
-    const pasted = this.parseWiresharkCompareLines(pastedText);
-    const lines = [
-      "VERGLEICH",
-      "------------------------------------------------------------------------",
-      `Aktueller Mitschnitt: ${current.length} Frames`,
-      `App-Log: ${pasted.length} Frames`,
-      "------------------------------------------------------------------------",
-    ];
-    const max = Math.max(current.length, pasted.length);
-    if (!max) {
-      lines.push("Keine vergleichbaren cmd/mode/parm Zeilen gefunden.");
-      return lines.join("\n");
-    }
-    let diff = 0;
-    for (let index = 0; index < max; index += 1) {
-      const left = current[index] || "<fehlt>";
-      const right = pasted[index] || "<fehlt>";
-      if (left === right) continue;
-      diff += 1;
-      lines.push(`#${index + 1}`);
-      lines.push(`  Mitschnitt: ${left}`);
-      lines.push(`  App-Log   : ${right}`);
-    }
-    if (!diff) lines.push("OK: Keine Unterschiede gefunden.");
-    lines.push("------------------------------------------------------------------------");
-    return lines.join("\n");
-  }
-
-  wiresharkCompareDialog() {
-    const data = this.wiresharkCompareDialogData || null;
-    if (!data) return "";
-    const title = String(data.title || "Vergleich App-Log");
-    const fileName = String(data.fileName || "");
-    const rxText = String(data.rxText || "");
-    const txText = String(data.txText || "");
-    const selectedText = String(data.selectedText || "");
-    const selectedCount = Number(data.selectedCount || 0);
-    const selectedLabel = selectedText ? `Markierte Frames (${selectedCount}) - für Vergleich benutzt` : "Markierte Frames";
-    const pasted = String(data.pasted || "");
-    const result = String(data.result || "");
-    const busy = Boolean(data.busy);
-    return `
-      <div class="modal-backdrop">
-        <section class="modal card wireshark-compare-modal">
-          <div class="wireshark-compare-head">
-            <h2>${this.escapeHtml(title)}</h2>
-            ${fileName ? `<small>${this.escapeHtml(fileName)}</small>` : ""}
-          </div>
-          <div class="wireshark-compare-form">
-            <span>Aktueller Mitschnitt - Notify/RX</span>
-            <textarea readonly>${this.escapeHtml(rxText)}</textarea>
-            <span>Aktueller Mitschnitt - TX/Schreibframes</span>
-            <textarea readonly>${this.escapeHtml(txText)}</textarea>
-            ${selectedText ? `
-            <span>${this.escapeHtml(selectedLabel)}</span>
-            <textarea readonly>${this.escapeHtml(selectedText)}</textarea>` : ""}
-            <span>App-Log hier einfuegen</span>
-            <textarea data-wireshark-compare-paste>${this.escapeHtml(pasted)}</textarea>
-            <span>Vergleich</span>
-            <textarea readonly>${this.escapeHtml(result)}</textarea>
-          </div>
-          <div class="wireshark-compare-actions">
-            <button type="button" class="primary" data-wireshark-compare-run ${busy ? "disabled" : ""}>Vergleichen</button>
-            <button type="button" data-wireshark-compare-reload ${busy ? "disabled" : ""}>Aktuellen Log neu laden</button>
-            <button type="button" data-wireshark-compare-copy="result">Ergebnis kopieren</button>
-            <span class="spacer"></span>
-            <button type="button" data-wireshark-compare-close>Schließen</button>
-            <button type="button" data-wireshark-compare-copy="log">Aktuellen Log kopieren</button>
-          </div>
-        </section>
-      </div>`;
-  }
-
-  patchWiresharkActions() {
-    const actions = this.querySelector(".wireshark-gui-actions");
-    if (!actions) return;
-    const compareTest = actions.querySelector("[data-wireshark-compare-test]");
-    if (compareTest && !compareTest.__chihirosCorePatched) {
-      compareTest.__chihirosCorePatched = true;
-      compareTest.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        this.wiresharkCompareDialogData = {
-          title: "Vergleich App-Log - Frontend Test",
-          fileName: "frontend-test",
-          rxText: "OK\nFrontend-Testbutton hat den Core-Dialog geöffnet.",
-          txText: "Wenn dieses Fenster sichtbar ist, laedt HA den richtigen Frontend-Code.",
-          selectedText: "",
-          selectedCount: 0,
-          compareText: "Wenn dieses Fenster sichtbar ist, laedt HA den richtigen Frontend-Code.",
-          pasted: "",
-          result: "",
-          busy: false,
-        };
-        this.render();
-      }, true);
-    }
-    const compare = actions.querySelector("[data-wireshark-compare-open]");
-    if (compare && !compare.__chihirosCorePatched) {
-      compare.__chihirosCorePatched = true;
-      const openCompare = async (ev) => {
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        const now = Date.now();
-        if (this.__wiresharkCompareOpenAt && now - this.__wiresharkCompareOpenAt < 750) return;
-        this.__wiresharkCompareOpenAt = now;
-        try {
-          await this.runWiresharkCompareFromCore();
-        } catch (err) {
-          this.wiresharkCompareDialogData = {
-            title: "Vergleich App-Log",
-            fileName: "Fehler",
-            rxText: "",
-            txText: `FAIL\n${err && err.message ? err.message : err}`,
-            pasted: "",
-            result: "",
-          };
-          this.render();
-        }
-      };
-      compare.addEventListener("pointerdown", openCompare, true);
-      compare.addEventListener("click", openCompare, true);
-    }
-  }
-
-  readWiresharkFieldsFromDom() {
-    const adb = {};
-    this.querySelectorAll("[data-wireshark-adb-field]").forEach((field) => {
-      const key = field.getAttribute("data-wireshark-adb-field");
-      if (!key) return;
-      adb[key] = field.type === "checkbox" ? Boolean(field.checked) : String(field.value || "");
-    });
-    return adb;
-  }
-
-  async runWiresharkCompareFromCore() {
-    const api = window.ChihirosAddonApi;
-    if (!api || typeof api.callPluginBackend !== "function") {
-      throw new Error("Plugin-Backend-API nicht verfügbar");
-    }
-    this.wiresharkPlugin = this.wiresharkPlugin || {};
-    const settings = (this.uiSettings && this.uiSettings.wireshark) || {};
-    const previousAdb = this.wiresharkPlugin.adb || {};
-    const adb = {
-      ...settings,
-      ...previousAdb,
-      ...this.readWiresharkFieldsFromDom(),
-      language: this.language(),
-      action: "compare-app-log",
-    };
-    this.wiresharkPlugin.adb = adb;
-    this.wiresharkPlugin.adbOutput = "ADB-Aktion läuft: compare-app-log...";
-    this.wiresharkPlugin.loading = true;
-    this.wiresharkPlugin.error = "";
-    this.wiresharkCompareDialogData = {
-      ...(this.wiresharkCompareDialogData || {}),
-      title: "Vergleich App-Log",
-      fileName: "wird geladen...",
-      rxText: "Laeuft\nVergleich App-Log wird geladen...",
-      txText: "",
-      result: "",
-      busy: true,
-    };
-    this.render();
-
-    const result = await api.callPluginBackend("wireshark", "run_wireshark_adb_action", [adb]);
-    const output = String(result.output || "").trim() || "Compare app log: Backend hat keine Ausgabe geliefert.";
-    const previous = this.wiresharkCompareDialogData || {};
-    const fileName = String(result.title || (result.frames_file ? String(result.frames_file).split(/[\\/]/).pop() : "keine Datei"));
-    const txText = String(result.tx_output || output || "");
-    const rxText = String(result.rx_output || "");
-    const selectedCompare = this.wiresharkSelectedCompareText();
-    const selectedText = selectedCompare.text || "";
-    const compareText = selectedText || txText;
-    this.wiresharkPlugin = {
-      ...(this.wiresharkPlugin || {}),
-      adb: {
-        ...(this.wiresharkPlugin && this.wiresharkPlugin.adb ? this.wiresharkPlugin.adb : {}),
-        ...(result.frames_file ? { frames_file: String(result.frames_file) } : {}),
-      },
-      adbOutput: [`Returncode: ${result.returncode}`, output].join("\n"),
-      updateOutput: output,
-      loading: false,
-      progressText: "App log comparison loaded",
-    };
-    this.wiresharkCompareDialogData = {
-      ...previous,
-      title: `Vergleich App-Log - ${fileName}`,
-      fileName,
-      rxText,
-      txText,
-      selectedText,
-      selectedCount: selectedCompare.count,
-      compareText,
-      pasted: previous.pasted || "",
-      result: previous.pasted ? this.buildWiresharkCompareResult(compareText, previous.pasted) : (previous.result || ""),
-      busy: false,
-    };
-    this.render();
-    const detail = this.querySelector("[data-wireshark-input]");
-    if (detail) detail.value = output;
-  }
-
-  bindPluginEvents() {
-    const plugins = window.ChihirosPlugins || {};
-    Object.values(plugins).forEach((plugin) => {
-      if (plugin && typeof plugin.bindEvents === "function") plugin.bindEvents(this);
-    });
+    this.bindCoreEvents();
+    if (this.activeTab === "led") this.bindLedEvents();
   }
 }
 

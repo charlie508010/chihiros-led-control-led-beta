@@ -7,8 +7,8 @@ in [`protocol.md`](protocol.md).
 ## Abgrenzung
 
 - LED und die allgemeine Konfiguration gehören fest zum Chihiros Core.
-- Doser, Wireshark, CTL, Rührer und Heizer sind getrennte Add-ons. Neue
-  LED-Funktionen dürfen keine Abhängigkeit zu deren Plugin-Code erzeugen.
+- Andere Gerätearten und Diagnosewerkzeuge werden getrennt entwickelt. Neue
+  LED-Funktionen dürfen keine Abhängigkeit zu externem Erweiterungscode erzeugen.
 - `src/chihiros_led_control/` ist die Quelle der gemeinsam genutzten
   Bibliothek. Die Kopie unter `custom_components/chihiros/vendor/` wird nur
   über `scripts/sync_vendor.py` aktualisiert.

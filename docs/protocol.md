@@ -290,51 +290,6 @@ The old Chihiros Magic app identifies these Doctor commands:
 | `0xa5` / `165` | `0x02` / `2` | `[2]` | Doctor power off |
 | `0xa5` / `165` | `0x02` / `2` | `[3]` | Query Doctor runtime/status |
 
-## Dosing Pump Commands
-
-Dosing pump findings are not used by the current LED implementation, but they
-confirm that Chihiros dosing devices use the same frame format, checksum, and
-Nordic UART-style transport. Observed device name prefixes include `DYDOSE` and
-`DYNDOS`.
-
-Amounts are encoded as a big-endian integer in tenths of a milliliter:
-
-```python
-units = round(ml * 10)
-ml_hi = units >> 8
-ml_lo = units & 0xff
-```
-
-Known dosing pump commands:
-
-| Command ID | Mode | Parameters | Meaning |
-| ---: | ---: | --- | --- |
-| `0xa5` / `165` | `0x15` / `21` | `[channel, unknown_or_timer_type, hour, minute, 0, 0]` | Timer/time command |
-| `0xa5` / `165` | `0x1b` / `27` | `[channel, 0, subtype/status, ml_hi, ml_lo]` | Manual or amount command variant |
-| `0xa5` / `165` | `0x1b` / `27` | `[channel, weekdays, recurrence_flag, unknown/status, ml_hi, ml_lo]` | Scheduled/recurring amount command variant |
-| `0xa5` / `165` | `0x20` / `32` | `[channel, catch_up_missed, active]` | Auto/channel enable |
-
-Captured OEM automatic schedule save order:
-
-```text
-0x5a / 0x04 / [1]
-0x5a / 0x09 / [year - 2000, month, weekday, hour, minute, second]
-0x5a / 0x09 / [year - 2000, month, weekday, hour, minute, second]
-0xa5 / 0x04 / [4]
-0xa5 / 0x04 / [5]
-0xa5 / 0x20 / [channel, catch_up_missed, active]
-0xa5 / 0x1b / [channel, weekdays, recurrence_flag, unknown/status, ml_hi, ml_lo]
-0xa5 / 0x15 / [channel, unknown_or_timer_type, hour, minute, 0, 0]
-```
-
-Captured example for channel `0`, every day, `60.0 ml`, time `22:35`:
-
-```text
-a5 01 08 00 57 20 00 00 01 7f
-a5 01 0b 00 58 1b 00 7f 01 01 02 58 6c
-a5 01 0b 00 59 15 00 00 16 23 00 00 73
-```
-
 ## Decompiler Notes
 
 The Flutter app's central frame builder appears as

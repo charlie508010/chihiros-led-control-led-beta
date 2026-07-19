@@ -2,7 +2,7 @@
 set -euo pipefail
 
 OPTIONS_FILE="/data/options.json"
-SOURCE_REPOSITORY="https://github.com/charlie508010/chihiros-led-control-beta.git"
+SOURCE_REPOSITORY="https://github.com/charlie508010/chihiros-led-control-led-beta.git"
 SOURCE_BRANCH="main"
 GITHUB_TOKEN=""
 INSTALL_INTEGRATION="true"
@@ -15,7 +15,7 @@ import shlex
 from pathlib import Path
 data = json.loads(Path("/data/options.json").read_text())
 values = {
-    "SOURCE_REPOSITORY": str(data.get("source_repository", "https://github.com/charlie508010/chihiros-led-control-beta.git")),
+    "SOURCE_REPOSITORY": str(data.get("source_repository", "https://github.com/charlie508010/chihiros-led-control-led-beta.git")),
     "SOURCE_BRANCH": str(data.get("source_branch", "main")),
     "GITHUB_TOKEN": str(data.get("github_token", "")),
     "INSTALL_INTEGRATION": str(data.get("install_integration", True)).lower(),

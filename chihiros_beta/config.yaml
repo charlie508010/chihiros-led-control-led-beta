@@ -1,8 +1,8 @@
 name: LED Core
-version: "0.2.1010"
+version: "0.2.1011"
 slug: chihiros_beta
-description: One Chihiros integration and dashboard for all supported devices
-url: https://github.com/charlie508010/chihiros-led-control-beta/tree/main/chihiros_beta
+description: Chihiros LED integration, CLI, scheduler, and dashboard for Home Assistant
+url: https://github.com/charlie508010/chihiros-led-control-led-beta/tree/main/chihiros_beta
 arch:
   - aarch64
   - amd64
@@ -20,7 +20,7 @@ hassio_role: manager
 map:
   - config:rw
 options:
-  source_repository: https://github.com/charlie508010/chihiros-led-control-beta.git
+  source_repository: https://github.com/charlie508010/chihiros-led-control-led-beta.git
   source_branch: main
   github_token: ""
   install_integration: true

@@ -10,7 +10,6 @@ import shlex
 import sqlite3
 import subprocess
 import threading
-import time
 from datetime import datetime, timedelta, timezone
 from datetime import time as datetime_time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -63,125 +62,27 @@ DEFAULT_STATE_DB_PATH = Path(
 )
 HA_STORAGE = CONFIG_ROOT / ".storage"
 SETTINGS_PATH = Path(os.environ.get("CHIHIROS_DASHBOARD_SETTINGS", "/data/dashboard_settings.json"))
-PLUGIN_ASSET_ROOT = CONFIG_ROOT / ".chihiros" / "plugins"
-DEFAULT_CHANNELS = [
-    {"id": 1, "name": "Nitrat", "color": "#2ea8ff"},
-    {"id": 2, "name": "Phosphat", "color": "#39d353"},
-    {"id": 3, "name": "Eisen", "color": "#ff9300"},
-    {"id": 4, "name": "Kalium", "color": "#a855f7"},
-]
 CORE_TABS = ["led", "config"]
-SOURCE_PLUGIN_ROOT = SOURCE_ROOT / "custom_components" / "chihiros" / "plugins"
-CORE_PLUGIN_KINDS = ["doser", "ruehrer", "heizer", "wireshark", "ctl"]
-ADDON_PREFIX = "8ea2de0f_"
-PLUGIN_TABS = {
-    "core": CORE_TABS,
-    "ctl": ["ctl", "config"],
-    "doser": ["doser", "config"],
-    "ruehrer": ["ruehrer", "config"],
-    "heizer": ["heizer", "config"],
-}
-_PLUGIN_INSTALL_CACHE: tuple[float, list[str]] = (0.0, [])
-_PLUGIN_BACKEND_CACHE: dict[str, object] = {}
+
+
 def plugin_kind() -> str:
-    """Return the add-on plugin kind."""
-    value = str(os.environ.get("CHIHIROS_PLUGIN_KIND") or "core").strip().lower()
-    if value == "core":
-        return "core"
-    return re.sub(r"[^a-z0-9_]+", "", value) or "core"
+    """Return the fixed add-on kind for the separated LED repository."""
+    return "core"
 
 
 def plugin_tabs() -> list[str]:
-    """Return tabs enabled for this add-on."""
-    kind = plugin_kind()
-    if kind != "core":
-        return list(PLUGIN_TABS.get(kind, [kind, "config"]))
-    installed = set(installed_plugin_kinds())
-    ordered = ["led", *[kind for kind in CORE_PLUGIN_KINDS if kind in installed], "config"]
-    return ordered
+    """Return the LED-only dashboard tabs."""
+    return list(CORE_TABS)
 
 
 def installed_plugin_kinds() -> list[str]:
-    """Return plugin modules bundled with the single Core add-on."""
-    global _PLUGIN_INSTALL_CACHE
-    now = time.monotonic()
-    cached_at, cached = _PLUGIN_INSTALL_CACHE
-    if now - cached_at < 10:
-        return list(cached)
-    bundled = [
-        kind for kind in CORE_PLUGIN_KINDS if (SOURCE_PLUGIN_ROOT / kind / "www" / f"{kind}-plugin.js").is_file()
-    ]
-    configured = [
-        re.sub(r"[^a-z0-9_]+", "", item.strip().lower())
-        for item in str(os.environ.get("CHIHIROS_ENABLED_PLUGINS") or "").split(",")
-        if item.strip()
-    ]
-    installed = [*bundled, *[item for item in configured if item]]
-    seen: set[str] = set()
-    deduped: list[str] = []
-    for kind in installed:
-        if kind in seen:
-            continue
-        seen.add(kind)
-        deduped.append(kind)
-    _PLUGIN_INSTALL_CACHE = (now, deduped)
-    return list(deduped)
+    """Return no optional plugins from the separated LED repository."""
+    return []
 
 
 def plugin_assets() -> dict[str, dict[str, object]]:
-    """Return browser-loadable plugin asset modules."""
-    assets: dict[str, dict[str, object]] = {}
-    kinds = installed_plugin_kinds()
-    seen: set[str] = set()
-    for kind in kinds:
-        if kind in seen:
-            continue
-        seen.add(kind)
-        module_path = SOURCE_PLUGIN_ROOT / kind / "www" / f"{kind}-plugin.js"
-        if not module_path.is_file():
-            module_path = PLUGIN_ASSET_ROOT / kind / f"{kind}-plugin.js"
-        if module_path.is_file():
-            assets[kind] = {
-                "module": f"./plugins/{kind}/{kind}-plugin.js",
-                "mtime": int(module_path.stat().st_mtime),
-            }
-    return assets
-
-
-def plugin_backend(kind: str) -> object:
-    """Load a plugin backend module without keeping plugin code in core."""
-    key = re.sub(r"[^a-z0-9_]+", "", kind.lower())
-    if not key:
-        raise RuntimeError("Plugin name fehlt")
-    if key in _PLUGIN_BACKEND_CACHE:
-        return _PLUGIN_BACKEND_CACHE[key]
-
-    candidates = [
-        SOURCE_ROOT / "custom_components" / "chihiros" / "plugins" / key / "backend.py",
-        Path.cwd() / "custom_components" / "chihiros" / "plugins" / key / "backend.py",
-        PLUGIN_ASSET_ROOT / key / "backend.py",
-    ]
-    backend_path = next((path for path in candidates if path.is_file()), None)
-    if backend_path is None:
-        raise RuntimeError(f"Plugin Backend nicht gefunden: {key}")
-
-    spec = importlib.util.spec_from_file_location(f"chihiros_{key}_plugin_backend", backend_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Plugin Backend kann nicht geladen werden: {backend_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    _PLUGIN_BACKEND_CACHE[key] = module
-    return module
-
-
-def call_plugin_backend(kind: str, function_name: str, *args: object) -> object:
-    """Call a function from a plugin backend module."""
-    backend = plugin_backend(kind)
-    func = getattr(backend, function_name, None)
-    if not callable(func):
-        raise RuntimeError(f"Plugin Funktion fehlt: {kind}.{function_name}")
-    return func(*args)
-
+    """Return no plugin assets from the separated LED repository."""
+    return {}
 
 def addon_info_is_installed(data: dict[str, object]) -> bool:
     """Return true only for add-ons installed on this Home Assistant host."""
@@ -194,18 +95,8 @@ def addon_info_is_installed(data: dict[str, object]) -> bool:
 
 
 def plugin_title() -> str:
-    """Return the display title for this add-on."""
-    titles = {
-        "core": "LED Core",
-        "doser": "Chihiros Doser",
-        "ruehrer": "Chihiros Ruehrer",
-        "heizer": "Chihiros Heizer",
-    }
-    kind = plugin_kind()
-    if kind == "core":
-        return titles["core"]
-    return titles.get(kind, f"Chihiros {kind.replace('_', ' ').title()}")
-
+    """Return the display title for this LED add-on."""
+    return "LED Core"
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
@@ -276,9 +167,6 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path in ("/api/history", "/api/led-history"):
             self.save_history(self.read_json(), default_scope="led" if parsed.path == "/api/led-history" else "")
-            return
-        if parsed.path == "/api/plugin-backend":
-            self.run_plugin_backend(self.read_json())
             return
         if parsed.path == "/api/addon-refresh":
             self.refresh_addon_update_source(self.read_json())
@@ -591,31 +479,6 @@ class Handler(BaseHTTPRequestHandler):
             {"returncode": result.returncode, "output": output or "(no output)"},
         )
 
-    def run_plugin_backend(self, body: bytes) -> None:
-        try:
-            data = json.loads(body.decode("utf-8") or "{}")
-        except json.JSONDecodeError:
-            self.send_json(400, {"message": "Invalid JSON"})
-            return
-        plugin = re.sub(r"[^a-z0-9_]+", "", str(data.get("plugin") or "").strip().lower())
-        function = re.sub(r"[^a-zA-Z0-9_]+", "", str(data.get("function") or "").strip())
-        args = data.get("args", [])
-        if not plugin or not function:
-            self.send_json(400, {"message": "Plugin oder Funktion fehlt"})
-            return
-        if not isinstance(args, list):
-            self.send_json(400, {"message": "args muss eine Liste sein"})
-            return
-        try:
-            result = call_plugin_backend(plugin, function, *args)
-        except ValueError as err:
-            self.send_json(400, {"message": str(err)})
-            return
-        except RuntimeError as err:
-            self.send_json(500, {"message": str(err)})
-            return
-        self.send_json(200, result if isinstance(result, dict) else {"result": result})
-
     def refresh_addon_update_source(self, body: bytes) -> None:
         try:
             json.loads(body.decode("utf-8") or "{}")
@@ -659,28 +522,7 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(raw_path).lstrip("/") or "index.html"
         root = ROOT
         allowed_roots = [ROOT.resolve()]
-        if path.startswith("plugins/"):
-            root = SOURCE_PLUGIN_ROOT
-            path = path.removeprefix("plugins/")
-            allowed_roots = [SOURCE_PLUGIN_ROOT.resolve(), PLUGIN_ASSET_ROOT.resolve()]
         target = (root / path).resolve()
-        if (
-            path.startswith("ctl/")
-            or path.startswith("doser/")
-            or path.startswith("ruehrer/")
-            or path.startswith("heizer/")
-            or path.startswith("wireshark/")
-        ):
-            if not target.is_file():
-                parts = path.split("/", 1)
-                if len(parts) == 2 and parts[1] == f"{parts[0]}-plugin.js":
-                    source_fallback = (SOURCE_PLUGIN_ROOT / parts[0] / "www" / parts[1]).resolve()
-                    if source_fallback.is_file():
-                        target = source_fallback
-                if not target.is_file():
-                    fallback = (PLUGIN_ASSET_ROOT / path).resolve()
-                    if fallback.is_file():
-                        target = fallback
         if not target.is_file() or not any(str(target).startswith(str(allowed)) for allowed in allowed_roots):
             self.send_json(404, {"message": "Not found"})
             return
@@ -841,24 +683,6 @@ def sanitize_ha_service_result(value: object) -> object:
     return cleaned
 
 
-def entity_prefix(address: str) -> str:
-    compact = re.sub(r"[^a-z0-9]", "", address.lower())
-    if compact.startswith(("dydose", "dytdos")):
-        return compact
-    return f"dydose{compact}" if compact else "dydosedoser1"
-
-
-def doser_display_alias(address: str, fallback: str) -> str:
-    compact = re.sub(r"[^A-Z0-9]", "", address.upper())
-    match = re.match(r"^(DYDOSE[A-Z]{2}|DYTDOS[A-Z]{2})", compact)
-    return match.group(1) if match else fallback
-
-
-def channel_slug(ch_id: int, name: str) -> str:
-    suffix = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
-    return f"ch{ch_id}_{suffix}" if suffix else f"ch{ch_id}"
-
-
 def parse_ts(value: str) -> tuple[str, str]:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -869,123 +693,6 @@ def parse_ts(value: str) -> tuple[str, str]:
 
 def _history_sort_key(entry: dict[str, object]) -> str:
     return str(entry.get("ts") or f"{entry.get('date', '')}T{entry.get('time', '')}")
-
-
-def latest_auto_totals(device: str) -> list[float]:
-    values = [0.0, 0.0, 0.0, 0.0]
-    seen: set[int] = set()
-    for row in sqlite_rows(
-        """
-        SELECT channel, ml
-        FROM doser_auto_totals
-        WHERE device_key=?
-        ORDER BY day DESC, updated_at DESC, mode DESC
-        """,
-        (device.upper(),),
-    ):
-        channel = int(row.get("channel", -1))
-        if 0 <= channel < 4 and channel not in seen:
-            values[channel] = float(row.get("ml") or 0.0)
-            seen.add(channel)
-    return values
-
-
-def schedule_by_channel(device: str) -> dict[int, dict[str, object]]:
-    schedules: dict[int, dict[str, object]] = {}
-    for row in sqlite_rows(
-        """
-        SELECT *
-        FROM doser_schedules
-        WHERE device_key=?
-        ORDER BY channel, updated_at DESC, schedule_time
-        """,
-        (device.upper(),),
-    ):
-        channel = int(row.get("channel", -1))
-        if 0 <= channel < 4 and channel not in schedules:
-            schedules[channel] = row
-    return schedules
-
-
-def history_entries(device: str) -> list[dict[str, object]]:
-    entries: list[dict[str, object]] = []
-    for row in sqlite_rows(
-        """
-        SELECT ts, action, channel AS ch, params_json, status, output
-        FROM actions
-        WHERE UPPER(device_address)=UPPER(?) OR UPPER(device_alias)=UPPER(?)
-        ORDER BY id DESC
-        LIMIT 120
-        """,
-        (device, device),
-    ):
-        date_text, time_text = parse_ts(str(row.get("ts") or ""))
-        channel = row.get("ch")
-        entry: dict[str, object] = {
-            "ts": str(row.get("ts") or ""),
-            "date": date_text,
-            "time": time_text,
-            "action": str(row.get("action") or ""),
-            "detail": str(row.get("output") or row.get("status") or ""),
-            "status": str(row.get("status") or ""),
-        }
-        if channel is not None:
-            try:
-                entry["pump"] = int(channel) + 1
-            except (TypeError, ValueError):
-                pass
-        params = row.get("params_json")
-        if params:
-            try:
-                parsed = json.loads(str(params))
-            except json.JSONDecodeError:
-                parsed = None
-            if isinstance(parsed, dict):
-                entry["params"] = parsed
-        entries.append(entry)
-
-    for row in sqlite_rows(
-        """
-        SELECT ts, channel AS ch, ml
-        FROM manual_history
-        WHERE device_key=?
-        ORDER BY id DESC
-        LIMIT 80
-        """,
-        (device.upper(),),
-    ):
-        date_text, time_text = parse_ts(str(row.get("ts") or ""))
-        channel = int(row.get("ch") or 0)
-        ml = float(row.get("ml") or 0.0)
-        entries.append(
-            {
-                "date": date_text,
-                "time": time_text,
-                "ts": str(row.get("ts") or ""),
-                "pump": channel + 1,
-                "action": "Manuelle Dosierung",
-                "detail": f"{ml:.1f} mL",
-            }
-        )
-    ext = load_doser_ext_store(device)
-    raw = ext.get("action_log", [])
-    if isinstance(raw, list):
-        entries.extend(entry for entry in raw[:80] if isinstance(entry, dict))
-
-    seen: set[tuple[str, str, object, str]] = set()
-    deduped: list[dict[str, object]] = []
-    for entry in sorted(entries, key=_history_sort_key, reverse=True):
-        key = (
-            str(entry.get("ts") or entry.get("date") or ""),
-            str(entry.get("action") or ""),
-            entry.get("pump"),
-            str(entry.get("detail") or ""),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(entry)
-    return deduped[:80]
 
 
 def ensure_actions_table(conn: sqlite3.Connection) -> None:
@@ -1094,99 +801,20 @@ def history_action_entries(device: str, limit: int = 200, scope: str = "") -> li
     return entries
 
 
-def doser_devices() -> list[dict[str, object]]:
-    settings = dashboard_settings()
-    if settings.get("mode") == "custom":
-        rows = sqlite_devices()
-        if not rows:
-            rows = ha_chihiros_doser_entries()
-    else:
-        rows = ha_chihiros_doser_entries()
-        if not rows:
-            rows = sqlite_devices()
-    devices = []
-    for index, row in enumerate(rows[:4], start=1):
-        address = str(row.get("address") or row.get("alias") or f"doser_{index}")
-        names = local_channel_names(address)
-        channels = [
-            {**channel, "name": str(names.get(channel["id"] - 1) or channel["name"])} for channel in DEFAULT_CHANNELS
-        ]
-        devices.append(
-            {
-                "id": str(row.get("alias") or f"doser_{index}"),
-                "label": str(row.get("label") or f"Geraet {index}"),
-                "name": str(row.get("label") or row.get("alias") or f"Doser {index}"),
-                "address": address,
-                "model": str(row.get("model") or "Dosing Pump"),
-                "entity_prefix": entity_prefix(address),
-                "container_full_ml": 500,
-                "entities": {},
-                "channels": channels,
-            }
-        )
-    return devices
-
-
 def build_dashboard_state() -> dict[str, object]:
+    """Build the standalone dashboard state from LED entities only."""
     states: dict[str, dict[str, object]] = {}
     settings = dashboard_settings()
     settings["templates"] = led_templates()
     settings["led_schedules"] = {}
     settings["led_device_status"] = {}
     led_addresses: set[str] = set()
-    devices = doser_devices()
-    for device in devices:
-        address = str(device["address"])
-        prefix = str(device["entity_prefix"])
-        ext = load_doser_ext_store(address)
-        containers = container_values(address, ext)
-        manual = manual_daily_values(address, ext)
-        auto = latest_auto_totals(address)
-        schedules = schedule_by_channel(address)
-        channels = list(device["channels"])  # type: ignore[arg-type]
-
-        for channel in channels:
-            ch_id = int(channel["id"])
-            index = ch_id - 1
-            slug = channel_slug(ch_id, str(channel["name"]))
-            schedule = schedules.get(index, {})
-            schedule_time = str(schedule.get("schedule_time") or "Unbekannt")
-            schedule_amount = float(schedule.get("dose_ml") or 0.0)
-            schedule_type_id = int(schedule.get("schedule_type_id") or 1)
-            active = bool(schedule.get("enabled", False))
-            remaining = float(containers.get(str(index), 0.0))
-            auto_ml = float(auto[index])
-            manual_ml = float(manual[index])
-            daily_ml = auto_ml + manual_ml
-
-            states[f"sensor.{prefix}_{slug}_daily_dose"] = state_obj(f"{daily_ml:.1f}", "mL")
-            states[f"sensor.{prefix}_{slug}_auto_daily_dose"] = state_obj(f"{auto_ml:.1f}", "mL")
-            states[f"sensor.{prefix}_{slug}_manual_daily_dose"] = state_obj(f"{manual_ml:.1f}", "mL")
-            states[f"sensor.{prefix}_{slug}_remaining"] = state_obj(f"{remaining:.1f}", "mL")
-            states[f"sensor.{prefix}_{slug}_schedule_time"] = state_obj(
-                schedule_time,
-                schedule_type_id=schedule_type_id,
-                schedule_kind=str(schedule.get("schedule_kind") or "single_dose"),
-            )
-            states[f"sensor.{prefix}_{slug}_schedule_amount"] = state_obj(f"{schedule_amount:.1f}", "mL")
-            states[f"switch.{prefix}_{slug}_schedule_active"] = state_obj("on" if active else "off")
-            states[f"number.{prefix}_{slug}_schedule_amount"] = state_obj(f"{schedule_amount:.1f}", "mL")
-            states[f"number.{prefix}_{slug}_remaining_volume"] = state_obj(f"{remaining:.1f}", "mL")
-            states[f"number.{prefix}_pump_{ch_id}_dose_volume"] = state_obj("1.0", "mL")
-            states[f"button.{prefix}_dose_pump_{ch_id}"] = state_obj("unknown")
-            states[f"button.{prefix}_{slug}_reset_schedule"] = state_obj("unknown")
-            states[f"button.{prefix}_{slug}_start_calibration"] = state_obj("unknown")
-
-        states[f"sensor.{prefix}_doser_history"] = state_obj(
-            "OK",
-            entries=history_entries(address),
-            low_container_push_enabled=False,
-            low_container_push_targets=[],
-        )
-        states[f"sensor.{prefix}_doser_timer_status"] = state_obj("OK")
-        states[f"switch.{prefix}_low_container_notification"] = state_obj("off")
-
     token = os.environ.get("SUPERVISOR_TOKEN", "")
+    entity_pattern = re.compile(
+        r"^(light|switch|sensor)\.([a-z0-9]*[0-9a-f]{12})_"
+        r"(red|green|blue|white|power|auto_mode|schedule|firmware_version|runtime|runtime_minutes|last_notification)$",
+        re.IGNORECASE,
+    )
     if token:
         try:
             ha_states = homeassistant_request("GET", "/api/states", token)
@@ -1195,81 +823,18 @@ def build_dashboard_state() -> dict[str, object]:
                     if not isinstance(item, dict):
                         continue
                     entity_id = str(item.get("entity_id") or "")
-                    domain = entity_id.split(".", 1)[0]
-                    if domain not in {"light", "switch", "button", "number", "sensor", "binary_sensor", "climate"}:
+                    match = entity_pattern.match(entity_id)
+                    if not match:
                         continue
                     attrs = item.get("attributes", {})
-                    friendly = str(attrs.get("friendly_name") if isinstance(attrs, dict) else "")
-                    haystack = f"{entity_id} {friendly}".lower()
-                    is_non_led_device = any(
-                        key in haystack
-                        for key in ("doser", "dosing", "dose", "pump", "ruehrer", "rührer", "stirrer", "mixer", "mix")
-                    )
-                    color = str(attrs.get("color") if isinstance(attrs, dict) else "").lower()
-                    is_chihiros_light = domain == "light" and (
-                        not is_non_led_device
-                        and (
-                            color in {"red", "green", "blue", "white"}
-                            or bool(
-                                re.match(
-                                    r"^light\.[a-z0-9]*[0-9a-f]{12}_(red|green|blue|white)$", entity_id, re.IGNORECASE
-                                )
-                            )
-                        )
-                    )
-                    is_chihiros_led_entity = bool(
-                        not is_non_led_device
-                        and re.match(
-                            r"^(light|switch|sensor)\.[a-z0-9]*[0-9a-f]{12}_(red|green|blue|white|power|auto_mode|schedule|firmware_version|runtime|runtime_minutes|last_notification)$",
-                            entity_id,
-                            re.IGNORECASE,
-                        )
-                    )
-                    is_chihiros_doser_entity = any(
-                        key in haystack
-                        for key in (
-                            "doser",
-                            "dosing",
-                            "dydose",
-                            "dytdos",
-                            "dose_pump",
-                            "dose_volume",
-                            "daily_dose",
-                            "dosed_today",
-                            "manual_daily_dose",
-                            "auto_daily_dose",
-                            "remaining_volume",
-                            "schedule_amount",
-                            "schedule_time",
-                            "schedule_active",
-                            "pump_",
-                        )
-                    )
-                    # The add-on already exposes one canonical Doser state set from its local database above.
-                    # Importing the integration's differently named Doser entities creates a second, empty device tab.
-                    if is_chihiros_doser_entity:
-                        continue
-                    if not (
-                        is_chihiros_light
-                        or is_chihiros_led_entity
-                        or any(key in haystack for key in ("chihiros", "ruehrer", "stirrer", "heizer"))
-                    ):
-                        continue
                     states[entity_id] = {
                         "state": str(item.get("state") or "unknown"),
                         "attributes": attrs if isinstance(attrs, dict) else {},
                         "last_changed": str(item.get("last_changed") or ""),
                         "last_updated": str(item.get("last_updated") or ""),
                     }
-                    match = re.match(
-                        r"^(light|switch|sensor)\.([a-z0-9]*[0-9a-f]{12})_(red|green|blue|white|power|auto_mode|schedule|firmware_version|runtime|runtime_minutes|last_notification)$",
-                        entity_id,
-                        re.IGNORECASE,
-                    )
-                    if match:
-                        address = ":".join(match.group(2)[-12:][index : index + 2] for index in range(0, 12, 2)).upper()
-                        if address:
-                            led_addresses.add(address)
+                    compact = match.group(2)[-12:]
+                    led_addresses.add(":".join(compact[index : index + 2] for index in range(0, 12, 2)).upper())
         except ValueError:
             pass
         try:
@@ -1293,14 +858,13 @@ def build_dashboard_state() -> dict[str, object]:
         "plugin_kind": plugin_kind(),
         "plugin_title": plugin_title(),
         "enabled_tabs": plugin_tabs(),
-        "installed_plugins": installed_plugin_kinds(),
-        "plugin_assets": plugin_assets(),
-        "devices": devices,
+        "installed_plugins": [],
+        "plugin_assets": {},
+        "devices": [],
         "states": states,
         "database": settings,
         "state_db_path": str(current_state_db_path()),
     }
-
 
 def led_templates() -> dict[str, object]:
     def decode_values(raw: str) -> list[int]:
@@ -1917,129 +1481,6 @@ def sqlite_rows(query: str, params: tuple[object, ...] = ()) -> list[dict[str, o
             return [dict(row) for row in conn.execute(query, params).fetchall()]
     except sqlite3.Error:
         return []
-
-
-def ha_chihiros_doser_entries() -> list[dict[str, object]]:
-    data = read_json_file(HA_STORAGE / "core.config_entries")
-    entries = data.get("data", {}).get("entries", []) if isinstance(data.get("data"), dict) else []
-    rows = []
-    for entry in entries if isinstance(entries, list) else []:
-        if not isinstance(entry, dict) or entry.get("domain") != "chihiros":
-            continue
-        entry_data = entry.get("data", {})
-        if not isinstance(entry_data, dict):
-            continue
-        address = str(entry_data.get("address") or "").strip()
-        if not address:
-            continue
-        pump_count = int(entry_data.get("pump_count") or entry_data.get("dosing_pump_count") or 0)
-        model_text = " ".join(
-            [
-                address,
-                str(entry.get("title") or ""),
-                *(str(entry_data.get(key) or "") for key in ("device_type", "model", "model_name", "name")),
-            ]
-        ).lower()
-        is_doser_entry = any(key in model_text for key in ("doser", "dosing", "dose", "pump", "dydose", "dytdos"))
-        if pump_count <= 0 and not is_doser_entry and not has_doser_state(address):
-            continue
-        alias = doser_display_alias(address, f"doser_{len(rows) + 1}")
-        rows.append(
-            {
-                "alias": alias,
-                "address": address.upper(),
-                "label": str(entry.get("title") or entry_data.get("name") or alias),
-                "model": str(entry_data.get("device_type") or "Dosing Pump"),
-            }
-        )
-    return rows
-
-
-def has_doser_state(address: str) -> bool:
-    key = address.upper()
-    if sqlite_rows("SELECT 1 FROM containers WHERE device_key=? LIMIT 1", (key,)):
-        return True
-    if sqlite_rows("SELECT 1 FROM doser_schedules WHERE device_key=? LIMIT 1", (key,)):
-        return True
-    if sqlite_rows("SELECT 1 FROM doser_auto_totals WHERE device_key=? LIMIT 1", (key,)):
-        return True
-    return bool(load_doser_ext_store(address))
-
-
-def sqlite_devices() -> list[dict[str, object]]:
-    rows = sqlite_rows(
-        """
-        SELECT DISTINCT device_key AS address FROM containers
-        UNION
-        SELECT DISTINCT device_key AS address FROM doser_schedules
-        UNION
-        SELECT DISTINCT device_key AS address FROM doser_auto_totals
-        UNION
-        SELECT DISTINCT device_key AS address FROM manual_history
-        ORDER BY address
-        """
-    )
-    return [
-        {"alias": f"doser_{index}", "address": str(row["address"]), "label": f"Geraet {index}", "model": "Dosing Pump"}
-        for index, row in enumerate(rows, start=1)
-        if row.get("address")
-    ]
-
-
-def load_doser_ext_store(address: str) -> dict[str, object]:
-    key = address.upper().lower().replace(":", "_")
-    raw = read_json_file(HA_STORAGE / f"chihiros_doser_ext_{key}")
-    data = raw.get("data", raw)
-    return data if isinstance(data, dict) else {}
-
-
-def local_channel_names(address: str) -> dict[int, str]:
-    out: dict[int, str] = {}
-    for row in sqlite_rows(
-        "SELECT key, value FROM ctl_settings WHERE key LIKE ?",
-        (f"channel_name.doser.{address.upper()}.%",),
-    ):
-        try:
-            out[int(str(row.get("key", "")).rsplit(".", 1)[-1])] = str(row.get("value", ""))
-        except (TypeError, ValueError):
-            continue
-    return out
-
-
-def container_values(address: str, ext: dict[str, object]) -> dict[str, float]:
-    values = {str(index): 500.0 for index in range(4)}
-    raw = ext.get("containers_ml")
-    if isinstance(raw, dict):
-        for key, value in raw.items():
-            values[str(key)] = float(value or 0.0)
-    for row in sqlite_rows(
-        "SELECT channel, volume_ml FROM containers WHERE device_key=? ORDER BY channel",
-        (address.upper(),),
-    ):
-        values[str(int(row["channel"]))] = float(row.get("volume_ml") or 0.0)
-    return values
-
-
-def manual_daily_values(address: str, ext: dict[str, object]) -> list[float]:
-    values = [0.0, 0.0, 0.0, 0.0]
-    raw = ext.get("manual_daily_ml")
-    if isinstance(raw, dict):
-        for key, value in raw.items():
-            try:
-                channel = int(key)
-            except (TypeError, ValueError):
-                continue
-            if 0 <= channel < 4:
-                values[channel] = float(value or 0.0)
-    today = datetime.now().date().isoformat()
-    for row in sqlite_rows(
-        "SELECT channel, ml FROM manual_daily WHERE device_key=? AND day=?",
-        (address.upper(), today),
-    ):
-        channel = int(row.get("channel", -1))
-        if 0 <= channel < 4:
-            values[channel] = float(row.get("ml") or 0.0)
-    return values
 
 
 if __name__ == "__main__":

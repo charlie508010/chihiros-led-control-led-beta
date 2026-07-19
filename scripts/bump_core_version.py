@@ -76,7 +76,7 @@ def main() -> int:
         "--addon",
         choices=("core", "all"),
         default="core",
-        help="Add-on version to bump. Device plugins are internal packages now; default: core.",
+        help="LED Core add-on version to bump; default: core.",
     )
     parser.add_argument("--version", help="Explicit version to set instead of bumping patch.")
     parser.add_argument("--message", help="Commit message to use after updating the version.")

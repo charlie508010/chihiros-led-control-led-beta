@@ -55,9 +55,6 @@ window.ChihirosNotificationUi = window.ChihirosNotificationUi || {
       } else if (model.mode === 0xFE) {
         parsedType = "STATUS_SNAPSHOT";
         meaning = "Status-Snapshot 0xFE";
-      } else if ([0x1E, 0x22].includes(model.mode) && model.values.length) {
-        parsedType = model.mode === 0x22 ? "DOSER_AUTO_DAILY_TOTALS" : "DOSER_STATUS_TOTALS";
-        meaning = model.values.map((value, channel) => `CH${channel + 1}=${value.toFixed(1)} mL`).join(" · ");
       }
       const described = typeof describe === "function" ? (describe(model, index) || {}) : {};
       parsedType = described.parsedType || parsedType;
@@ -66,8 +63,6 @@ window.ChihirosNotificationUi = window.ChihirosNotificationUi || {
       const defaultTabLabels = {
         0x0A: english ? "Runtime" : "Laufzeit",
         0xFE: card.tr("status"),
-        0x1E: english ? "Total values" : "Gesamtwerte",
-        0x22: english ? "Daily values" : "Tageswerte",
       };
       const tabLabel = described.tabLabel || defaultTabLabels[model.mode] || parsedType;
       const decodeLines = [

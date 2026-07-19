@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, time
+from datetime import datetime
 
 import pytest
 
 import chihiros_led_control.client as client_module
-from chihiros_led_control.client import ChihirosDevice, ChihirosDosingPump, read_doser_auto_totals
+from chihiros_led_control.client import ChihirosDevice
 from chihiros_led_control.models import RGB_CHANNELS, WHITE_CHANNELS, WRGB_CHANNELS, DeviceModel
 from chihiros_led_control.protocol import (
     RuntimeNotification,
@@ -196,27 +196,6 @@ def test_connection_prelude_appends_ordered_schedule_delete(monkeypatch: pytest.
     assert writes[-1][5:-1] == delete_command[5:-1]
 
 
-def test_doser_app_prelude_uses_full_time_then_short_year() -> None:
-    """The Doser app prelude sends the full clock followed by mode 9 with only the year."""
-    writes: list[bytes] = []
-
-    class FakeClient:
-        async def write_gatt_char(self, _characteristic: object, command: bytes, _response: bool) -> None:
-            writes.append(bytes(command))
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Doser", (), WHITE_CHANNELS))  # type: ignore[arg-type]
-        device._write_char = object()  # type: ignore[assignment]
-        device._connection_prelude_mode = "doser_manual"  # noqa: SLF001
-        await device._send_connection_prelude(FakeClient())  # type: ignore[arg-type]
-
-    asyncio.run(run())
-
-    assert [frame[5] for frame in writes] == [4, 9, 9]
-    assert len(writes[1][6:-1]) == 6
-    assert writes[2][6:-1] == writes[1][6:7]
-
-
 def test_schedule_delete_waits_for_auth_notification_before_rtc(monkeypatch: pytest.MonkeyPatch) -> None:
     """RTC and delete writes start only after the initial auth notification arrives."""
     writes: list[int] = []
@@ -325,110 +304,6 @@ def test_query_status_is_passive() -> None:
     assert calls == []
 
 
-def test_doser_schedule_reconnects_once_after_ble_disconnect() -> None:
-    """A dropped schedule connection restarts the complete app sequence once."""
-    attempts: list[tuple[object, ...]] = []
-    disconnects = 0
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Doser", (), WHITE_CHANNELS))  # type: ignore[arg-type]
-
-        async def send_once(*args: object) -> None:
-            attempts.append(args)
-            if len(attempts) == 1:
-                raise client_module.BleakError("[org.bluez.Error.NotConnected] Not Connected")
-
-        async def disconnect() -> None:
-            nonlocal disconnects
-            disconnects += 1
-
-        device._send_single_dose_schedule_once = send_once  # type: ignore[method-assign]
-        device._execute_disconnect = disconnect  # type: ignore[method-assign]
-        await device.add_schedule(0, time(11, 0), 5.0)
-
-    asyncio.run(run())
-
-    assert len(attempts) == 2
-    assert attempts[0] == attempts[1]
-    assert disconnects == 2
-
-
-def test_doser_interval_reconnects_once_after_ble_authorization_error() -> None:
-    """An interval schedule restarts the full transaction after a GATT authorization failure."""
-    sent_batches: list[list[bytes]] = []
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Doser", (), WHITE_CHANNELS))  # type: ignore[arg-type]
-
-        async def send(command: list[bytes] | bytes | bytearray, retry: int | None = None) -> None:
-            del retry
-            assert isinstance(command, list)
-            sent_batches.append([bytes(frame) for frame in command])
-            if len(sent_batches) == 1:
-                raise client_module.BleakError("GATT Protocol Error: Insufficient Authorization")
-
-        device._send_command = send  # type: ignore[method-assign]
-        await device.add_interval_schedule(1, 20, 10.0)
-
-    asyncio.run(run())
-
-    assert len(sent_batches) == 2
-    assert [[frame[5] for frame in batch] for batch in sent_batches] == [[4, 4, 27, 21], [4, 4, 27, 21]]
-    assert [frame[6:-1] for frame in sent_batches[1]] == [
-        bytes([4]),
-        bytes([5]),
-        bytes([1, 127, 1, 0, 0, 100]),
-        bytes([1, 1, 0, 20, 0, 0]),
-    ]
-
-
-def test_doser_single_dose_schedule_matches_app_sequence() -> None:
-    """Single-dose scheduling uses the confirmed app packet order and timing."""
-    sent: list[bytes] = []
-    sleeps: list[float] = []
-    connection_modes: list[str] = []
-    lock_states: list[bool] = []
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Doser", (), WHITE_CHANNELS))  # type: ignore[arg-type]
-
-        async def ensure_connected() -> None:
-            connection_modes.append(device._connection_prelude_mode)  # noqa: SLF001
-
-        async def send_connected(command: list[bytes]) -> None:
-            lock_states.append(device._operation_lock.locked())  # noqa: SLF001
-            sent.append(bytes(command[0]))
-
-        async def disconnect() -> None:
-            return None
-
-        async def capture_sleep(delay: float) -> None:
-            sleeps.append(delay)
-
-        device._ensure_connected = ensure_connected  # type: ignore[method-assign]
-        device._send_command_while_connected_once = send_connected  # type: ignore[method-assign]
-        device._execute_disconnect = disconnect  # type: ignore[method-assign]
-        original_sleep = asyncio.sleep
-        asyncio.sleep = capture_sleep  # type: ignore[method-assign]
-        try:
-            await device.add_schedule(0, time(11, 0), 5.0)
-        finally:
-            asyncio.sleep = original_sleep  # type: ignore[method-assign]
-
-    asyncio.run(run())
-
-    assert connection_modes == ["doser_manual"]
-    assert lock_states == [True, True, True, True, True]
-    assert [(frame[0], frame[5], list(frame[6:-1])) for frame in sent] == [
-        (165, 4, [4]),
-        (165, 4, [5]),
-        (165, 32, [0, 0, 1]),
-        (165, 27, [0, 127, 1, 0, 0, 50]),
-        (165, 21, [0, 0, 11, 0, 0, 0]),
-    ]
-    assert sleeps == [0.4, 0.12, 12.9, 0.175, 0.143]
-
-
 def test_query_status_stays_passive_after_command_send() -> None:
     """A refresh immediately after a write must not open a second BLE transaction."""
     events: list[str] = []
@@ -486,166 +361,6 @@ def test_query_status_active_sends_base_auth_and_waits_for_notification() -> Non
     assert frame[0:3] == bytes.fromhex("5a0106")
     assert frame[5:7] == bytes([4, 1])
     assert wait == 4.0
-
-
-def test_dosing_pump_manual_dose_sends_auth_and_dose_batch() -> None:
-    """Manual dosing sends dose auth frames before the one-shot dose command."""
-    sent_batches: list[list[bytes]] = []
-    sleeps: list[float] = []
-    events: list[str] = []
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Dosing Pump", (), {}))  # type: ignore[arg-type]
-
-        async def ensure_connected() -> None:
-            assert device._connection_prelude_mode == "doser_manual"  # noqa: SLF001
-            return None
-
-        async def capture_command(command: list[bytes], retry: int | None = None) -> None:
-            del retry
-            sent_batches.append([bytes(item) for item in command])
-            events.append(f"send:{command[0][5]}:{command[0][6]}")
-
-        async def execute_disconnect() -> None:
-            return None
-
-        async def capture_sleep(delay: float) -> None:
-            sleeps.append(delay)
-            events.append(f"sleep:{delay}")
-
-        device._ensure_connected = ensure_connected  # type: ignore[method-assign]
-        device._send_command_while_connected = capture_command  # type: ignore[method-assign]
-        device._execute_disconnect = execute_disconnect  # type: ignore[method-assign]
-        original_sleep = asyncio.sleep
-        asyncio.sleep = capture_sleep  # type: ignore[method-assign]
-
-        try:
-            await device.dose_ml(1, 2.0)
-            assert device._connection_prelude_mode == "standard"  # noqa: SLF001
-        finally:
-            asyncio.sleep = original_sleep  # type: ignore[method-assign]
-
-    asyncio.run(run())
-
-    assert [batch[0][5:7] for batch in sent_batches] == [bytes([4, 4]), bytes([4, 5]), bytes([27, 1])]
-    assert sent_batches[-1][0][6:-1] == bytes([1, 0, 0, 0, 20])
-    assert sleeps == [0.15, 0.15, 0.5, 8.0]
-    assert events == [
-        "send:4:4",
-        "sleep:0.15",
-        "send:4:5",
-        "sleep:0.15",
-        "sleep:0.5",
-        "sleep:8.0",
-        "send:27:1",
-    ]
-
-
-def test_dosing_pump_auto_totals_dialog_sends_auth_and_query_batch() -> None:
-    """App-like daily totals reading sends Doser auth frames before the 5B query."""
-    sent_batches: list[list[bytes]] = []
-    waits: list[float] = []
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Dosing Pump", (), {}))  # type: ignore[arg-type]
-
-        async def capture_command(
-            command: list[bytes] | bytes | bytearray,
-            retry: int | None = None,
-            notification_wait: float = 0,
-        ) -> None:
-            del retry
-            assert isinstance(command, list)
-            sent_batches.append([bytes(item) for item in command])
-            waits.append(notification_wait)
-
-        device._send_command = capture_command  # type: ignore[method-assign]
-
-        await device.read_auto_totals_via_dialog(0x22)
-
-    asyncio.run(run())
-
-    assert [command[5:7] for command in sent_batches[0][:2]] == [bytes([4, 4]), bytes([4, 5])]
-    assert sent_batches[0][2][0] == 0x5B
-    assert sent_batches[0][2][5] == 0x22
-    assert waits == [2.0]
-
-
-def test_dosing_pump_read_notifications_uses_app_dialog_and_wait() -> None:
-    """Doser notification reading sends the app dialog and collects the resulting burst."""
-    sent: list[bytes] = []
-    sleeps: list[float] = []
-    lock_states: list[bool] = []
-
-    async def run() -> None:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Dosing Pump", (), {}))  # type: ignore[arg-type]
-
-        async def ensure_connected() -> None:
-            assert device._connection_prelude_mode == "doser_manual"  # noqa: SLF001
-
-        async def send_once(command: list[bytes]) -> None:
-            lock_states.append(device._operation_lock.locked())  # noqa: SLF001
-            sent.append(bytes(command[0]))
-
-        async def disconnect() -> None:
-            return None
-
-        async def capture_sleep(delay: float) -> None:
-            sleeps.append(delay)
-
-        device._ensure_connected = ensure_connected  # type: ignore[method-assign]
-        device._send_command_while_connected_once = send_once  # type: ignore[method-assign]
-        device._execute_disconnect = disconnect  # type: ignore[method-assign]
-        original_sleep = asyncio.sleep
-        asyncio.sleep = capture_sleep  # type: ignore[method-assign]
-        try:
-            await device.read_doser_notifications(notification_wait=5.0)
-        finally:
-            asyncio.sleep = original_sleep  # type: ignore[method-assign]
-
-    asyncio.run(run())
-
-    assert [frame[5:7] for frame in sent] == [bytes([4, 4]), bytes([4, 5])]
-    assert sleeps == [0.4, 0.12, 5.0]
-    assert lock_states == [True, True]
-
-
-def test_ha_auto_totals_uses_app_dialog_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The HA helper retries the confirmed totals mode through the app-like dialog."""
-    calls: list[tuple[str, int]] = []
-
-    async def direct(self: ChihirosDosingPump, mode: int, *, clear_notifications: bool = True) -> None:
-        del self, clear_notifications
-        calls.append(("direct", mode))
-        return None
-
-    async def dialog(
-        self: ChihirosDosingPump,
-        mode: int,
-        *,
-        clear_notifications: bool = True,
-    ) -> list[float]:
-        del self, clear_notifications
-        calls.append(("dialog", mode))
-        return [1.0, 2.0, 3.0, 4.0]
-
-    async def disconnect(self: ChihirosDosingPump) -> None:
-        del self
-
-    monkeypatch.setattr(ChihirosDosingPump, "read_auto_totals", direct)
-    monkeypatch.setattr(ChihirosDosingPump, "read_auto_totals_via_dialog", dialog)
-    monkeypatch.setattr(ChihirosDosingPump, "disconnect", disconnect)
-
-    values, _debug = asyncio.run(
-        read_doser_auto_totals(
-            ble_device=FakeBLEDevice(),
-            address="AA:BB:CC:DD:EE:FF",
-            mode_5b=0x1E,
-        )
-    )
-
-    assert values == [1.0, 2.0, 3.0, 4.0]
-    assert calls == [("direct", 0x1E), ("dialog", 0x1E)]
 
 
 def test_send_command_disconnects_after_command_batch() -> None:
@@ -774,64 +489,6 @@ def test_render_protocol_debug_decodes_schedule_snapshot_as_curve_points() -> No
     assert "Details          : Zeitplan 2: 09:00-17:00 Level=5%" in output
     assert "Details          : Punkt 2: 17:01 Level=65%" in output
     assert "red=0%" not in output
-
-
-def test_doser_debug_decodes_doser_status_instead_of_led_curve() -> None:
-    """A Doser 0xFE response uses its channel blocks instead of the LED curve decoder."""
-    frame = bytes.fromhex(
-        "5B08300001FE0020E4000C000000000000000400000000000000000400000000000000000400000000000000000502050600"
-    )
-
-    async def run() -> str:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Dosing Pump", (), {}))  # type: ignore[arg-type]
-        device.raw_notifications.append(frame)
-        return device.render_raw_notifications()
-
-    output = asyncio.run(run())
-
-    assert "Bedeutung        : Doser-Status-Snapshot 0xFE" in output
-    assert "Details          : Header/Status=[0, 32, 228] (Bitbelegung offen)" in output
-    assert "Details          : CH1: Einzeldosis, marker=0, Zeit=12:00" in output
-    assert "Planmenge-Ganzzahl=5 ml, Auto-heute=0.0 ml" in output
-    assert "Details          : CH2: inaktiv/leer, marker=4" in output
-    assert "Zeitplan-Snapshot Kurvenpunkte" not in output
-
-
-def test_doser_debug_decodes_schedule_markers_independent_of_channel() -> None:
-    """Doser schedule-kind markers have the same meaning on every channel."""
-    frame = bytes.fromhex(
-        "5B08300001FE06150E0007000000000000500100000000000000720200000116031807F80301000106010C000F080DF80900"
-    )
-
-    async def run() -> str:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Dosing Pump", (), {}))  # type: ignore[arg-type]
-        device.raw_notifications.append(frame)
-        return device.render_raw_notifications()
-
-    output = asyncio.run(run())
-
-    assert "Details          : CH1: Einzeldosis, marker=0, Zeit=07:00" in output
-    assert "Details          : CH2: 24h/Intervall, marker=1" in output
-    assert "Details          : CH3: Timerliste, marker=2, Zeiten=01:22,03:24" in output
-    assert "Planmenge-Ganzzahl=248 ml, Auto-heute=204.0 ml" in output
-    assert "Details          : CH4: Benutzerdefiniert, marker=3, Zeiten=01:00,01:06,01:12" in output
-    assert "Planmenge-Ganzzahl=9 ml, Auto-heute=1.5 ml" in output
-
-
-def test_doser_debug_labels_only_mode_22_as_confirmed_daily_totals() -> None:
-    """Doser 0x1E is a status sum while 0x22 is the confirmed automatic daily counter."""
-    status_sum = bytes.fromhex("5B010A00011E0C7A010402D403F665")
-    daily_totals = bytes.fromhex("5B010A000122000000000000000028")
-
-    async def run() -> str:
-        device = ChihirosDosingPump(FakeBLEDevice(), DeviceModel("Dosing Pump", (), {}))  # type: ignore[arg-type]
-        device.raw_notifications.extend([status_sum, daily_totals])
-        return device.render_raw_notifications()
-
-    output = asyncio.run(run())
-
-    assert "Doser Status-/Summenwerte (kein bestaetigter Tageszaehler)" in output
-    assert "Doser Auto-Tageswerte (bestaetigt) CH1=0.0 ml" in output
 
 
 def test_render_protocol_debug_closes_trailing_schedule_at_existing_boundary() -> None:

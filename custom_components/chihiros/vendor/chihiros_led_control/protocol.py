@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 RESERVED_BYTE = 0x5A
 SCHEDULE_SNAPSHOT_POINTS_START = 25
@@ -40,43 +39,6 @@ class ScheduleSnapshotNotification:
 
 
 ParsedNotification = RuntimeNotification | ScheduleSnapshotNotification
-
-
-def split_ml_25_6(total_ml: float | int | str) -> tuple[int, int]:
-    """Encode ml as 25.6 ml buckets plus 0.1 ml remainder."""
-    value = Decimal(str(total_ml).replace(",", ".")).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-    if value < Decimal("0.2") or value > Decimal("999.9"):
-        raise ValueError("ml must be within 0.2..999.9")
-    high = int((value / Decimal("25.6")).to_integral_value(rounding=ROUND_FLOOR))
-    remainder = (value - Decimal(high) * Decimal("25.6")).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
-    low = int((remainder * Decimal("10")).to_integral_value(rounding=ROUND_HALF_UP))
-    if low == 256:
-        high += 1
-        low = 0
-    return high & 0xFF, low & 0xFF
-
-
-def ml_from_25_6(high_buckets: int, tenths_remainder: int) -> float:
-    """Decode 25.6 ml bucket encoding to ml."""
-    return round(25.6 * int(high_buckets) + 0.1 * int(tenths_remainder), 1)
-
-
-def parse_doser_totals_frame(payload: bytes | bytearray) -> list[float] | None:
-    """Parse Doser daily totals notification frames into four channel values."""
-    if len(payload) < 15 or payload[0] != 0x5B:
-        return None
-    if payload[5] not in (0x1E, 0x22, 0x34):
-        return None
-    params = list(payload[6:-1])
-    if len(params) >= 10 and 1 <= params[1] <= 4 and len(params[2:]) >= params[1] * 2:
-        params = params[2:]
-    if len(params) < 8:
-        return None
-    values = []
-    for offset in range(0, 8, 2):
-        tenths = (params[offset] << 8) | params[offset + 1]
-        values.append(round(tenths / 10.0, 1))
-    return values
 
 
 def next_message_id(current_msg_id: tuple[int, int] = (0, 0)) -> tuple[int, int]:

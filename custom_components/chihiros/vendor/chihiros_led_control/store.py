@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DEVICE_KINDS = ("led", "doser", "ruehrer", "heizer")
+DEVICE_KINDS = ("led",)
 
 DEFAULT_STANDARD_TEMPLATES: dict[str, list[int]] = {
     "ALL": [100, 100, 100, 100],
@@ -40,8 +40,6 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _today() -> str:
-    return datetime.now().date().isoformat()
 
 
 def _db_connect() -> sqlite3.Connection:
@@ -54,90 +52,10 @@ def _db_connect() -> sqlite3.Connection:
 
 
 def init_state_db() -> None:
-    """Create local Doser state tables."""
+    """Create local LED state tables."""
     with _db_connect() as conn:
         conn.executescript(
             """
-            CREATE TABLE IF NOT EXISTS actions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ts TEXT NOT NULL,
-                device_alias TEXT DEFAULT '',
-                device_address TEXT DEFAULT '',
-                action TEXT NOT NULL,
-                channel INTEGER,
-                params_json TEXT DEFAULT '{}',
-                status TEXT DEFAULT '',
-                output TEXT DEFAULT ''
-            );
-
-            CREATE TABLE IF NOT EXISTS containers (
-                device_key TEXT NOT NULL,
-                channel INTEGER NOT NULL,
-                volume_ml REAL NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (device_key, channel)
-            );
-
-            CREATE TABLE IF NOT EXISTS manual_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                device_key TEXT NOT NULL,
-                channel INTEGER NOT NULL,
-                ml REAL NOT NULL,
-                ts TEXT NOT NULL,
-                day TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS manual_daily (
-                device_key TEXT NOT NULL,
-                channel INTEGER NOT NULL,
-                day TEXT NOT NULL,
-                ml REAL NOT NULL DEFAULT 0,
-                PRIMARY KEY (device_key, channel, day)
-            );
-
-            CREATE TABLE IF NOT EXISTS doser_schedules (
-                device_key TEXT NOT NULL,
-                channel INTEGER NOT NULL,
-                schedule_kind TEXT NOT NULL DEFAULT 'single_dose',
-                schedule_type_id INTEGER NOT NULL DEFAULT 1,
-                schedule_time TEXT NOT NULL,
-                weekdays_mask INTEGER NOT NULL,
-                dose_ml REAL NOT NULL,
-                timer_type INTEGER NOT NULL DEFAULT 0,
-                entries_json TEXT NOT NULL DEFAULT '[]',
-                enabled INTEGER NOT NULL DEFAULT 1,
-                source TEXT DEFAULT 'ble',
-                not_before_date TEXT NOT NULL DEFAULT '',
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (device_key, channel, schedule_time, weekdays_mask)
-            );
-
-            CREATE TABLE IF NOT EXISTS doser_auto_totals (
-                device_key TEXT NOT NULL,
-                channel INTEGER NOT NULL,
-                day TEXT NOT NULL,
-                mode INTEGER NOT NULL,
-                ml REAL NOT NULL DEFAULT 0,
-                raw_json TEXT DEFAULT '{}',
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (device_key, channel, day, mode)
-            );
-
-            CREATE TABLE IF NOT EXISTS magstirrer_schedules (
-                device_key TEXT NOT NULL,
-                channel INTEGER NOT NULL,
-                schedule_kind TEXT NOT NULL,
-                weekdays_mask INTEGER NOT NULL,
-                timer_type INTEGER NOT NULL DEFAULT 0,
-                schedule_value INTEGER NOT NULL DEFAULT 0,
-                catch_up INTEGER NOT NULL DEFAULT 0,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                entries_json TEXT NOT NULL DEFAULT '[]',
-                source TEXT DEFAULT 'ble',
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (device_key, channel, schedule_kind, weekdays_mask)
-            );
-
             CREATE TABLE IF NOT EXISTS led_schedules (
                 device_key TEXT NOT NULL,
                 schedule_index INTEGER NOT NULL,
@@ -189,23 +107,15 @@ def init_state_db() -> None:
             );
             """
         )
-        _ensure_doser_schedule_columns(conn)
         _ensure_default_standard_templates(conn)
 
 
 def state_db_info() -> dict[str, Any]:
-    """Return local Doser state database table counts."""
+    """Return local LED state database table counts."""
     init_state_db()
     with _db_connect() as conn:
         tables = {}
         for table in (
-            "actions",
-            "containers",
-            "manual_history",
-            "manual_daily",
-            "doser_schedules",
-            "doser_auto_totals",
-            "magstirrer_schedules",
             "led_schedules",
             "ctl_devices",
             "ctl_settings",
@@ -217,342 +127,23 @@ def state_db_info() -> dict[str, Any]:
     return {"path": str(state_db_path()), "tables": tables}
 
 
-def record_action(
-    action: str,
-    *,
-    device_alias: str = "",
-    device_address: str = "",
-    channel: int | None = None,
-    params: dict[str, Any] | None = None,
-    status: str = "",
-    output: str = "",
-) -> None:
-    """Record a local Doser/CTL action."""
-    init_state_db()
-    with _db_connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO actions(ts, device_alias, device_address, action, channel, params_json, status, output)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                _utc_now(),
-                device_alias,
-                device_address,
-                action,
-                channel,
-                json.dumps(params or {}, ensure_ascii=False),
-                status,
-                output,
-            ),
-        )
 
 
-def _empty_channels() -> dict[str, float]:
-    return {str(index): 0.0 for index in range(4)}
+
+
+
+
+
+
+
+
+
+
 
 
 def _state_key(device: str) -> str:
+    """Return the normalized key used by device-scoped LED settings."""
     return resolve_device_address(device).upper()
-
-
-def ensure_device_containers(device: str) -> None:
-    """Ensure local container rows exist for one Doser."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        for channel in range(4):
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO containers(device_key, channel, volume_ml, updated_at)
-                VALUES (?, ?, 0, ?)
-                """,
-                (key, channel, _utc_now()),
-            )
-
-
-def set_container(device: str, channel: int, ml: float) -> None:
-    """Set one local container volume."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO containers(device_key, channel, volume_ml, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(device_key, channel) DO UPDATE SET
-                volume_ml=excluded.volume_ml,
-                updated_at=excluded.updated_at
-            """,
-            (key, int(channel), max(0.0, float(ml)), _utc_now()),
-        )
-
-
-def adjust_container(device: str, channel: int, delta_ml: float) -> None:
-    """Adjust one local container volume."""
-    current = get_containers(device).get(str(int(channel)), 0.0)
-    set_container(device, channel, current + float(delta_ml))
-
-
-def get_containers(device: str) -> dict[str, float]:
-    """Return local container volumes."""
-    ensure_device_containers(device)
-    key = _state_key(device)
-    with _db_connect() as conn:
-        rows = conn.execute(
-            "SELECT channel, volume_ml FROM containers WHERE device_key=? ORDER BY channel", (key,)
-        ).fetchall()
-    values = _empty_channels()
-    for row in rows:
-        values[str(int(row["channel"]))] = float(row["volume_ml"])
-    return values
-
-
-def record_manual(device: str, channel: int, ml: float) -> None:
-    """Record a local manual Doser amount."""
-    init_state_db()
-    key = _state_key(device)
-    day = _today()
-    with _db_connect() as conn:
-        conn.execute(
-            "INSERT INTO manual_history(device_key, channel, ml, ts, day) VALUES (?, ?, ?, ?, ?)",
-            (key, int(channel), float(ml), _utc_now(), day),
-        )
-        conn.execute(
-            """
-            INSERT INTO manual_daily(device_key, channel, day, ml)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(device_key, channel, day) DO UPDATE SET
-                ml=round(manual_daily.ml + excluded.ml, 3)
-            """,
-            (key, int(channel), day, float(ml)),
-        )
-
-
-def get_history(device: str, limit: int = 20) -> list[dict[str, Any]]:
-    """Return recent local manual Doser history."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        rows = conn.execute(
-            "SELECT ts, channel AS ch, ml FROM manual_history WHERE device_key=? ORDER BY id DESC LIMIT ?",
-            (key, int(limit)),
-        ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def clear_history(device: str) -> None:
-    """Clear local manual Doser history."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        conn.execute("DELETE FROM manual_history WHERE device_key=?", (key,))
-        conn.execute("DELETE FROM manual_daily WHERE device_key=?", (key,))
-
-
-def get_manual_daily_totals(device: str) -> list[float]:
-    """Return today's local manual Doser totals."""
-    init_state_db()
-    key = _state_key(device)
-    totals = [0.0, 0.0, 0.0, 0.0]
-    with _db_connect() as conn:
-        rows = conn.execute(
-            "SELECT channel, ml FROM manual_daily WHERE device_key=? AND day=?",
-            (key, _today()),
-        ).fetchall()
-    for row in rows:
-        channel = int(row["channel"])
-        if 0 <= channel < 4:
-            totals[channel] = float(row["ml"])
-    return totals
-
-
-def _ensure_doser_schedule_columns(conn: sqlite3.Connection) -> None:
-    columns = {row["name"] for row in conn.execute("PRAGMA table_info(doser_schedules)").fetchall()}
-    if not columns:
-        return
-    if "schedule_kind" not in columns:
-        conn.execute("ALTER TABLE doser_schedules ADD COLUMN schedule_kind TEXT NOT NULL DEFAULT 'single_dose'")
-    if "schedule_type_id" not in columns:
-        conn.execute("ALTER TABLE doser_schedules ADD COLUMN schedule_type_id INTEGER NOT NULL DEFAULT 1")
-    if "timer_type" not in columns:
-        conn.execute("ALTER TABLE doser_schedules ADD COLUMN timer_type INTEGER NOT NULL DEFAULT 0")
-    if "entries_json" not in columns:
-        conn.execute("ALTER TABLE doser_schedules ADD COLUMN entries_json TEXT NOT NULL DEFAULT '[]'")
-    if "not_before_date" not in columns:
-        conn.execute("ALTER TABLE doser_schedules ADD COLUMN not_before_date TEXT NOT NULL DEFAULT ''")
-    conn.execute(
-        """
-        UPDATE doser_schedules
-        SET schedule_type_id = CASE schedule_kind
-            WHEN 'interval' THEN 2
-            WHEN 'timer' THEN 3
-            WHEN 'window' THEN 4
-            ELSE 1
-        END
-        """
-    )
-
-
-def upsert_doser_schedule(
-    device: str,
-    channel: int,
-    schedule_time: str,
-    weekdays_mask: int,
-    dose_ml: float,
-    *,
-    schedule_kind: str = "single_dose",
-    timer_type: int = 0,
-    entries: list[dict[str, Any]] | None = None,
-    enabled: bool = True,
-    source: str = "ble",
-    not_before_date: str | None = "",
-) -> None:
-    """Store one local Doser schedule."""
-    init_state_db()
-    key = _state_key(device)
-    schedule_type_id = {"single_dose": 1, "interval": 2, "timer": 3, "window": 4}.get(str(schedule_kind), 1)
-    with _db_connect() as conn:
-        conn.execute("DELETE FROM doser_schedules WHERE device_key=? AND channel=?", (key, int(channel)))
-        conn.execute(
-            """
-            INSERT INTO doser_schedules(
-                device_key, channel, schedule_kind, schedule_type_id, schedule_time, weekdays_mask, dose_ml,
-                timer_type, entries_json, enabled, source, not_before_date, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                key,
-                int(channel),
-                str(schedule_kind),
-                schedule_type_id,
-                str(schedule_time),
-                int(weekdays_mask),
-                float(dose_ml),
-                int(timer_type),
-                json.dumps(entries or [], ensure_ascii=False),
-                1 if enabled else 0,
-                source,
-                str(not_before_date or ""),
-                _utc_now(),
-            ),
-        )
-
-
-def list_doser_schedules(device: str) -> list[dict[str, Any]]:
-    """List current local Doser schedules."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        _ensure_doser_schedule_columns(conn)
-        rows = conn.execute(
-            """
-            SELECT *
-            FROM doser_schedules
-            WHERE device_key=?
-            ORDER BY channel, schedule_time, weekdays_mask
-            """,
-            (key,),
-        ).fetchall()
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        item = dict(row)
-        try:
-            item["entries"] = json.loads(item.get("entries_json") or "[]")
-        except json.JSONDecodeError:
-            item["entries"] = []
-        out.append(item)
-    return out
-
-
-def set_doser_schedule_enabled(device: str, channel: int, enabled: bool) -> int:
-    """Set local Doser schedule enabled flag for a channel."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        cur = conn.execute(
-            "UPDATE doser_schedules SET enabled=?, updated_at=? WHERE device_key=? AND channel=?",
-            (1 if enabled else 0, _utc_now(), key, int(channel)),
-        )
-        return int(cur.rowcount)
-
-
-def delete_doser_schedule(device: str, channel: int, kind: str | None = None) -> int:
-    """Delete local Doser schedule rows."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        if kind:
-            cur = conn.execute(
-                "DELETE FROM doser_schedules WHERE device_key=? AND channel=? AND schedule_kind=?",
-                (key, int(channel), str(kind)),
-            )
-        else:
-            cur = conn.execute("DELETE FROM doser_schedules WHERE device_key=? AND channel=?", (key, int(channel)))
-        return int(cur.rowcount)
-
-
-def set_doser_auto_total(device: str, channel: int, mode: int, ml: float, day: str | None = None) -> None:
-    """Set one local Doser auto total value."""
-    init_state_db()
-    key = _state_key(device)
-    selected_day = day or _today()
-    with _db_connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO doser_auto_totals(device_key, channel, day, mode, ml, raw_json, updated_at)
-            VALUES (?, ?, ?, ?, ?, '{}', ?)
-            ON CONFLICT(device_key, channel, day, mode) DO UPDATE SET
-                ml=excluded.ml,
-                updated_at=excluded.updated_at
-            """,
-            (key, int(channel), selected_day, int(mode), float(ml), _utc_now()),
-        )
-
-
-def record_doser_auto_totals(device: str, mode: int, values: list[float], day: str | None = None) -> None:
-    """Store four local Doser auto totals."""
-    for channel, ml in enumerate(values[:4]):
-        set_doser_auto_total(device, channel, mode, float(ml), day)
-
-
-def get_doser_auto_totals(device: str, mode: int | None = None, day: str | None = None) -> list[dict[str, Any]]:
-    """Return local Doser auto totals."""
-    init_state_db()
-    key = _state_key(device)
-    clauses = ["device_key=?"]
-    params: list[Any] = [key]
-    if mode is not None:
-        clauses.append("mode=?")
-        params.append(int(mode))
-    if day is not None:
-        clauses.append("day=?")
-        params.append(str(day))
-    where = " AND ".join(clauses)
-    with _db_connect() as conn:
-        rows = conn.execute(
-            f"SELECT * FROM doser_auto_totals WHERE {where} ORDER BY day DESC, mode, channel",
-            params,
-        ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def clear_doser_auto_totals(device: str, mode: int | None = None, day: str | None = None) -> int:
-    """Clear local Doser auto totals."""
-    init_state_db()
-    key = _state_key(device)
-    clauses = ["device_key=?"]
-    params: list[Any] = [key]
-    if mode is not None:
-        clauses.append("mode=?")
-        params.append(int(mode))
-    if day is not None:
-        clauses.append("day=?")
-        params.append(str(day))
-    with _db_connect() as conn:
-        cur = conn.execute(f"DELETE FROM doser_auto_totals WHERE {' AND '.join(clauses)}", params)
-        return int(cur.rowcount)
 
 
 def set_channel_name(kind: str, device: str, channel: int, name: str) -> None:
@@ -571,99 +162,10 @@ def list_channel_names(kind: str, device: str) -> dict[int, str]:
     return names
 
 
-def upsert_magstirrer_schedule(
-    device: str,
-    channel: int,
-    schedule_kind: str,
-    weekdays_mask: int,
-    entries: list[dict[str, Any]],
-    *,
-    timer_type: int = 0,
-    schedule_value: int = 0,
-    catch_up: int = 0,
-    enabled: bool = True,
-    source: str = "ble",
-) -> None:
-    """Store one local MagStirrer schedule."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        conn.execute(
-            """
-            INSERT INTO magstirrer_schedules(
-                device_key, channel, schedule_kind, weekdays_mask, timer_type,
-                schedule_value, catch_up, enabled, entries_json, source, updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(device_key, channel, schedule_kind, weekdays_mask) DO UPDATE SET
-                timer_type=excluded.timer_type,
-                schedule_value=excluded.schedule_value,
-                catch_up=excluded.catch_up,
-                enabled=excluded.enabled,
-                entries_json=excluded.entries_json,
-                source=excluded.source,
-                updated_at=excluded.updated_at
-            """,
-            (
-                key,
-                int(channel),
-                str(schedule_kind),
-                int(weekdays_mask),
-                int(timer_type),
-                int(schedule_value),
-                int(catch_up),
-                1 if enabled else 0,
-                json.dumps(entries, ensure_ascii=False),
-                str(source),
-                _utc_now(),
-            ),
-        )
 
 
-def list_magstirrer_schedules(device: str) -> list[dict[str, Any]]:
-    """List local MagStirrer schedules."""
-    init_state_db()
-    key = _state_key(device)
-    with _db_connect() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM magstirrer_schedules
-            WHERE device_key=?
-            ORDER BY channel, schedule_kind, weekdays_mask
-            """,
-            (key,),
-        ).fetchall()
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        item = dict(row)
-        try:
-            item["entries"] = json.loads(item.get("entries_json") or "[]")
-        except json.JSONDecodeError:
-            item["entries"] = []
-        out.append(item)
-    return out
 
 
-def delete_magstirrer_schedule(
-    device: str,
-    channel: int,
-    schedule_kind: str | None = None,
-    weekdays_mask: int | None = None,
-) -> int:
-    """Delete local MagStirrer schedule rows."""
-    init_state_db()
-    key = _state_key(device)
-    clauses = ["device_key=?", "channel=?"]
-    params: list[Any] = [key, int(channel)]
-    if schedule_kind is not None:
-        clauses.append("schedule_kind=?")
-        params.append(str(schedule_kind))
-    if weekdays_mask is not None:
-        clauses.append("weekdays_mask=?")
-        params.append(int(weekdays_mask))
-    with _db_connect() as conn:
-        cur = conn.execute(f"DELETE FROM magstirrer_schedules WHERE {' AND '.join(clauses)}", params)
-        return int(cur.rowcount)
 
 
 def _empty_store() -> dict[str, Any]:
@@ -788,16 +290,7 @@ def save_store(data: dict[str, Any]) -> None:
 def normalize_kind(kind: str) -> str:
     """Normalize a user-facing device kind."""
     normalized = kind.strip().lower()
-    aliases = {
-        "light": "led",
-        "licht": "led",
-        "dose": "doser",
-        "mag": "ruehrer",
-        "magstirrer": "ruehrer",
-        "rührer": "ruehrer",
-        "stirrer": "ruehrer",
-        "heater": "heizer",
-    }
+    aliases = {"light": "led", "licht": "led"}
     normalized = aliases.get(normalized, normalized)
     if normalized not in DEVICE_KINDS:
         raise ValueError(f"Unknown device kind: {kind}")
@@ -874,7 +367,7 @@ def list_devices(kind: str | None = None) -> list[dict[str, str]]:
 
 
 def resolve_device_address(value: str) -> str:
-    """Resolve an alias such as doser_1 to a stored MAC address."""
+    """Resolve an LED alias to a stored MAC address."""
     wanted = value.strip()
     data = load_store()
     for devices in data["devices"].values():

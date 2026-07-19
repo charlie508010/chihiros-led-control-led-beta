@@ -94,9 +94,8 @@
       let addonTitle = "LED Core";
       const enabledTabs = ["led", "config"];
 
-      function defaultTabForKind(kind) {
-        const map = { core: "led", doser: "doser", ruehrer: "ruehrer", heizer: "heizer" };
-        return map[kind] || "led";
+      function defaultTabForKind() {
+        return "led";
       }
 
       function setAddonTitle(value) {

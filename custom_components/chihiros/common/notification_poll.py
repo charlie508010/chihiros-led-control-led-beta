@@ -31,7 +31,7 @@ class NotificationPollPayload:
 
 @dataclass(slots=True)
 class NotificationPollResult:
-    """Normalized result shared by LED and Doser consumers."""
+    """Normalized LED notification polling result."""
 
     address: str
     device_type: str
