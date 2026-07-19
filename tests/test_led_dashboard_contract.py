@@ -97,7 +97,7 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     assert 'domain: "chihiros_led_core"' in dashboard
     assert 'callService("chihiros_led_core"' in dashboard
     assert '/config/custom_components/chihiros_led_core' in run
-    assert '/config/.chihiros_led_core/chihiros_state.sqlite3' in run
+    assert '/config/.chihiros_led_core/chihiros_led_core.sqlite3' in run
     assert 'rm -rf /config/custom_components/chihiros' not in run
 
 
@@ -138,6 +138,37 @@ def test_parallel_led_core_entities_accept_home_assistant_numeric_suffixes() -> 
     assert '(red|green|blue|white)(?:_\\d+)?$' in panel
     assert 'const suffix = rawSuffix.replace(/_\\d+$/, "");' in panel
     assert "isNonLedEntity" not in panel
+
+
+def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
+    """Only LED configuration and diagnostics use the integration-owned SQLite database."""
+    server = source(ADDON_SERVER)
+    dashboard = source(DASHBOARD)
+    run = source(ADDON_RUN)
+    library_store = source(ROOT / "src" / "chihiros_led_control" / "store.py")
+    integration_store = source(ROOT / "custom_components" / "chihiros" / "common" / "storage.py")
+    storage_sources = "\n".join((server, library_store, integration_store))
+
+    assert "/config/.chihiros_led_core/chihiros_led_core.sqlite3" in run
+    assert "chihiros_state.sqlite3" not in "\n".join((run, server, library_store, integration_store, dashboard))
+    assert '"mode": "integration"' in server
+    assert "integration_state_db_path" in server
+    assert "initialize_led_core_database()" in server
+    assert "from chihiros_led_control.store import init_state_db" in server
+    assert 'name="diagnostic_retention_days"' in dashboard
+    assert "Entity-Zustände, History und Statistiken bleiben im Home-Assistant-Recorder." in dashboard
+    assert "DELETE FROM actions WHERE action='LED notification fetch' AND ts < ?" in server
+    assert "CREATE TABLE IF NOT EXISTS states" not in storage_sources
+    assert "CREATE TABLE IF NOT EXISTS statistics" not in storage_sources
+
+
+def test_addon_promotes_only_addresses_with_led_color_light_entities() -> None:
+    """Doser or other auxiliary sensors must not create false LED device tabs."""
+    server = source(ADDON_SERVER)
+
+    assert 'match.group(1).lower() != "light"' in server
+    assert 'match.group(3).lower() not in {' in server
+    assert 'if address not in led_addresses:' in server
 
 
 def test_channel_toggle_sends_distinct_on_off_values() -> None:

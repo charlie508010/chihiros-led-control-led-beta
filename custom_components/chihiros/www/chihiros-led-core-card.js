@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1021";
+import "./panels/chihiros-led-panel.js?v=0.2.1022";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -101,38 +101,30 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   addonDatabasePanel() {
     if (!this.config?.addon_mode) return "";
     const database = this.config.addon_database || {};
-    const mode = String(database.mode || "hass");
     const stateDbPath = String(
-      database.state_db_path || database.hass_state_db_path || "/config/.chihiros_led_core/chihiros_state.sqlite3",
+      database.state_db_path || database.integration_state_db_path || "/config/.chihiros_led_core/chihiros_led_core.sqlite3",
     );
     const effectiveState = String(database.effective_state_db_path || stateDbPath);
     const diagnosticsEnabled = Boolean(database.database_diagnostics_enabled);
+    const retentionDays = Math.max(0, Math.min(3650, Number(database.diagnostic_retention_days) || 0));
     return `
       <section class="card config-card database-card">
         <div class="config-card-head">
           <div><h2>${this.tr("database")}</h2><small>${this.tr("database_subtitle")}</small></div>
-          <span class="db-pill">${mode === "custom" ? this.tr("own_database") : "Home Assistant"}</span>
+          <span class="db-pill">${this.tr("integration_database")}</span>
         </div>
         <form data-addon-db-form>
-          <div class="db-mode">
-            <label class="${mode === "hass" ? "active" : ""}">
-              <input type="radio" name="mode" value="hass" ${mode === "hass" ? "checked" : ""}>
-              <span>Home Assistant</span>
-            </label>
-            <label class="${mode === "custom" ? "active" : ""}">
-              <input type="radio" name="mode" value="custom" ${mode === "custom" ? "checked" : ""}>
-              <span>${this.tr("own_database")}</span>
-            </label>
-          </div>
-          <label class="config-row wide">
-            <span>State SQLite</span>
-            <input type="text" name="state_db_path" value="${this.escapeHtml(stateDbPath)}">
-          </label>
+          <small class="settings-note">${this.tr("recorder_storage_hint")}</small>
           <div class="db-current"><p><b>${this.tr("active_sqlite")}</b><span>${this.escapeHtml(effectiveState)}</span></p></div>
           <label class="config-check">
             <input type="checkbox" name="database_diagnostics_enabled" ${diagnosticsEnabled ? "checked" : ""}>
             <span><b>${this.tr("database_diagnostics")}</b><small>${this.tr("database_diagnostics_hint")}</small></span>
           </label>
+          <label class="config-row wide">
+            <span>${this.tr("diagnostic_retention")}</span>
+            <input type="number" name="diagnostic_retention_days" min="0" max="3650" step="1" value="${retentionDays}">
+          </label>
+          <small class="settings-note">${this.tr("diagnostic_retention_hint")}</small>
           <div class="db-actions">
             <button type="button" class="link" data-addon-db-refresh>${this.tr("reload").toUpperCase()}</button>
             <button type="submit" class="primary">${this.tr("save").toUpperCase()}</button>
@@ -313,9 +305,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         const data = new FormData(form);
         try {
           await api.saveDatabaseConfig({
-            mode: data.get("mode") || "hass",
-            state_db_path: data.get("state_db_path") || "",
             database_diagnostics_enabled: data.get("database_diagnostics_enabled") === "on",
+            diagnostic_retention_days: Number(data.get("diagnostic_retention_days") || 0),
           });
         } catch (error) {
           this.dialogState = {
@@ -1439,11 +1430,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         show_mac: "MAC-Adresse anzeigen",
         channel_names: "Kanalnamen",
         database: "Datenbank",
-        database_subtitle: "Quelle für Add-on-Dashboard und Tageswerte",
+        database_subtitle: "Scheduler, Vorlagen, Übertragungsstatus und Diagnosen",
+        integration_database: "LED-Core-Speicher",
+        recorder_storage_hint: "Entity-Zustände, History und Statistiken bleiben im Home-Assistant-Recorder.",
         own_database: "Eigene DB",
         active_sqlite: "Aktive SQLite",
         database_diagnostics: "DB-Diagnose",
         database_diagnostics_hint: "Gespeicherte LED-Zeitpläne und offene Prüfaufträge anzeigen",
+        diagnostic_retention: "Diagnose-Aufbewahrung (Tage)",
+        diagnostic_retention_hint: "0 = unbegrenzt; betrifft nur regelmäßige BLE-Diagnosemeldungen.",
         database_status: "Scheduler-Datenbankstatus",
         database_open: "Geöffnet",
         database_closed: "Nicht geöffnet",
@@ -1683,11 +1678,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         show_mac: "Show MAC address",
         channel_names: "Channel names",
         database: "Database",
-        database_subtitle: "Source for add-on dashboard and daily values",
+        database_subtitle: "Schedules, templates, transfer status and diagnostics",
+        integration_database: "LED Core storage",
+        recorder_storage_hint: "Entity states, history and statistics remain in the Home Assistant Recorder.",
         own_database: "Own DB",
         active_sqlite: "Active SQLite",
         database_diagnostics: "DB diagnostics",
         database_diagnostics_hint: "Show stored LED schedules and pending verification jobs",
+        diagnostic_retention: "Diagnostic retention (days)",
+        diagnostic_retention_hint: "0 = unlimited; only periodic BLE diagnostic messages are affected.",
         database_status: "Scheduler database status",
         database_open: "Open",
         database_closed: "Not open",

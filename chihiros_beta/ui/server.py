@@ -59,11 +59,12 @@ ROOT = Path("/opt/chihiros-led-core-ui")
 SOURCE_ROOT = Path(os.environ.get("CHIHIROS_SOURCE_ROOT", "/opt/chihiros-led-core-src"))
 CONFIG_ROOT = Path(os.environ.get("HASS_CONFIG", "/config"))
 DEFAULT_STATE_DB_PATH = Path(
-    os.environ.get("CHIHIROS_STATE_DB", str(CONFIG_ROOT / ".chihiros_led_core" / "chihiros_state.sqlite3"))
+    os.environ.get("CHIHIROS_STATE_DB", str(CONFIG_ROOT / ".chihiros_led_core" / "chihiros_led_core.sqlite3"))
 )
 HA_STORAGE = CONFIG_ROOT / ".storage"
 SETTINGS_PATH = Path(os.environ.get("CHIHIROS_DASHBOARD_SETTINGS", "/data/dashboard_settings.json"))
 CORE_TABS = ["led", "config"]
+DEFAULT_DIAGNOSTIC_RETENTION_DAYS = 0
 
 
 def plugin_kind() -> str:
@@ -852,6 +853,7 @@ def build_dashboard_state() -> dict[str, object]:
     settings["templates"] = led_templates()
     settings["led_schedules"] = {}
     settings["led_device_status"] = {}
+    cleanup_led_diagnostics(settings)
     led_addresses: set[str] = set()
     token = os.environ.get("SUPERVISOR_TOKEN", "")
     entity_pattern = re.compile(
@@ -864,6 +866,7 @@ def build_dashboard_state() -> dict[str, object]:
         try:
             ha_states = homeassistant_request("GET", "/api/states", token)
             if isinstance(ha_states, list):
+                matched_states: list[tuple[dict[str, object], re.Match[str]]] = []
                 for item in ha_states:
                     if not isinstance(item, dict):
                         continue
@@ -871,6 +874,23 @@ def build_dashboard_state() -> dict[str, object]:
                     match = entity_pattern.match(entity_id)
                     if not match:
                         continue
+                    matched_states.append((item, match))
+                    if match.group(1).lower() != "light" or match.group(3).lower() not in {
+                        "red",
+                        "green",
+                        "blue",
+                        "white",
+                    }:
+                        continue
+                    compact = match.group(2)[-12:]
+                    led_addresses.add(":".join(compact[index : index + 2] for index in range(0, 12, 2)).upper())
+
+                for item, match in matched_states:
+                    compact = match.group(2)[-12:]
+                    address = ":".join(compact[index : index + 2] for index in range(0, 12, 2)).upper()
+                    if address not in led_addresses:
+                        continue
+                    entity_id = str(item.get("entity_id") or "")
                     attrs = item.get("attributes", {})
                     states[entity_id] = {
                         "state": str(item.get("state") or "unknown"),
@@ -878,8 +898,6 @@ def build_dashboard_state() -> dict[str, object]:
                         "last_changed": str(item.get("last_changed") or ""),
                         "last_updated": str(item.get("last_updated") or ""),
                     }
-                    compact = match.group(2)[-12:]
-                    led_addresses.add(":".join(compact[index : index + 2] for index in range(0, 12, 2)).upper())
         except ValueError:
             pass
         try:
@@ -1380,31 +1398,45 @@ def save_led_schedule_rows_local(device: str, periods: list[dict[str, object]]) 
 
 
 def normalize_dashboard_settings(data: dict[str, object]) -> dict[str, object]:
-    mode = str(data.get("mode") or "hass").strip().lower()
-    if mode not in {"hass", "custom"}:
-        raise ValueError("mode must be hass or custom")
-    state_db = str(data.get("state_db_path") or DEFAULT_STATE_DB_PATH).strip()
-    if mode == "custom" and not state_db:
-        raise ValueError("state_db_path is required for custom mode")
+    try:
+        retention_days = int(data.get("diagnostic_retention_days") or DEFAULT_DIAGNOSTIC_RETENTION_DAYS)
+    except (TypeError, ValueError):
+        retention_days = DEFAULT_DIAGNOSTIC_RETENTION_DAYS
     return {
-        "mode": mode,
-        "state_db_path": state_db or str(DEFAULT_STATE_DB_PATH),
+        "mode": "integration",
+        "state_db_path": str(DEFAULT_STATE_DB_PATH),
         "database_diagnostics_enabled": bool(data.get("database_diagnostics_enabled", False)),
+        "diagnostic_retention_days": max(0, min(3650, retention_days)),
     }
 
 
 def dashboard_settings() -> dict[str, object]:
     settings = normalize_dashboard_settings(read_json_file(SETTINGS_PATH))
     settings["effective_state_db_path"] = str(current_state_db_path(settings))
-    settings["hass_state_db_path"] = str(DEFAULT_STATE_DB_PATH)
+    settings["integration_state_db_path"] = str(DEFAULT_STATE_DB_PATH)
     return settings
 
 
 def current_state_db_path(settings: dict[str, object] | None = None) -> Path:
-    selected = settings or normalize_dashboard_settings(read_json_file(SETTINGS_PATH))
-    if selected.get("mode") == "custom":
-        return Path(str(selected.get("state_db_path") or DEFAULT_STATE_DB_PATH))
+    del settings
     return DEFAULT_STATE_DB_PATH
+
+
+def cleanup_led_diagnostics(settings: dict[str, object] | None = None) -> int:
+    """Remove expired periodic LED diagnostics when retention is explicitly enabled."""
+    selected = settings or normalize_dashboard_settings(read_json_file(SETTINGS_PATH))
+    retention_days = int(selected.get("diagnostic_retention_days") or 0)
+    path = current_state_db_path(selected)
+    if retention_days <= 0 or not path.exists():
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    with sqlite3.connect(path, timeout=10) as conn:
+        ensure_actions_table(conn)
+        cursor = conn.execute(
+            "DELETE FROM actions WHERE action='LED notification fetch' AND ts < ?",
+            (cutoff,),
+        )
+    return max(0, int(cursor.rowcount or 0))
 
 
 def read_json_file(path: Path) -> dict[str, object]:
@@ -1528,8 +1560,22 @@ def sqlite_rows(query: str, params: tuple[object, ...] = ()) -> list[dict[str, o
         return []
 
 
+def initialize_led_core_database() -> None:
+    """Create the dedicated LED Core database and its local-only tables."""
+    from chihiros_led_control.store import init_state_db
+
+    init_state_db()
+    path = current_state_db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(path, timeout=10) as conn:
+        ensure_actions_table(conn)
+        ensure_led_schedule_table(conn)
+        ensure_led_device_status_table(conn)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("CHIHIROS_UI_PORT") or "8109")
+    initialize_led_core_database()
     threading.Thread(target=led_status_reconcile_loop, name="led-status-reconcile", daemon=True).start()
     server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
     print(f"{plugin_title()} web UI listening on port {port}")

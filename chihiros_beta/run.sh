@@ -47,7 +47,7 @@ git clone --depth 1 --branch "${SOURCE_BRANCH}" "${CLONE_REPOSITORY}" /opt/chihi
 
 mkdir -p /config/.chihiros_led_core
 export HASS_CONFIG="/config"
-export CHIHIROS_STATE_DB="/config/.chihiros_led_core/chihiros_state.sqlite3"
+export CHIHIROS_STATE_DB="/config/.chihiros_led_core/chihiros_led_core.sqlite3"
 export CHIHIROS_PLUGIN_KIND="core"
 export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8109}"
 

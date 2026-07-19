@@ -32,8 +32,8 @@ def state_db_path() -> Path:
     if configured:
         return Path(configured)
     if Path("/config").exists():
-        return Path("/config/.chihiros_led_core/chihiros_state.sqlite3")
-    return Path.home() / ".chihiros" / "chihiros_state.sqlite3"
+        return Path("/config/.chihiros_led_core/chihiros_led_core.sqlite3")
+    return Path.home() / ".chihiros_led_core" / "chihiros_led_core.sqlite3"
 
 
 def _utc_now() -> str:
