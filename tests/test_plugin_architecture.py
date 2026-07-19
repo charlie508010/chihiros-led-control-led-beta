@@ -1,0 +1,60 @@
+"""Contracts for the isolated Chihiros device-plugin architecture."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+COMPONENT = ROOT / "custom_components" / "chihiros"
+LED_PLUGIN = COMPONENT / "plugins" / "led"
+
+
+def _load_manifest_module():
+    path = COMPONENT / "plugin_loader" / "manifest.py"
+    spec = importlib.util.spec_from_file_location("test_chihiros_plugin_manifest", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_led_plugin_has_complete_manifest_and_isolated_subsystems() -> None:
+    """LED must be discoverable as a plugin with explicit subsystem boundaries."""
+    data = json.loads((LED_PLUGIN / "plugin.json").read_text(encoding="utf-8"))
+
+    assert data["id"] == "led"
+    assert data["python_entrypoint"] == "plugin.py"
+    assert data["frontend"] == "dashboard/chihiros-led-card.js"
+    for directory in ("protocol", "services", "entities", "storage", "cli", "dashboard", "translations"):
+        assert (LED_PLUGIN / directory).is_dir()
+
+
+def test_plugin_manifest_rejects_paths_outside_plugin_directory(tmp_path: Path) -> None:
+    """A plugin must not escape its own directory through manifest paths."""
+    module = _load_manifest_module()
+    manifest_path = tmp_path / "plugin.json"
+    manifest_path.write_text(
+        json.dumps({"id": "unsafe", "python_entrypoint": "../outside.py"}),
+        encoding="utf-8",
+    )
+
+    try:
+        module.PluginManifest.from_path(manifest_path)
+    except ValueError as err:
+        assert "inside its plugin directory" in str(err)
+    else:
+        raise AssertionError("Unsafe plugin path was accepted")
+
+
+def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values() -> None:
+    """The add-on API must expose the manifests discovered by the Core."""
+    server = (ROOT / "chihiros_beta" / "ui" / "server.py").read_text(encoding="utf-8")
+
+    assert "def plugin_manifest_rows()" in server
+    assert 'CONFIG_ROOT / ".chihiros_led_core" / "plugins"' in server
+    assert '"installed_plugins": installed_plugin_kinds()' in server
+    assert '"plugin_assets": plugin_assets()' in server

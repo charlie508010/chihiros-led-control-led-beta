@@ -1,0 +1,5 @@
+{
+  "card": "../../www/chihiros-led-core-card.js",
+  "panel": "../../www/panels/chihiros-led-panel.js",
+  "notification_ui": "../../www/chihiros-notification-ui.js"
+}

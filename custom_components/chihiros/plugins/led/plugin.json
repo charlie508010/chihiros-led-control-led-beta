@@ -1,0 +1,16 @@
+{
+  "id": "led",
+  "name": "Chihiros LED",
+  "version": "1.0.0",
+  "requires_core": "1.0.0",
+  "python_entrypoint": "plugin.py",
+  "frontend": "dashboard/chihiros-led-card.js",
+  "cli_entrypoint": "chihiros_led_control.led_cli:app",
+  "tabs": [
+    {
+      "id": "led",
+      "title": "LED",
+      "icon": "mdi:led-strip-variant"
+    }
+  ]
+}

@@ -16,7 +16,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
-from .common.notification_poll import (
+from .const import DOMAIN
+from .coordinator import ChihirosDataUpdateCoordinator
+from .core.notifications import (
     NOTIFICATION_POLL_GAP_SECONDS,
     NOTIFICATION_POLL_INTERVAL,
     NOTIFICATION_POLL_LAST_FINISHED,
@@ -25,9 +27,8 @@ from .common.notification_poll import (
     async_poll_device_notifications,
     async_track_notification_poll,
 )
-from .common.storage import record_led_notification_poll
-from .const import DOMAIN
-from .coordinator import ChihirosDataUpdateCoordinator
+from .core.plugin_loader import async_load_plugins
+from .core.storage import record_led_notification_poll
 from .models import ChihirosData
 from .packages.led.const import (
     ADD_SCHEDULE_SCHEMA,
@@ -111,6 +112,7 @@ def _frontend_panel_version() -> str:
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the bundled Chihiros dashboard panel."""
+    await async_load_plugins(hass, DOMAIN)
     async_update_led_services(hass, True, lambda data: _resolve_service_device(hass, data))
     await _async_register_frontend_panel(hass)
     return True
@@ -118,6 +120,7 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up chihiros from a config entry."""
+    await async_load_plugins(hass, DOMAIN)
     runtime = await resolve_chihiros_runtime(hass, entry)
     coordinator = ChihirosDataUpdateCoordinator(
         hass,

@@ -67,24 +67,75 @@ CORE_TABS = ["led", "config"]
 DEFAULT_DIAGNOSTIC_RETENTION_DAYS = 0
 
 
+def plugin_manifest_rows() -> list[dict[str, object]]:
+    """Return validated metadata for packaged and configuration-local plugins."""
+    roots = (
+        Path(__file__).resolve().parents[2] / "custom_components" / "chihiros" / "plugins",
+        SOURCE_ROOT / "custom_components" / "chihiros" / "plugins",
+        CONFIG_ROOT / ".chihiros_led_core" / "plugins",
+    )
+    plugins: dict[str, dict[str, object]] = {}
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in sorted(root.glob("*/plugin.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(data, dict):
+                continue
+            plugin_id = str(data.get("id") or "").strip()
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", plugin_id) or plugin_id in plugins:
+                continue
+            tabs = [
+                {
+                    "id": str(tab.get("id") or "").strip(),
+                    "title": str(tab.get("title") or tab.get("id") or "").strip(),
+                    "icon": str(tab.get("icon") or "").strip(),
+                }
+                for tab in data.get("tabs", [])
+                if isinstance(tab, dict) and re.fullmatch(r"[a-z][a-z0-9_]*", str(tab.get("id") or "").strip())
+            ]
+            plugins[plugin_id] = {
+                "id": plugin_id,
+                "name": str(data.get("name") or plugin_id),
+                "version": str(data.get("version") or "0.0.0"),
+                "frontend": str(data.get("frontend") or ""),
+                "tabs": tabs or [{"id": plugin_id, "title": plugin_id, "icon": ""}],
+            }
+    return [plugins[key] for key in sorted(plugins)]
+
+
 def plugin_kind() -> str:
     """Return the fixed add-on kind for the separated LED repository."""
     return "core"
 
 
 def plugin_tabs() -> list[str]:
-    """Return the LED-only dashboard tabs."""
-    return list(CORE_TABS)
+    """Return installed plugin tabs followed by the Core configuration tab."""
+    tabs = [
+        str(tab.get("id") or "")
+        for plugin in plugin_manifest_rows()
+        for tab in plugin.get("tabs", [])
+        if isinstance(tab, dict)
+    ]
+    tabs = list(dict.fromkeys(tab for tab in tabs if tab))
+    if "led" not in tabs:
+        tabs.insert(0, "led")
+    if "config" not in tabs:
+        tabs.append("config")
+    return tabs
 
 
 def installed_plugin_kinds() -> list[str]:
-    """Return no optional plugins from the separated LED repository."""
-    return []
+    """Return ids of all discovered plugins."""
+    return [str(plugin["id"]) for plugin in plugin_manifest_rows()]
 
 
 def plugin_assets() -> dict[str, dict[str, object]]:
-    """Return no plugin assets from the separated LED repository."""
-    return {}
+    """Return public plugin metadata used by the dashboard shell."""
+    return {str(plugin["id"]): plugin for plugin in plugin_manifest_rows()}
 
 def addon_info_is_installed(data: dict[str, object]) -> bool:
     """Return true only for add-ons installed on this Home Assistant host."""
@@ -993,8 +1044,8 @@ def build_dashboard_state() -> dict[str, object]:
         "plugin_kind": plugin_kind(),
         "plugin_title": plugin_title(),
         "enabled_tabs": plugin_tabs(),
-        "installed_plugins": [],
-        "plugin_assets": {},
+        "installed_plugins": installed_plugin_kinds(),
+        "plugin_assets": plugin_assets(),
         "devices": [],
         "states": states,
         "database": settings,
