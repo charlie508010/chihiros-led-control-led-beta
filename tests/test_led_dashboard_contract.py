@@ -180,6 +180,17 @@ def test_parallel_led_core_entities_accept_home_assistant_numeric_suffixes() -> 
     assert "isNonLedEntity" not in panel
 
 
+def test_led_device_tabs_deduplicate_parallel_entities_by_mac_address() -> None:
+    """Different entity prefixes for the same MAC must remain one physical LED device."""
+    panel = source(LED_PANEL)
+
+    assert 'const deviceKey = (slug) =>' in panel
+    assert 'return hex ? hex[0].toLowerCase() : "";' in panel
+    assert 'const deviceSlug = deviceKey(rawDeviceSlug);' in panel
+    assert 'deviceSlug: match ? deviceKey(match[2]) : "led_1"' in panel
+    assert 'group.channels.findIndex((existing) => existing.key === channel.key)' in panel
+
+
 def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
     """Only LED configuration and diagnostics use the integration-owned SQLite database."""
     server = source(ADDON_SERVER)

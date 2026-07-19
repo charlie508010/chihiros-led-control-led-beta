@@ -87,9 +87,13 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const colorOrder = new Map(colorMap.map(([key], index) => [key, index]));
     const supportedColors = new Set(colorMap.map(([key]) => key));
     const devicePattern = /^(light|switch|sensor)\.([a-z0-9]*[0-9a-f]{12})_(.+)$/;
-    const deviceAddress = (slug) => {
+    const deviceKey = (slug) => {
       const hex = String(slug || "").match(/[0-9a-f]{12}$/i);
-      return hex ? hex[0].match(/.{1,2}/g).join(":").toUpperCase() : "";
+      return hex ? hex[0].toLowerCase() : "";
+    };
+    const deviceAddress = (slug) => {
+      const hex = deviceKey(slug);
+      return hex ? hex.match(/.{1,2}/g).join(":").toUpperCase() : "";
     };
     const entityColor = (entityId, attrs) => {
       const attrColor = String(attrs.color || "").toLowerCase();
@@ -102,7 +106,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const match = String(entityId).toLowerCase().match(devicePattern);
       if (!match) return;
       const attrs = state && state.attributes ? state.attributes : {};
-      const [, domain, deviceSlug, rawSuffix] = match;
+      const [, domain, rawDeviceSlug, rawSuffix] = match;
+      const deviceSlug = deviceKey(rawDeviceSlug);
+      if (!deviceSlug) return;
       const suffix = rawSuffix.replace(/_\d+$/, "");
       if (!groups.has(deviceSlug)) {
         groups.set(deviceSlug, {
@@ -148,7 +154,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         const color = entityColor(entityId, attrs);
         const name = String(color || attrs.friendly_name || entityId.split(".")[1] || entityId);
         const match = String(entityId).toLowerCase().match(devicePattern);
-        return { entityId, state, attrs, name, color, deviceSlug: match ? match[2] : "led_1" };
+        return { entityId, state, attrs, name, color, deviceSlug: match ? deviceKey(match[2]) : "led_1" };
       })
       .sort((left, right) => (colorOrder.get(left.color) ?? 99) - (colorOrder.get(right.color) ?? 99));
     entities.forEach((item) => {
@@ -180,14 +186,22 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       if (Number(item.attrs.max_power_watts) > 0) group.max_power_watts = Number(item.attrs.max_power_watts);
       const match = colorMap.find(([key]) => key === item.color);
       const brightness = Number(item.attrs.brightness || 0);
-      group.channels.push({
+      const channel = {
         id: group.channels.length + 1,
         name: match ? match[1] : String(item.name).replace(/^.* /, "") || `CH${group.channels.length + 1}`,
         color: match ? match[2] : "#2ea8ff",
         key: item.color,
         value: brightness ? Math.round((brightness / 255) * this.inferLedMaxBrightness(item)) : (item.state.state === "on" ? this.inferLedMaxBrightness(item) : 0),
         entity: item.entityId,
-      });
+        available: !["unavailable", "unknown"].includes(String(item.state.state || "").toLowerCase()),
+      };
+      const existingIndex = group.channels.findIndex((existing) => existing.key === channel.key);
+      if (existingIndex < 0) {
+        group.channels.push(channel);
+      } else if (!group.channels[existingIndex].available && channel.available) {
+        channel.id = group.channels[existingIndex].id;
+        group.channels[existingIndex] = channel;
+      }
     });
     return Array.from(groups.values())
       .filter((device) => device.channels.length)
@@ -196,6 +210,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         label: `${this.tr("device")} ${index + 1}`,
         model: device.model && device.model !== "LED" ? device.model : (device.channels.length >= 4 ? "WRGB" : "LED"),
         power_entity: device.power_entity || (device.channels[0] ? device.channels[0].entity : ""),
+        channels: device.channels.map(({ available: _available, ...channel }) => channel),
       }));
   }
 
