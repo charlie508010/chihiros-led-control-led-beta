@@ -517,7 +517,8 @@ async def async_add_schedule_period(
 
 def ensure_light_device(chihiros_data: ChihirosData) -> None:
     """Validate that the selected service target is a light."""
-    if chihiros_data.dosing_totals:
+    model = getattr(chihiros_data.device, "model", None)
+    if not getattr(model, "color_channels", None):
         raise HomeAssistantError(f"{chihiros_data.device.name} is not a light")
 
 

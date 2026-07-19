@@ -462,6 +462,7 @@ async def test_schedule_services_validate_and_drive_client(
 ) -> None:
     """Drive schedule services through Home Assistant's service registry."""
     entry, client = await _setup_entry(hass, monkeypatch)
+    assert not hasattr(client, "dosing_totals")
 
     await hass.services.async_call(
         DOMAIN,

@@ -9,11 +9,30 @@ ADDON_SERVER = ROOT / "chihiros_beta/ui/server.py"
 ADDON_INDEX = ROOT / "chihiros_beta/ui/index.html"
 ADDON_RUN = ROOT / "chihiros_beta/run.sh"
 ADDON_CONFIG = ROOT / "chihiros_beta/config.yaml"
+LED_SERVICES = ROOT / "custom_components/chihiros/packages/led/services.py"
 
 
 def source(path: Path) -> str:
     """Read one dashboard source file."""
     return path.read_text(encoding="utf-8")
+
+
+def test_led_services_do_not_depend_on_removed_doser_state() -> None:
+    """LED-only service validation must use model channels, never Doser runtime fields."""
+    services = source(LED_SERVICES)
+
+    assert "dosing_totals" not in services
+    assert 'getattr(model, "color_channels", None)' in services
+
+
+def test_addon_icon_fallback_renders_real_svg_symbols() -> None:
+    """The standalone add-on must render LED icons without Home Assistant's ha-icon component."""
+    index = source(ADDON_INDEX)
+
+    assert 'const iconShapes = {' in index
+    assert 'observedAttributes() { return ["icon"]; }' in index
+    assert 'this.innerHTML = `<svg viewBox="0 0 24 24"' in index
+    assert 'ha-icon::after' not in index
 
 
 def test_private_addon_runtime_restart_keeps_the_token_backed_source_clone() -> None:
