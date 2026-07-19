@@ -1,6 +1,6 @@
 ﻿# Home Assistant Docker Test Environment
 
-This compose setup runs Home Assistant with the local `custom_components/chihiros` directory mounted into `/config/custom_components/chihiros`.
+This compose setup runs Home Assistant with the local `custom_components/chihiros` source directory mounted into the isolated Home Assistant target `/config/custom_components/chihiros_led_core`.
 
 ## UI and Config Flow Testing
 

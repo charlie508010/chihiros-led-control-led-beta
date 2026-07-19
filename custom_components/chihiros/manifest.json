@@ -1,6 +1,6 @@
 {
-  "domain": "chihiros",
-  "name": "chihiros",
+  "domain": "chihiros_led_core",
+  "name": "Chihiros LED Core",
   "bluetooth": [
     {
       "local_name": "DYSSD*",
@@ -94,5 +94,5 @@
   "requirements": [
     "bleak-retry-connector==4.6.1"
   ],
-  "version": "0.2.1017"
+  "version": "0.2.1018"
 }

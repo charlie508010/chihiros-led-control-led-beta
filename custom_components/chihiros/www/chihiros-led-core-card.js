@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1017";
+import "./panels/chihiros-led-panel.js?v=0.2.1018";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -103,7 +103,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const database = this.config.addon_database || {};
     const mode = String(database.mode || "hass");
     const stateDbPath = String(
-      database.state_db_path || database.hass_state_db_path || "/config/.chihiros/chihiros_state.sqlite3",
+      database.state_db_path || database.hass_state_db_path || "/config/.chihiros_led_core/chihiros_state.sqlite3",
     );
     const effectiveState = String(database.effective_state_db_path || stateDbPath);
     const diagnosticsEnabled = Boolean(database.database_diagnostics_enabled);
@@ -322,24 +322,24 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       if (returnResponse && this._hass.connection && this._hass.connection.sendMessagePromise) {
         return await this._hass.connection.sendMessagePromise({
           type: "call_service",
-          domain: "chihiros",
+          domain: "chihiros_led_core",
           service,
           service_data: serviceData,
           return_response: true,
         });
       }
-      return await this._hass.callService("chihiros", service, {
+      return await this._hass.callService("chihiros_led_core", service, {
         ...serviceData,
       }, undefined, true, returnResponse);
     } catch (err) {
       if (!returnResponse || !isMissingResponseSupport(err)) throw err;
-      await this._hass.callService("chihiros", service, { ...serviceData });
+      await this._hass.callService("chihiros_led_core", service, { ...serviceData });
       return fallbackResponse(err);
     }
   }
 
   async callChihirosWithDialog(service, data = {}, options = {}) {
-    const channel = Number(options.channel || data.pump || 1);
+    const channel = Number(options.channel || 1);
     const debug = Boolean(options.debug);
     const wantsResponse = options.returnResponse !== undefined ? Boolean(options.returnResponse) : false;
     this.dialogState = { type: "debug", channel, output: this.tr("debug_sending"), running: true, debug, noChannel: Boolean(options.noChannel), level: "pending" };
@@ -362,7 +362,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       this.dialogState = {
         type: "debug",
         channel,
-        output: `FAIL\nService: chihiros.${service}\n${err && err.message ? err.message : err}`,
+        output: `FAIL\nService: chihiros_led_core.${service}\n${err && err.message ? err.message : err}`,
         debug,
         noChannel: Boolean(options.noChannel),
         running: false,
@@ -462,7 +462,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         ? debugData.raw_debug
         : (serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "")
     );
-    const debugService = debugData && debugData.service ? String(debugData.service) : `chihiros.${service}`;
+    const debugService = debugData && debugData.service ? String(debugData.service) : `chihiros_led_core.${service}`;
     const lines = ["Debug", `Service: ${debugService}`];
     if (debugData && debugData.summary) lines.push(`Summary: ${debugData.summary}`);
     if (debugData && debugData.device) lines.push(`Device: ${debugData.device}`);
@@ -531,7 +531,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       "type:scheduler",
       "type:device",
       "type:control",
-      "type:calibration",
       "type:settings",
       "type:other",
     ]);
@@ -554,11 +553,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       .map((value) => String(value || "").trim().toLowerCase())
       .filter(Boolean)
       .join(" ");
-    if (/kalibrier|calibrat/.test(text)) return "calibration";
-    if (/beh(?:ä|ae)lter|container|dosierschutz|dosing protection|safety|push|einstellung|setting|(?:ü|ue)berdos|overdos/.test(text)) return "settings";
-    if (/scheduler|schedule|zeitplan|timer|auto[ -]?differenz|automatic dose|automatische dosierung|auto[ -]?mode|automodus/.test(text)) return "scheduler";
+    if (/einstellung|setting|datenbank|database|vorlage|preset/.test(text)) return "settings";
+    if (/scheduler|schedule|zeitplan|timer|auto[ -]?mode|automodus/.test(text)) return "scheduler";
     if (/ger(?:ä|ae)temeld|notification|firmware|laufzeit|runtime|tageswert|daily (?:value|total)|ger(?:ä|ae)teinformation|device information/.test(text)) return "device";
-    if (/manuell|manual|dosier|dose|led gesetzt|led set|an ger(?:ä|ae)t gesendet|device send|einschalten|ausschalten/.test(text)) return "control";
+    if (/manuell|manual|led gesetzt|led set|an ger(?:ä|ae)t gesendet|device send|einschalten|ausschalten/.test(text)) return "control";
     return "other";
   }
 
@@ -578,7 +576,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             ${option("type:scheduler", this.tr("history_type_scheduler"))}
             ${option("type:device", this.tr("history_type_device"))}
             ${option("type:control", this.tr("history_type_control"))}
-            ${option("type:calibration", this.tr("history_type_calibration"))}
             ${option("type:settings", this.tr("history_type_settings"))}
             ${option("type:other", this.tr("history_type_other"))}
           </optgroup>
@@ -948,7 +945,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const payload = response.response !== undefined ? response.response : response;
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
     if (payload.debug_output !== undefined || payload.debug_data !== undefined || payload.send_status !== undefined || payload.ok !== undefined) return payload;
-    const serviceKey = service ? `chihiros.${service}` : "";
+    const serviceKey = service ? `chihiros_led_core.${service}` : "";
     if (serviceKey && payload[serviceKey]) return payload[serviceKey];
     if (service && payload[service]) return payload[service];
     const values = Object.values(payload).filter((value) => value && typeof value === "object" && !Array.isArray(value));
@@ -960,7 +957,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const serviceResponse = this.serviceResponse(response, service);
     const ok = this.serviceSendOk(serviceResponse);
     const title = options && options.title ? String(options.title) : "";
-    const serviceLabel = String(service || "").includes(".") ? String(service || "") : `chihiros.${service}`;
+    const serviceLabel = String(service || "").includes(".") ? String(service || "") : `chihiros_led_core.${service}`;
     const status = serviceResponse && serviceResponse.send_status ? String(serviceResponse.send_status) : "";
     const reply = serviceResponse && serviceResponse.send_detail ? String(serviceResponse.send_detail) : "";
     const debugOutput = this.normalizeDebugOutput(serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "");
@@ -1040,10 +1037,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     if (text.includes("gelöscht") || text.includes("deleted") || text.includes("reset")) return "&#128465;";
     if (text.includes("gespeichert") || text.includes("saved")) return "&#128190;";
     if (text.includes("gesendet") || text.includes("sent")) return "&#8599;";
-    if (text.includes("dosier") || text.includes("dose")) return "&#128167;";
     if (text.includes("auto")) return "&#8635;";
-    if (text.includes("kalibrier") || text.includes("calibrat")) return "&#9881;";
-    if (text.includes("behälter") || text.includes("behaelter") || text.includes("container")) return "&#128167;";
     return "&#9679;";
   }
 
@@ -1370,21 +1364,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         updating: "Update läuft …",
         command_copied: "Befehl kopiert",
         no_entities: "Keine passenden Home-Assistant-Entities gefunden.",
-        fetch_data: "Daten holen",
-        read_daily: "Tageswerte lesen",
-        catch_up: "Nachholen",
-        catch_up_edit: "Nachholen bearbeiten",
-        catch_up_timer_status: "Nächster Nachhol-Lauf",
         status: "Status",
-        calibrate: "Kalibrieren",
-        calibrate_channel: "kalibrieren",
-        next: "Weiter",
-        step_label: "Schritt",
-        manual: "Manuell",
-        automatic: "Automatisch",
-        daily_amounts: "Tagesmengen",
-        container: "Behälter",
-        container_volume: "Behältervolumen",
         active: "Aktiv",
         today: "Heute",
         time: "Zeit",
@@ -1396,40 +1376,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         history_type_scheduler: "Scheduler",
         history_type_device: "Geräteinformation",
         history_type_control: "Steuerung",
-        history_type_calibration: "Kalibrierung",
         history_type_settings: "Einstellungen",
         history_type_other: "Sonstige",
         led_no_history: "Noch keine LED-Aktionen gespeichert",
-        dose: "Dosieren",
-        dose_now: "Direkt dosieren",
         channel: "Kanal",
         schedule: "Zeitplan",
         scheduler: "Scheduler",
         amount: "Menge",
         weekdays: "Wochentage",
         actions: "Aktionen",
-        single_dose: "Einzeldosis",
-        interval: "Intervall",
-        interval_minutes: "Intervall Minuten",
-        timer_list: "Timerliste",
-        timer_add: "Einzeldosierung hinzufügen",
-        timer_remove: "Entfernen",
-        timer_time: "Uhrzeit",
-        timer_amount: "Einzelmenge",
-        timer_hint: "Bis zu 24 Einzeldosierungen; mindestens 10 Minuten Abstand.",
-        timer_count_error: "Timerlisten brauchen 1 bis 24 Einzeldosierungen.",
-        timer_gap_error: "Zwischen Einzeldosierungen müssen mindestens 10 Minuten liegen.",
-        time_window: "Benutzerdefiniert",
-        custom_schedule: "Benutzerdefiniert",
-        window_daily_amount: "Tagesdosierung gesamt",
-        window_hint: "Insgesamt höchstens 24 Dosierungen; innerhalb eines Zeitfensters höchstens 30 Minuten Abstand.",
-        window_total_doses: "Dosierungen gesamt",
-        window_start: "Von",
-        window_end: "Bis",
-        window_doses: "Dosierungen",
-        window_add: "Zeitfenster hinzufügen",
-        window_count_error: "Mindestens ein Zeitfenster und insgesamt höchstens 24 Dosierungen angeben.",
-        window_gap_error: "Innerhalb eines Zeitfensters dürfen zwischen Dosierungen höchstens 30 Minuten liegen.",
         everyday: "täglich",
         every_day: "Jeden Tag",
         reset: "Zurücksetzen",
@@ -1442,32 +1397,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         led_reset_device_effect: "Die lokal gespeicherten Zeitpläne bleiben unverändert.",
         reset_schedule_yes: "Ja, zurücksetzen",
         reset_schedule_no: "Nein, behalten",
-        valid_from_tomorrow: "Plan gültig ab morgen",
-        valid_from_tomorrow_note: "Sendet den Zeitplan mit App-Flag mode27[3]=1. Nutzen, wenn der Kanal heute bereits automatisch dosiert hat.",
-        auto_limit_reached: "Automatik Limit erreicht",
-        auto_limit_reached_note: "Zeitplan wird als gültig ab morgen gesendet.",
-        settings: "Schutz & Einstellungen",
-        overdose: "Überdosierungsschutz",
-        auto_limit: "Automatisch Limit",
-        manual_limit: "Manuell Limit pro Kanal",
-        daily_limit: "Tagesmenge Limit",
-        manual_limit_note: "0.00 mL sperrt manuelle Dosierung komplett.",
-        safety_edit: "Überdosierungsschutz bearbeiten",
-        max_auto_ml: "Automatisch Limit",
-        max_manual_ml: "Manuell Limit pro Kanal",
-        max_daily_ml: "Maximale Tagesdosis",
-        auto_fill: "Automatisch befüllen",
-        threshold: "Schwellwert",
-        low_container_push: "Push bei niedrigem Behälter",
-        auto_fill_edit: "Automatisches Befüllen bearbeiten",
-        push_targets: "Push-Geräte",
-        push_target_1: "Push-Gerät 1",
-        push_target_2: "Push-Gerät 2",
-        push_target_3: "Push-Gerät 3",
-        no_push_target: "Kein Zusatzgerät",
-        push_message: "Push-Nachricht",
-        push_message_hint: "Platzhalter: {ch}, {channel}, {device}, {remaining}, {threshold}",
-        push_message_default: "{ch} {channel}: nur noch {remaining} mL im Behälter. Schwellwert: {threshold} mL.",
         connection: "Verbindung",
         device: "Gerät",
         model: "Modell",
@@ -1476,39 +1405,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         presets: "Voreinstellungen",
         online: "Online",
         offline: "Offline",
-        prepare: "Vorbereiten",
-        prepare_text: "Schlauch vollständig mit Flüssigkeit füllen.",
-        hose_fill: "Schlauch spülen / befüllen",
-        hose_fill_hint: "Pumpe läuft für die gewählte Dauer und wird danach automatisch gestoppt.",
-        measure_prepare_text: "Messzylinder an das Ende des Dosierschlauchs stellen und danach „Kalibrierung starten“ drücken.",
-        start_measure: "Kalibrierung starten",
-        start_measure_hint: "Es werden ungefähr 2–4 mL dosiert. Der Vorgang kann bis zu 5 Sekunden dauern.",
-        fill_duration: "Spüldauer in Sekunden",
-        start_sequence: "Startsequenz senden",
-        start_sequence_text: "Pumpe laufen lassen, bis die Kalibrier-Menge im Messbecher ist.",
-        measured_save: "Exakte Menge eingeben",
-        measure_exact_hint: "Messzylinder auf eine ebene Fläche stellen, die exakte Menge ablesen und den Wert auf 0,05 mL genau eingeben.",
-        measured_amount: "Gemessene Menge in mL",
-        optional_check: "Optional prüfen",
-        send_test: "Danach Testdosierung senden",
-        test_amount: "Testmenge in mL",
-        save_calibration: "Kalibrierwert speichern",
-        calibration_failed: "Kalibrierung fehlgeschlagen",
-        enter_measured: "Bitte die gemessene Menge eintragen.",
-        calibration_last: "Letzte Kalibrierung",
-        calibration_not_recorded: "Noch nicht gespeichert",
-        calibration_reminder_days: "Erneut erinnern in Tagen",
-        calibration_reminder_at: "Erneuern am",
-        calibration_test_prepare: "Messzylinder vollständig leeren und trocknen. Danach die 4-ml-Prüfdosierung starten.",
-        calibration_test_dose: "4 ml dosieren",
-        calibration_test_question: "Wurden genau 4 ml dosiert? (zwischen 3,95 und 4,05 ml)",
-        calibration_test_yes: "Ja, weiter",
-        calibration_test_retry: "Nein, neu kalibrieren",
-        calibration_completed: "Kalibrierung abgeschlossen",
-        calibration_summary_measured: "Gemessene Kalibriermenge",
-        calibration_summary_test: "Prüfdosierung bestätigt",
-        calibration_summary_date: "Kalibriert am",
-        calibration_summary_reminder: "Erneut kalibrieren am",
         schedule_edit: "Zeitplan bearbeiten",
         debug_output: "Debug Ausgabe",
         result_output: "Rückmeldung",
@@ -1521,14 +1417,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         led_schedule_time_invalid: "Ungültiges Zeitfenster",
         led_schedule_time_conflict: "Zeitfenster überschneidet vorhandenen Eintrag",
         led_schedule_time_conflict_detail: "Bitte Zeiten so ändern, dass sich keine Bereiche überlappen.",
-        container_edit: "Behälter bearbeiten",
-        manual_dose: "Manuell dosieren",
-        manual_blocked: "Manuell gesperrt",
-        mode: "Modus",
-        next_time: "Nächste Zeit",
-        auto_today: "Automatisch heute",
-        manual_today: "Manuell heute",
-        today_total: "Heute gesamt",
       },
       en: {
         unknown: "Unknown",
@@ -1720,21 +1608,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         updating: "Updating …",
         command_copied: "Command copied",
         no_entities: "No matching Home Assistant entities found.",
-        fetch_data: "Fetch data",
-        read_daily: "Read daily values",
-        catch_up: "Catch-up",
-        catch_up_edit: "Edit catch-up",
-        catch_up_timer_status: "Next catch-up run",
         status: "Status",
-        calibrate: "Calibrate",
-        calibrate_channel: "calibrate",
-        next: "Next",
-        step_label: "Step",
-        manual: "Manual",
-        automatic: "Automatic",
-        daily_amounts: "Daily amounts",
-        container: "Container",
-        container_volume: "Container volume",
         active: "Active",
         today: "Today",
         time: "Time",
@@ -1746,40 +1620,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         history_type_scheduler: "Scheduler",
         history_type_device: "Device information",
         history_type_control: "Control",
-        history_type_calibration: "Calibration",
         history_type_settings: "Settings",
         history_type_other: "Other",
         led_no_history: "No LED actions saved yet",
-        dose: "Dose",
-        dose_now: "Dose now",
         channel: "Channel",
         schedule: "Schedule",
         scheduler: "Scheduler",
         amount: "Amount",
         weekdays: "Weekdays",
         actions: "Actions",
-        single_dose: "Single dose",
-        interval: "Interval",
-        interval_minutes: "Interval minutes",
-        timer_list: "Timer list",
-        timer_add: "Add single dose",
-        timer_remove: "Remove",
-        timer_time: "Time",
-        timer_amount: "Dose amount",
-        timer_hint: "Up to 24 single doses with at least 10 minutes between them.",
-        timer_count_error: "Timer lists need 1 to 24 single doses.",
-        timer_gap_error: "Single doses must be at least 10 minutes apart.",
-        time_window: "Custom",
-        custom_schedule: "Custom",
-        window_daily_amount: "Total daily dose",
-        window_hint: "Up to 24 doses in total and no more than 30 minutes between doses within a window.",
-        window_total_doses: "Total doses",
-        window_start: "From",
-        window_end: "To",
-        window_doses: "Doses",
-        window_add: "Add time window",
-        window_count_error: "Enter at least one time window and no more than 24 doses in total.",
-        window_gap_error: "Doses within a time window must be no more than 30 minutes apart.",
         everyday: "daily",
         every_day: "Every day",
         reset: "Reset",
@@ -1792,32 +1641,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         led_reset_device_effect: "Locally stored schedules remain unchanged.",
         reset_schedule_yes: "Yes, reset",
         reset_schedule_no: "No, keep it",
-        valid_from_tomorrow: "Plan valid from tomorrow",
-        valid_from_tomorrow_note: "Sends the schedule with app flag mode27[3]=1. Use this when the channel already dosed automatically today.",
-        auto_limit_reached: "Automatic limit reached",
-        auto_limit_reached_note: "Schedule will be sent as valid from tomorrow.",
-        settings: "Protection & settings",
-        overdose: "Overdose protection",
-        auto_limit: "Automatic limit",
-        manual_limit: "Manual limit per channel",
-        daily_limit: "Daily limit",
-        manual_limit_note: "0.00 mL blocks manual dosing completely.",
-        safety_edit: "Edit overdose protection",
-        max_auto_ml: "Automatic limit",
-        max_manual_ml: "Manual limit per channel",
-        max_daily_ml: "Max daily dose",
-        auto_fill: "Auto refill",
-        threshold: "Threshold",
-        low_container_push: "Low container push",
-        auto_fill_edit: "Edit auto refill",
-        push_targets: "Push devices",
-        push_target_1: "Push device 1",
-        push_target_2: "Push device 2",
-        push_target_3: "Push device 3",
-        no_push_target: "No extra device",
-        push_message: "Push message",
-        push_message_hint: "Placeholders: {ch}, {channel}, {device}, {remaining}, {threshold}",
-        push_message_default: "{ch} {channel}: only {remaining} mL left in the container. Threshold: {threshold} mL.",
         connection: "Connection",
         device: "Device",
         model: "Model",
@@ -1826,39 +1649,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         presets: "Presets",
         online: "Online",
         offline: "Offline",
-        prepare: "Prepare",
-        prepare_text: "Fill the tube completely with liquid.",
-        hose_fill: "Flush / fill hose",
-        hose_fill_hint: "The pump runs for the selected duration and then stops automatically.",
-        measure_prepare_text: "Place the measuring cylinder at the end of the dosing tube, then press Start calibration.",
-        start_measure: "Start calibration",
-        start_measure_hint: "Approximately 2–4 mL are dispensed. This process can take up to 5 seconds.",
-        fill_duration: "Fill duration in seconds",
-        start_sequence: "Send start sequence",
-        start_sequence_text: "Run the pump until the calibration amount is in the measuring cup.",
-        measured_save: "Enter exact amount",
-        measure_exact_hint: "Place the measuring cylinder on a level surface, read the exact amount, and enter the value to the nearest 0.05 mL.",
-        measured_amount: "Measured amount in mL",
-        optional_check: "Optional check",
-        send_test: "Send test dose afterwards",
-        test_amount: "Test amount in mL",
-        save_calibration: "Save calibration value",
-        calibration_failed: "Calibration failed",
-        enter_measured: "Enter the measured amount.",
-        calibration_last: "Last calibration",
-        calibration_not_recorded: "Not stored yet",
-        calibration_reminder_days: "Remind again in days",
-        calibration_reminder_at: "Renew on",
-        calibration_test_prepare: "Empty and dry the measuring cylinder completely. Then start the 4 mL test dose.",
-        calibration_test_dose: "Dose 4 mL",
-        calibration_test_question: "Were exactly 4 mL dispensed? (between 3.95 and 4.05 mL)",
-        calibration_test_yes: "Yes, continue",
-        calibration_test_retry: "No, recalibrate",
-        calibration_completed: "Calibration completed",
-        calibration_summary_measured: "Measured calibration amount",
-        calibration_summary_test: "Test dose confirmed",
-        calibration_summary_date: "Calibrated on",
-        calibration_summary_reminder: "Recalibrate on",
         schedule_edit: "Edit schedule",
         debug_output: "Debug output",
         result_output: "Response",
@@ -1871,14 +1661,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         led_schedule_time_invalid: "Invalid time window",
         led_schedule_time_conflict: "Time window overlaps an existing entry",
         led_schedule_time_conflict_detail: "Please change the times so no ranges overlap.",
-        container_edit: "Edit container",
-        manual_dose: "Manual dose",
-        manual_blocked: "Manual blocked",
-        mode: "Mode",
-        next_time: "Next time",
-        auto_today: "Automatic today",
-        manual_today: "Manual today",
-        today_total: "Today total",
       },
     };
     const lang = this.language();
@@ -2823,10 +2605,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .manual-input input { width:58px; height:24px; color:var(--primary-text-color); background:transparent; border:0; text-align:right; font:inherit; outline:0; }
         .manual-input input:disabled { color:rgba(255,255,255,.52); }
         .manual-input span { color:rgba(255,255,255,.72); }
-        .dose-inline { width:32px; height:32px; border:1px solid rgba(81,154,190,.35); border-radius:999px; background:rgba(10,18,21,.88); color:inherit; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; font:inherit; }
-        .dose-inline ha-icon { color:#ffc400; --mdc-icon-size:22px; }
-        .dose-inline.blocked { border-color:rgba(255,255,255,.16); background:rgba(90,90,90,.28); cursor:not-allowed; }
-        .dose-inline.blocked ha-icon { color:#858585; }
         .schedule table { width:100%; border-collapse:collapse; font-size:12px; }
         .schedule th, .schedule td { border:1px solid rgba(255,255,255,.12); padding:6px 8px; text-align:left; }
         .schedule tr.inactive-row { color:rgba(255,255,255,.48); filter:grayscale(.85); }
@@ -2843,15 +2621,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .mini, .add, .link { border:0; background:transparent; cursor:pointer; font:inherit; }
         .quick .tile { min-height:88px; }
         .quick .tile ha-icon { --mdc-icon-size:48px; color:#4c84b4; }
-        .containers, .manual-panel, .auto-panel { min-height: 0; }
-        .container-row { display:grid; grid-template-columns:12px 28px 1fr auto 28px; align-items:center; gap:8px; min-height:30px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,.07); }
-        .container-row:last-child { border-bottom:0; }
-        .container-row strong { font-weight:600; }
+        .manual-panel, .auto-panel { min-height: 0; }
         .mini.edit { padding:0; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; }
         .mini.edit ha-icon, .mini.edit .ui-icon { --mdc-icon-size:20px; width:20px; height:20px; }
         .value-row { display:grid; grid-template-columns:12px 28px 1fr auto; align-items:center; gap:8px; min-height:30px; border-bottom:1px solid rgba(255,255,255,.07); cursor:pointer; }
         .value-row:last-child { border-bottom:0; }
-        .value-row strong, .container-row strong { justify-self:end; text-align:right; min-width:76px; padding-left:12px; }
+        .value-row strong { justify-self:end; text-align:right; min-width:76px; padding-left:12px; }
         .value-row strong { font-weight:700; }
         .history-card { min-height: 130px; }
         .card-title-action { display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -2971,10 +2746,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .primary { min-height:36px; border:1px solid #03c9ff; border-radius:7px; background:#007aa6; color:#fff; font:inherit; padding:0 14px; cursor:pointer; }
         .secondary { min-height:34px; border:1px solid rgba(81,154,190,.45); border-radius:7px; background:rgba(10,18,21,.88); color:var(--primary-text-color); font:inherit; padding:0 12px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; justify-content:center; }
         .secondary ha-icon, .secondary .ui-icon { color:#ffc400; }
-        .calibration-modal { width:min(620px, calc(100vw - 40px)); max-height:calc(100vh - 40px); overflow:auto; }
         .debug-modal { width:min(760px, calc(100vw - 40px)); }
         .debug-output { max-height:min(62vh, 620px); overflow:auto; white-space:pre-wrap; word-break:break-word; border:1px solid rgba(255,255,255,.12); border-radius:7px; background:rgba(0,0,0,.42); color:var(--primary-text-color); padding:12px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-        .calibration-debug-output { min-height:80px; max-height:min(32vh, 300px); }
         .debug-modal.error { border-color:rgba(255,77,79,.75); box-shadow:0 0 0 1px rgba(255,77,79,.32), 0 18px 60px rgba(0,0,0,.45); }
         .debug-modal.error h2 { color:#ff8a8a; }
         .debug-output.error { border-color:rgba(255,77,79,.78); background:rgba(75,0,0,.46); color:#ffd8d8; }
@@ -2982,17 +2755,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-auto-mode-choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
         .led-auto-mode-choice button { min-height:42px; border:1px solid rgba(81,154,190,.35); border-radius:8px; background:rgba(0,0,0,.16); color:var(--primary-text-color); font:inherit; font-weight:800; cursor:pointer; }
         .led-auto-mode-choice button.active { border-color:#03c9ff; background:rgba(0,122,166,.28); color:#88ddff; }
-        .calibration-steps { display:grid; gap:10px; }
         .step { border:1px solid rgba(255,255,255,.10); border-radius:7px; padding:10px; background:rgba(0,0,0,.14); display:grid; gap:8px; }
         .active-step { border-color:rgba(3,201,255,.35); background:rgba(3,201,255,.06); }
         .step b { font-size:13px; }
         .step span { color:rgba(255,255,255,.72); line-height:1.35; }
-        .calibration-illustration { display:grid; place-items:center; min-height:138px; margin:2px 0; border-radius:8px; background:radial-gradient(circle, rgba(3,201,255,.10), transparent 66%); color:rgba(190,220,230,.68); }
-        .calibration-illustration svg { width:min(230px, 72vw); height:138px; overflow:visible; }
-        .calibration-illustration .accent { color:#03c9ff; }
-        .calibration-summary { display:grid; gap:8px; margin:4px 0; }
-        .calibration-summary div { display:flex; justify-content:space-between; gap:16px; padding:9px 10px; border:1px solid rgba(255,255,255,.10); border-radius:7px; background:rgba(0,0,0,.18); }
-        .calibration-summary strong { color:#8eeaff; text-align:right; }
         .sticky-actions { position:sticky; bottom:0; z-index:2; margin-top:12px; border-top:1px solid rgba(255,255,255,.10); background:linear-gradient(180deg, rgba(15,25,28,.96), rgba(8,15,18,.99)); padding:12px 0 2px; }
         @media (max-width: 1300px) { .top-four { grid-template-columns:1fr 1fr; } .led-channels { grid-template-columns:repeat(2, minmax(0,1fr)); } }
         @media (max-width: 1100px) { .led-schedule-side-card.compact p { font-size:16px; } .led-schedule-color-control { grid-template-columns:minmax(84px, 120px) minmax(0,1fr) 94px; } }

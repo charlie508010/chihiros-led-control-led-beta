@@ -24,7 +24,7 @@ This repository contains a python **CLI** script as well as a **Home Assistant i
 - Supported devices should be discovered at this point
 
 ### Manual Setup
-- Copy the directory ```custom_components/chihiros``` to your ```<config dir>/custom_components``` directory
+- Copy the contents of `custom_components/chihiros` to `<config dir>/custom_components/chihiros_led_core`
 - Restart Home-Assistant
 - Add the Chihiros integration to your Home Assistant instance via the integrations user interface
 
@@ -33,10 +33,10 @@ This repository contains a python **CLI** script as well as a **Home Assistant i
 The integration provides services for changing the auto mode schedule from
 **Developer Tools -> Actions** or from automations:
 
-- `chihiros.add_schedule`: add one schedule period.
-- `chihiros.remove_schedule`: remove one schedule period.
-- `chihiros.reset_schedule`: remove all schedule periods.
-- `chihiros.set_schedule`: replace the complete schedule.
+- `chihiros_led_core.add_schedule`: add one schedule period.
+- `chihiros_led_core.remove_schedule`: remove one schedule period.
+- `chihiros_led_core.reset_schedule`: remove all schedule periods.
+- `chihiros_led_core.set_schedule`: replace the complete schedule.
 
 If only one Chihiros device is configured, `entry_id` and `address` can be
 omitted. If multiple devices are configured, include either the config entry ID
@@ -45,7 +45,7 @@ or Bluetooth address.
 Replace the complete schedule:
 
 ```yaml
-service: chihiros.set_schedule
+service: chihiros_led_core.set_schedule
 data:
   address: "AA:BB:CC:DD:EE:FF"
   periods:
@@ -67,7 +67,7 @@ data:
 Add one white or shared-brightness period:
 
 ```yaml
-service: chihiros.add_schedule
+service: chihiros_led_core.add_schedule
 data:
   start: "08:00"
   end: "18:30"
@@ -81,7 +81,7 @@ data:
 Remove a matching period:
 
 ```yaml
-service: chihiros.remove_schedule
+service: chihiros_led_core.remove_schedule
 data:
   start: "08:00"
   end: "18:30"
@@ -94,7 +94,7 @@ data:
 Reset all schedule periods:
 
 ```yaml
-service: chihiros.reset_schedule
+service: chihiros_led_core.reset_schedule
 data:
   address: "AA:BB:CC:DD:EE:FF"
 ```

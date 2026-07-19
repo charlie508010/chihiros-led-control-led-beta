@@ -152,7 +152,7 @@
             };
           }
           await refreshDashboard();
-          if (domain === "chihiros" && (service === "add_schedule" || service === "set_schedule")) {
+          if (domain === "chihiros_led_core" && (service === "add_schedule" || service === "set_schedule")) {
             scheduleVerificationDashboardRefresh();
           }
           return data.result;
@@ -183,7 +183,7 @@
               };
             }
             await refreshDashboard();
-            if (message.domain === "chihiros" && (message.service === "add_schedule" || message.service === "set_schedule")) {
+            if (message.domain === "chihiros_led_core" && (message.service === "add_schedule" || message.service === "set_schedule")) {
               scheduleVerificationDashboardRefresh();
             }
             return data.result;

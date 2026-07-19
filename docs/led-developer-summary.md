@@ -17,7 +17,7 @@ in [`protocol.md`](protocol.md).
 
 ### Befehl an ein Gerät
 
-1. Das LED-Dashboard ruft einen Service unter `chihiros.*` auf.
+1. Das LED-Dashboard ruft einen Service unter `chihiros_led_core.*` auf.
 2. `custom_components/chihiros/packages/led/services.py` löst das Ziel über
    `entry_id`, `entity_id` oder MAC-Adresse auf und validiert Modell und Werte.
 3. Der Service ruft den geladenen `ChihirosDevice` aus der Config-Entry-Runtime
@@ -81,11 +81,11 @@ Der LED-Bereich registriert derzeit:
 
 | Service | Zweck |
 | --- | --- |
-| `chihiros.set_brightness` | Einen oder mehrere Farbkanäle manuell setzen |
-| `chihiros.add_schedule` | Einen Zeitplan hinzufügen oder ersetzen |
-| `chihiros.remove_schedule` | Einen bestimmten Zeitplan entfernen |
-| `chihiros.reset_schedule` | Alle Zeitpläne auf dem Gerät zurücksetzen |
-| `chihiros.set_schedule` | Eine vollständige Liste lokal speichern und optional senden |
+| `chihiros_led_core.set_brightness` | Einen oder mehrere Farbkanäle manuell setzen |
+| `chihiros_led_core.add_schedule` | Einen Zeitplan hinzufügen oder ersetzen |
+| `chihiros_led_core.remove_schedule` | Einen bestimmten Zeitplan entfernen |
+| `chihiros_led_core.reset_schedule` | Alle Zeitpläne auf dem Gerät zurücksetzen |
+| `chihiros_led_core.set_schedule` | Eine vollständige Liste lokal speichern und optional senden |
 
 Die Zielauflösung sollte bevorzugt mit `entry_id` oder einer zu einem geladenen
 Entry gehörenden `entity_id` erfolgen. Die MAC-Adresse bleibt ein Fallback. Bei
@@ -108,7 +108,7 @@ Zusammenfassung, TX/RX-Daten und Fehlerart.
   anschließend alle aktiven, für das Gerät gespeicherten Zeitpläne. Ohne
   gespeicherte Zeitpläne endet der Ablauf nach `[5, 255, 255]`.
   Dashboard und Home-Assistant-Switch verwenden dafür dieselbe zentrale
-  Implementierung. Der Dashboard-Aufruf `chihiros.enable_auto_mode` liefert
+  Implementierung. Der Dashboard-Aufruf `chihiros_led_core.enable_auto_mode` liefert
   bei aktiviertem Config-Debug die vollständige TX/RX-Ausgabe zurück.
 - Zeitplanspeicher löschen: Beim bestätigten Modell `DYU1000` zuerst jeden
   gemeldeten Zeitplan mit `0xA5`, Mode `0x19` und `255` je Kanal löschen.

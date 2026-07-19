@@ -15,7 +15,7 @@ def state_db_path() -> Path:
     configured = (os.environ.get("CHIHIROS_STATE_DB") or "").strip()
     if configured:
         return Path(configured)
-    return Path("/config/.chihiros/chihiros_state.sqlite3")
+    return Path("/config/.chihiros_led_core/chihiros_state.sqlite3")
 
 
 def record_led_notification_poll(

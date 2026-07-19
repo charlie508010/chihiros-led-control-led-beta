@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+SERVICE_DOMAIN = "chihiros_led_core"
+
 
 def normalize_protocol_debug_text(value: str) -> str:
     """Normalize shared protocol debug text in one central place."""
@@ -142,8 +144,8 @@ def _doc_command_section(
     debug_service = str(service or "").strip()
     if not debug_service:
         return None
-    if not debug_service.startswith("chihiros."):
-        debug_service = f"chihiros.{debug_service}"
+    if not debug_service.startswith(f"{SERVICE_DOMAIN}."):
+        debug_service = f"{SERVICE_DOMAIN}.{debug_service}"
 
     data = dict(request or {})
     if not data:
@@ -268,8 +270,8 @@ def build_debug_sections(
 ) -> list[dict[str, Any]]:
     """Build normalized debug sections shared by all dashboard services."""
     debug_service = str(service or "").strip()
-    if debug_service and not debug_service.startswith("chihiros."):
-        debug_service = f"chihiros.{debug_service}"
+    if debug_service and not debug_service.startswith(f"{SERVICE_DOMAIN}."):
+        debug_service = f"{SERVICE_DOMAIN}.{debug_service}"
     meta_lines = [
         f"Service: {debug_service}" if debug_service else "",
         f"Summary: {summary}" if summary else "",

@@ -45,9 +45,9 @@ fi
 
 git clone --depth 1 --branch "${SOURCE_BRANCH}" "${CLONE_REPOSITORY}" /opt/chihiros-led-core-src
 
-mkdir -p /config/.chihiros
+mkdir -p /config/.chihiros_led_core
 export HASS_CONFIG="/config"
-export CHIHIROS_STATE_DB="/config/.chihiros/chihiros_state.sqlite3"
+export CHIHIROS_STATE_DB="/config/.chihiros_led_core/chihiros_state.sqlite3"
 export CHIHIROS_PLUGIN_KIND="core"
 export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8109}"
 
@@ -59,10 +59,16 @@ echo "Chihiros dashboard assets installed to add-on UI."
 
 if [[ "${INSTALL_INTEGRATION}" == "true" ]]; then
   mkdir -p /config/custom_components
-  rm -rf /config/custom_components/chihiros
-  cp -a /opt/chihiros-led-core-src/custom_components/chihiros /config/custom_components/chihiros
-  find /config/custom_components/chihiros -type d -name __pycache__ -prune -exec rm -rf {} +
-  echo "Chihiros integration installed to /config/custom_components/chihiros"
+  integration_target="/config/custom_components/chihiros_led_core"
+  if [[ -d "${integration_target}" ]]; then
+    integration_backup="/config/.chihiros_led_core/backups/chihiros_led_core-$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$(dirname "${integration_backup}")"
+    cp -a "${integration_target}" "${integration_backup}"
+    echo "Existing LED Core integration backed up to ${integration_backup}"
+  fi
+  mkdir -p "${integration_target}"
+  cp -a /opt/chihiros-led-core-src/custom_components/chihiros/. "${integration_target}/"
+  echo "LED Core integration installed to ${integration_target}"
   echo "Restart Home Assistant after first install or update."
 fi
 

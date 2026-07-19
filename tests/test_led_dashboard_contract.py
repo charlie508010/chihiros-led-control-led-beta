@@ -80,6 +80,28 @@ def test_led_core_uses_dedicated_opt_paths() -> None:
     assert 'os.environ.get("CHIHIROS_UI_PORT") or "8109"' in server
 
 
+def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
+    """The separated LED integration must coexist with the combined Chihiros integration."""
+    manifest = source(ROOT / "custom_components" / "chihiros" / "manifest.json")
+    constants = source(ROOT / "custom_components" / "chihiros" / "const.py")
+    integration = source(ROOT / "custom_components" / "chihiros" / "__init__.py")
+    dashboard = source(DASHBOARD)
+    panel = source(ROOT / "custom_components" / "chihiros" / "www" / "chihiros-panel.js")
+    run = source(ADDON_RUN)
+
+    assert '"domain": "chihiros_led_core"' in manifest
+    assert 'DOMAIN = "chihiros_led_core"' in constants
+    assert 'FRONTEND_STATIC_URL = "/chihiros_led_core_static"' in integration
+    assert 'FRONTEND_PANEL_URL = "chihiros-led-core"' in integration
+    assert '"name": "chihiros-led-core-panel"' in integration
+    assert 'customElements.define("chihiros-led-core-panel"' in panel
+    assert 'domain: "chihiros_led_core"' in dashboard
+    assert 'callService("chihiros_led_core"' in dashboard
+    assert '/config/custom_components/chihiros_led_core' in run
+    assert '/config/.chihiros_led_core/chihiros_state.sqlite3' in run
+    assert 'rm -rf /config/custom_components/chihiros' not in run
+
+
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:
     """Transient HA state updates and confirmation delays must not retarget LED actions."""
     dashboard = source(DASHBOARD)

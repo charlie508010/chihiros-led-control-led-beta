@@ -1,7 +1,7 @@
 import "./chihiros-notification-ui.js?v=0.1.0";
-import "./chihiros-led-core-card.js?v=0.2.1017";
+import "./chihiros-led-core-card.js?v=0.2.1018";
 
-class ChihirosPanel extends HTMLElement {
+class ChihirosLedCorePanel extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     this.render();
@@ -45,4 +45,4 @@ class ChihirosPanel extends HTMLElement {
   }
 }
 
-customElements.define("chihiros-panel", ChihirosPanel);
+customElements.define("chihiros-led-core-panel", ChihirosLedCorePanel);

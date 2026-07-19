@@ -91,8 +91,8 @@ __all__ = [
 ]
 
 FRONTEND_PANEL_REGISTERED = f"{DOMAIN}_frontend_panel_registered"
-FRONTEND_STATIC_URL = "/chihiros_static"
-FRONTEND_PANEL_URL = "chihiros"
+FRONTEND_STATIC_URL = "/chihiros_led_core_static"
+FRONTEND_PANEL_URL = "chihiros-led-core"
 RUNTIME_POLL_UNSUBS = f"{DOMAIN}_runtime_poll_unsubs"
 RUNTIME_POLL_LOCK = NOTIFICATION_POLL_LOCK
 RUNTIME_POLL_LAST_FINISHED = NOTIFICATION_POLL_LAST_FINISHED
@@ -222,7 +222,7 @@ async def _async_register_frontend_panel(hass: HomeAssistant) -> None:
         require_admin=False,
         config={
             "_panel_custom": {
-                "name": "chihiros-panel",
+                "name": "chihiros-led-core-panel",
                 "module_url": f"{FRONTEND_STATIC_URL}/chihiros-panel.js?v={panel_version}",
                 "embed_iframe": False,
                 "trust_external_script": True,

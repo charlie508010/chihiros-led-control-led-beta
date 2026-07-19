@@ -59,7 +59,7 @@ ROOT = Path("/opt/chihiros-led-core-ui")
 SOURCE_ROOT = Path(os.environ.get("CHIHIROS_SOURCE_ROOT", "/opt/chihiros-led-core-src"))
 CONFIG_ROOT = Path(os.environ.get("HASS_CONFIG", "/config"))
 DEFAULT_STATE_DB_PATH = Path(
-    os.environ.get("CHIHIROS_STATE_DB", str(CONFIG_ROOT / ".chihiros" / "chihiros_state.sqlite3"))
+    os.environ.get("CHIHIROS_STATE_DB", str(CONFIG_ROOT / ".chihiros_led_core" / "chihiros_state.sqlite3"))
 )
 HA_STORAGE = CONFIG_ROOT / ".storage"
 SETTINGS_PATH = Path(os.environ.get("CHIHIROS_DASHBOARD_SETTINGS", "/data/dashboard_settings.json"))
