@@ -200,7 +200,12 @@ def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
     dashboard = source(DASHBOARD)
     run = source(ADDON_RUN)
     library_store = source(ROOT / "src" / "chihiros_led_control" / "store.py")
-    integration_store = source(ROOT / "custom_components" / "chihiros" / "common" / "storage.py")
+    integration_store = "\n".join(
+        (
+            source(ROOT / "custom_components" / "chihiros" / "core" / "storage" / "runtime.py"),
+            source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "storage" / "history.py"),
+        )
+    )
     storage_sources = "\n".join((server, library_store, integration_store))
 
     assert "/config/.chihiros_led_core/chihiros_led_core.sqlite3" in run

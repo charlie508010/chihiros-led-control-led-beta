@@ -56,8 +56,8 @@ try:
         ATTR_BRIGHTNESS as ATTR_SCHEDULE_BRIGHTNESS,
     )
     from custom_components.chihiros.const import DOMAIN
-    from custom_components.chihiros.coordinator import ChihirosDataUpdateCoordinator
-    from custom_components.chihiros.runtime import ChihirosRuntime
+    from custom_components.chihiros.plugins.led.coordinator import ChihirosDataUpdateCoordinator
+    from custom_components.chihiros.plugins.led.runtime import ChihirosRuntime
 except ImportError as err:
     pytest.skip(
         f"Home Assistant test group is not installed or is incompatible: {err}",
