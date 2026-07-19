@@ -125,10 +125,11 @@ class ChihirosNotificationSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return detailed notification data."""
+        integration_attributes = {"integration_domain": DOMAIN}
         if self.entity_description.key == ATTR_LAST_NOTIFICATION:
             notification = self.coordinator.data.get(ATTR_LAST_NOTIFICATION)
             if not isinstance(notification, dict):
-                return None
+                return integration_attributes
             notifications = [
                 item for item in self.coordinator.data.get(ATTR_RECENT_NOTIFICATIONS, ()) if isinstance(item, dict)
             ]
@@ -148,15 +149,16 @@ class ChihirosNotificationSensor(
                 notifications.append(notification)
             notifications.sort(key=lambda item: item.get("parsed_type") != "runtime")
             return {
+                **integration_attributes,
                 **notification,
                 "notifications": tuple(notifications[:2]),
             }
         if self.entity_description.key != ATTR_SCHEDULE_POINTS:
-            return None
+            return integration_attributes
         points = self.coordinator.data.get(ATTR_SCHEDULE_POINTS)
         if points is None:
-            return None
-        return {"points": points}
+            return integration_attributes
+        return {**integration_attributes, "points": points}
 
 
 def _format_schedule_state(points: tuple[dict[str, Any], ...]) -> str:

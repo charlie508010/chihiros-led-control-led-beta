@@ -76,6 +76,7 @@ class ChihirosLightEntity(
         self._attr_color = self._color
         self._attr_extra_state_attributes = {
             "color": self._color,
+            "integration_domain": DOMAIN,
             "model": self._device.model.name,
             "max_power_watts": self._device.model.max_power_watts,
         }

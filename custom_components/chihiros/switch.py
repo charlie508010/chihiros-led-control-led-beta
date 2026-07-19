@@ -58,6 +58,7 @@ class ChihirosAutoManualSwitch(
         self._device = device
         self._attr_name = chihiros_entity_name(device, "Auto Mode")
         self._attr_unique_id = chihiros_unique_id(coordinator.address, "auto_mode")
+        self._attr_extra_state_attributes = {"integration_domain": DOMAIN}
         self._attr_device_info = chihiros_device_info(device, coordinator.address)
 
     @property

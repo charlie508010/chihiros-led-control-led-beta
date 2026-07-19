@@ -943,6 +943,9 @@ def build_dashboard_state() -> dict[str, object]:
                     match = entity_pattern.match(entity_id)
                     if not match:
                         continue
+                    attributes = item.get("attributes", {})
+                    if not isinstance(attributes, dict) or attributes.get("integration_domain") != "chihiros_led_core":
+                        continue
                     matched_states.append((item, match))
                     if match.group(1).lower() != "light" or match.group(3).lower() not in {
                         "red",

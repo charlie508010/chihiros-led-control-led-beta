@@ -392,10 +392,13 @@ async def test_config_entry_sets_up_entities_services_status_and_unloads(
     notification_sensor = _entity_id(entity_registry, SENSOR_DOMAIN, f"{TEST_ADDRESS}_last_notification")
 
     assert hass.states.get(red_light) is not None
+    assert hass.states.get(red_light).attributes["integration_domain"] == DOMAIN
     assert hass.states.get(green_light) is not None
     assert hass.states.get(blue_light) is not None
     assert hass.states.get(auto_switch).state == STATE_OFF
+    assert hass.states.get(auto_switch).attributes["integration_domain"] == DOMAIN
     assert hass.states.get(firmware_sensor).state == "23"
+    assert hass.states.get(firmware_sensor).attributes["integration_domain"] == DOMAIN
     assert hass.states.get(schedule_sensor).state == "08:00 15%; 12:00 70%"
     assert hass.states.get(notification_sensor).state == "0xfe"
     assert hass.states.get(notification_sensor).attributes["parsed_type"] == "schedule_snapshot"

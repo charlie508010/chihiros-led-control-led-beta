@@ -222,6 +222,19 @@ def test_addon_promotes_only_addresses_with_led_color_light_entities() -> None:
     assert 'if address not in led_addresses:' in server
 
 
+def test_addon_accepts_only_entities_owned_by_led_core() -> None:
+    """Legacy Chihiros and Doser entities must never become LED Core device tabs."""
+    server = source(ADDON_SERVER)
+    light = source(ROOT / "custom_components" / "chihiros" / "light.py")
+    switch = source(ROOT / "custom_components" / "chihiros" / "switch.py")
+    sensor = source(ROOT / "custom_components" / "chihiros" / "sensor.py")
+
+    assert 'attributes.get("integration_domain") != "chihiros_led_core"' in server
+    assert '"integration_domain": DOMAIN' in light
+    assert '{"integration_domain": DOMAIN}' in switch
+    assert 'integration_attributes = {"integration_domain": DOMAIN}' in sensor
+
+
 def test_channel_toggle_sends_distinct_on_off_values() -> None:
     """The channel toggle selects one action while keeping distinct send paths."""
     panel = source(LED_PANEL)
