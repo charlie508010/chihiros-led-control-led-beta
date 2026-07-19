@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1022";
+import "./panels/chihiros-led-panel.js?v=0.2.1023";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -175,89 +175,23 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   }
 
   async runAddonUpdate() {
-    const entityId = "update.led_core_update";
-    const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
-    const debug = [];
-    const readState = async () => {
-      if (this._hass && typeof this._hass.callApi === "function") {
-        try {
-          return await this._hass.callApi("GET", `states/${entityId}`);
-        } catch (error) {
-          debug.push(`State source callApi failed: ${error && error.message ? error.message : error}`);
-        }
-      }
-      return this._hass && this._hass.states ? this._hass.states[entityId] : null;
-    };
-    const versionInfo = (state) => {
-      const attrs = state && state.attributes ? state.attributes : {};
-      return {
-        state: state ? String(state.state || "") : "",
-        installed: String(attrs.installed_version || ""),
-        latest: String(attrs.latest_version || ""),
-        inProgress: Boolean(attrs.in_progress),
-      };
-    };
-
     this.dialogState = {
       type: "debug",
       channel: 1,
-      output: "OK\nUpdate wird vorbereitet...\nchihiros_led_core",
+      output: "OK\nLED Core wird aktualisiert und neu gestartet...",
       running: true,
       noChannel: true,
       level: "pending",
     };
     this.render();
     try {
-      if (!this._hass) throw new Error("Home-Assistant-Verbindung fehlt");
-      const refreshResponse = await fetch("./api/addon-refresh", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ addon: "chihiros_led_core" }),
-      });
-      const refreshData = await refreshResponse.json().catch(() => ({}));
-      debug.push(String(refreshData.output || `Addon store reload: ${refreshResponse.status}`));
-      await this._hass.callService("homeassistant", "update_entity", { entity_id: entityId });
-      debug.push(`homeassistant.update_entity ${entityId}: OK`);
-
-      let state = await readState();
-      let info = versionInfo(state);
-      debug.push(this.updateDebug(state, "Nach update_entity poll 1"));
-      for (let poll = 1; poll < 60 && info.state !== "on"; poll += 1) {
-        await sleep(1000);
-        state = await readState();
-        info = versionInfo(state);
-        debug.push(this.updateDebug(state, `Nach update_entity poll ${poll + 1}`));
-      }
-      if (info.state !== "on") {
-        const versions = info.installed || info.latest
-          ? `Installiert: ${info.installed || "?"}\nLatest: ${info.latest || "?"}`
-          : "Update-Entity nicht gefunden.";
-        this.dialogState = {
-          type: "debug",
-          channel: 1,
-          output: `OK\nKein Update verfügbar.\n${entityId}\n${versions}\n\n${debug.join("\n\n")}`,
-          running: false,
-          noChannel: true,
-          level: "ok",
-        };
-        this.render();
-        return;
-      }
-
-      await this._hass.callService("update", "install", { backup: false }, { entity_id: entityId });
-      debug.push("update.install: OK");
-      for (let poll = 0; poll < 30; poll += 1) {
-        await sleep(1000);
-        state = await readState();
-        info = versionInfo(state);
-        debug.push(this.updateDebug(state, `update.install poll ${poll + 1}`));
-        if (info.state !== "on" && !info.inProgress) break;
-      }
-      const completed = Boolean(info.installed && info.latest && info.installed === info.latest);
+      const api = window.ChihirosAddonApi;
+      if (!api || typeof api.runAddonUpdate !== "function") throw new Error("LED-Core-Update-Endpunkt fehlt");
+      const result = await api.runAddonUpdate();
       this.dialogState = {
         type: "debug",
         channel: 1,
-        output: `OK\n${completed ? "Update abgeschlossen." : "Update gestartet."}\n${entityId}\nInstalliert: ${info.installed || "?"}\nLatest: ${info.latest || "?"}\n\n${debug.join("\n\n")}`,
+        output: `OK\n${String(result && result.message ? result.message : "LED Core wird neu gestartet.")}`,
         running: false,
         noChannel: true,
         level: "ok",
@@ -267,7 +201,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       this.dialogState = {
         type: "debug",
         channel: 1,
-        output: `FAIL\n${error && error.message ? error.message : error}\n\n${debug.join("\n\n")}`,
+        output: `FAIL\n${error && error.message ? error.message : error}`,
         running: false,
         noChannel: true,
         level: "error",

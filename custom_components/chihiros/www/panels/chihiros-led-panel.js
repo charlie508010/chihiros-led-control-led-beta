@@ -1701,15 +1701,24 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const candidate = id ? `sensor.${id}_last_notification` : "";
     if (candidate && states[candidate]) return candidate;
     const addressToken = String(device && device.address ? device.address : "").toLowerCase().replace(/[^a-f0-9]/g, "");
+    if (!addressToken) return "";
     return Object.keys(states).find((entityId) => {
       const normalized = String(entityId).toLowerCase();
+      const entityToken = normalized.replace(/[^a-f0-9]/g, "");
       return normalized.startsWith("sensor.") && normalized.endsWith("_last_notification")
-        && (!addressToken || normalized.replace(/[^a-f0-9]/g, "").includes(addressToken));
+        && entityToken.includes(addressToken);
     }) || "";
   }
 
   openLedNotificationDialog() {
-    this.dialogState = { type: "led-notification" };
+    const device = this.activeLedDevice || {};
+    this.dialogState = {
+      type: "led-notification",
+      ledDeviceId: String(device.id || ""),
+      ledDeviceAddress: String(device.address || "").trim().toUpperCase(),
+      notificationEntity: this.resolveLedNotificationEntity(device),
+      scheduleRows: this.ledScheduleRows().map((row) => ({ ...row })),
+    };
     this.render();
   }
 
@@ -1849,7 +1858,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   ledNotificationDialog() {
-    const entity = this.resolveLedNotificationEntity();
+    const entity = String(this.dialogState && this.dialogState.notificationEntity || "");
     const state = entity && this._hass && this._hass.states ? this._hass.states[entity] : null;
     const attrs = state && state.attributes && typeof state.attributes === "object" ? state.attributes : {};
     const stateValue = String(state && state.state ? state.state : "").trim();
@@ -1869,7 +1878,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
           }
         }
         const ranges = this.ledScheduleRangesFromPoints(points);
-        const localRows = this.ledScheduleRows().filter((row) => row && row.active !== false);
+        const localRows = (Array.isArray(this.dialogState && this.dialogState.scheduleRows)
+          ? this.dialogState.scheduleRows
+          : []).filter((row) => row && row.active !== false);
         const details = ranges.map((range, rangeIndex) => (
           `${this.tr("schedule")} ${rangeIndex + 1}: ${range.start}-${range.end}, ${range.level} %`
         ));

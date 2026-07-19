@@ -101,16 +101,17 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     assert 'rm -rf /config/custom_components/chihiros' not in run
 
 
-def test_led_core_update_uses_the_supervisor_update_entity_flow() -> None:
-    """Private-source updates retain the proven store refresh and HA update installation flow."""
+def test_led_core_update_button_uses_the_direct_addon_restart_flow() -> None:
+    """The visible update button restarts the add-on so it clones the current private source."""
     dashboard = source(DASHBOARD)
     server = source(ADDON_SERVER)
+    index = source(ADDON_INDEX)
 
-    assert 'const entityId = "update.led_core_update";' in dashboard
-    assert '"/api/states/update.led_core_update"' in server
-    assert 'fetch("./api/addon-refresh"' in dashboard
-    assert 'callService("homeassistant", "update_entity"' in dashboard
-    assert 'callService("update", "install"' in dashboard
+    assert 'typeof api.runAddonUpdate !== "function"' in dashboard
+    assert "const result = await api.runAddonUpdate();" in dashboard
+    assert 'fetch("./api/addon-update"' in index
+    assert 'if request_path == "/api/addon-update":' in server
+    assert 'supervisor_request("POST", f"/addons/{slug}/restart", token)' in server
     assert "await this.runAddonUpdate();" in dashboard
 
 
@@ -127,6 +128,18 @@ def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> 
     assert "targetDevice = this.activeLedDevice || {}" in panel
     assert "...this.ledServiceSelector(targetDevice)" in panel
     assert "this.resetLedDeviceSchedule(this._ledScheduleResetDebug, targetDevice)" in panel
+
+
+def test_led_notification_dialog_keeps_the_selected_device_target() -> None:
+    """A state refresh must not retarget an already opened notification dialog."""
+    panel = source(LED_PANEL)
+
+    assert 'notificationEntity: this.resolveLedNotificationEntity(device)' in panel
+    assert 'ledDeviceAddress: String(device.address || "").trim().toUpperCase()' in panel
+    assert 'const entity = String(this.dialogState && this.dialogState.notificationEntity || "");' in panel
+    assert 'if (!addressToken) return "";' in panel
+    assert 'const entityToken = normalized.replace(/[^a-f0-9]/g, "");' in panel
+    assert "&& entityToken.includes(addressToken);" in panel
 
 
 def test_parallel_led_core_entities_accept_home_assistant_numeric_suffixes() -> None:
