@@ -94,7 +94,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const entityColor = (entityId, attrs) => {
       const attrColor = String(attrs.color || "").toLowerCase();
       if (supportedColors.has(attrColor)) return attrColor;
-      const match = String(entityId).toLowerCase().match(/^light\.[a-z0-9]*[0-9a-f]{12}_(red|green|blue|white)$/);
+      const match = String(entityId).toLowerCase().match(/^light\.[a-z0-9]*[0-9a-f]{12}_(red|green|blue|white)(?:_\d+)?$/);
       return match ? match[1] : "";
     };
     const groups = new Map();
@@ -102,7 +102,8 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const match = String(entityId).toLowerCase().match(devicePattern);
       if (!match) return;
       const attrs = state && state.attributes ? state.attributes : {};
-      const [, domain, deviceSlug, suffix] = match;
+      const [, domain, deviceSlug, rawSuffix] = match;
+      const suffix = rawSuffix.replace(/_\d+$/, "");
       if (!groups.has(deviceSlug)) {
         groups.set(deviceSlug, {
           id: deviceSlug,

@@ -856,7 +856,8 @@ def build_dashboard_state() -> dict[str, object]:
     token = os.environ.get("SUPERVISOR_TOKEN", "")
     entity_pattern = re.compile(
         r"^(light|switch|sensor)\.([a-z0-9]*[0-9a-f]{12})_"
-        r"(red|green|blue|white|power|auto_mode|schedule|firmware_version|runtime|runtime_minutes|last_notification)$",
+        r"(red|green|blue|white|power|auto_mode|schedule|firmware_version|runtime|runtime_minutes|last_notification)"
+        r"(?:_\d+)?$",
         re.IGNORECASE,
     )
     if token:

@@ -129,6 +129,16 @@ def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> 
     assert "this.resetLedDeviceSchedule(this._ledScheduleResetDebug, targetDevice)" in panel
 
 
+def test_parallel_led_core_entities_accept_home_assistant_numeric_suffixes() -> None:
+    """A parallel integration must discover entity ids ending in _2, _3, and later suffixes."""
+    server = source(ADDON_SERVER)
+    panel = source(LED_PANEL)
+
+    assert 'r"(?:_\\d+)?$"' in server
+    assert '(red|green|blue|white)(?:_\\d+)?$' in panel
+    assert 'const suffix = rawSuffix.replace(/_\\d+$/, "");' in panel
+
+
 def test_channel_toggle_sends_distinct_on_off_values() -> None:
     """The channel toggle selects one action while keeping distinct send paths."""
     panel = source(LED_PANEL)
