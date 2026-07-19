@@ -50,6 +50,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 .uv-cache/
+.lh/
 cover/
 
 # Translations

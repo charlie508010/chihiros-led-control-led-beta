@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.0";
-import "./chihiros-doser-card-v3.js?v=0.2.1006";
+import "./chihiros-doser-card-v3.js?v=0.2.1007";
 import "/chihiros_plugin_static/doser/www/doser-plugin.js?v=0.1.67";
 import "/chihiros_plugin_static/wireshark/www/wireshark-plugin.js?v=0.1.52";
 import "/chihiros_plugin_static/ctl/www/ctl-plugin.js?v=0.1.1";
