@@ -838,7 +838,7 @@ def build_dashboard_state() -> dict[str, object]:
         except ValueError:
             pass
         try:
-            update_state = homeassistant_request("GET", "/api/states/update.chihiros_beta_update", token)
+            update_state = homeassistant_request("GET", "/api/states/update.chihiros_led_core_update", token)
             if isinstance(update_state, dict) and update_state.get("entity_id"):
                 states[str(update_state["entity_id"])] = {
                     "state": str(update_state.get("state") or "unknown"),
