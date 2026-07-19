@@ -8,6 +8,7 @@ DASHBOARD = ROOT / "custom_components/chihiros/www/chihiros-led-core-card.js"
 ADDON_SERVER = ROOT / "chihiros_beta/ui/server.py"
 ADDON_INDEX = ROOT / "chihiros_beta/ui/index.html"
 ADDON_RUN = ROOT / "chihiros_beta/run.sh"
+ADDON_CONFIG = ROOT / "chihiros_beta/config.yaml"
 
 
 def source(path: Path) -> str:
@@ -39,6 +40,16 @@ def test_led_core_addon_ignores_a_persisted_legacy_source_repository() -> None:
     assert 'SOURCE_REPOSITORY="${CANONICAL_SOURCE_REPOSITORY}"' in run
     assert '"CONFIGURED_SOURCE_REPOSITORY": str(' in run
     assert "Ignoring legacy source_repository" in run
+
+
+def test_led_core_addon_uses_its_own_ingress_port() -> None:
+    """LED Core must not collide with the former combined add-on on port 8099."""
+    config = source(ADDON_CONFIG)
+    run = source(ADDON_RUN)
+
+    assert "ingress_port: 8109" in config
+    assert "webui: http://[HOST]:[PORT:8109]/" in config
+    assert 'export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8109}"' in run
 
 
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:

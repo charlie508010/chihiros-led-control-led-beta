@@ -49,7 +49,7 @@ mkdir -p /config/.chihiros
 export HASS_CONFIG="/config"
 export CHIHIROS_STATE_DB="/config/.chihiros/chihiros_state.sqlite3"
 export CHIHIROS_PLUGIN_KIND="core"
-export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8099}"
+export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8109}"
 
 cp -a /opt/chihiros-src/chihiros_beta/ui/. /opt/chihiros-addon-ui/
 rm -rf /opt/chihiros-addon-ui/dashboard
