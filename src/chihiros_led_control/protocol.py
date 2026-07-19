@@ -1,0 +1,197 @@
+"""BLE protocol helpers for Chihiros commands."""
+
+from __future__ import annotations
+
+import datetime
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
+
+RESERVED_BYTE = 0x5A
+SCHEDULE_SNAPSHOT_POINTS_START = 25
+SCHEDULE_SNAPSHOT_POINT_SIZE = 3
+
+
+@dataclass(frozen=True)
+class RuntimeNotification:
+    """Parsed runtime/status notification."""
+
+    firmware_version: int
+    runtime_minutes: int
+    raw: bytes = field(default=b"", compare=False)
+
+
+@dataclass(frozen=True)
+class SchedulePoint:
+    """Parsed auto schedule point."""
+
+    hour: int
+    minute: int
+    levels: Mapping[str, int]
+
+
+@dataclass(frozen=True)
+class ScheduleSnapshotNotification:
+    """Parsed auto schedule/status snapshot notification."""
+
+    firmware_version: int
+    points: tuple[SchedulePoint, ...]
+    raw: bytes = field(default=b"", compare=False)
+
+
+ParsedNotification = RuntimeNotification | ScheduleSnapshotNotification
+
+
+def split_ml_25_6(total_ml: float | int | str) -> tuple[int, int]:
+    """Encode ml as 25.6 ml buckets plus 0.1 ml remainder."""
+    value = Decimal(str(total_ml).replace(",", ".")).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    if value < Decimal("0.2") or value > Decimal("999.9"):
+        raise ValueError("ml must be within 0.2..999.9")
+    high = int((value / Decimal("25.6")).to_integral_value(rounding=ROUND_FLOOR))
+    remainder = (value - Decimal(high) * Decimal("25.6")).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
+    low = int((remainder * Decimal("10")).to_integral_value(rounding=ROUND_HALF_UP))
+    if low == 256:
+        high += 1
+        low = 0
+    return high & 0xFF, low & 0xFF
+
+
+def ml_from_25_6(high_buckets: int, tenths_remainder: int) -> float:
+    """Decode 25.6 ml bucket encoding to ml."""
+    return round(25.6 * int(high_buckets) + 0.1 * int(tenths_remainder), 1)
+
+
+def parse_doser_totals_frame(payload: bytes | bytearray) -> list[float] | None:
+    """Parse Doser daily totals notification frames into four channel values."""
+    if len(payload) < 15 or payload[0] != 0x5B:
+        return None
+    if payload[5] not in (0x1E, 0x22, 0x34):
+        return None
+    params = list(payload[6:-1])
+    if len(params) >= 10 and 1 <= params[1] <= 4 and len(params[2:]) >= params[1] * 2:
+        params = params[2:]
+    if len(params) < 8:
+        return None
+    values = []
+    for offset in range(0, 8, 2):
+        tenths = (params[offset] << 8) | params[offset + 1]
+        values.append(round(tenths / 10.0, 1))
+    return values
+
+
+def next_message_id(current_msg_id: tuple[int, int] = (0, 0)) -> tuple[int, int]:
+    """Generate the next Bluetooth message id."""
+    msg_id_higher_byte, msg_id_lower_byte = current_msg_id
+    while True:
+        if msg_id_higher_byte == 255 and msg_id_lower_byte == 255:
+            msg_id_higher_byte, msg_id_lower_byte = 0, 1
+        elif msg_id_lower_byte == 255:
+            msg_id_higher_byte = (msg_id_higher_byte + 1) % 256
+            msg_id_lower_byte = 0
+        else:
+            msg_id_lower_byte += 1
+
+        if msg_id_higher_byte != RESERVED_BYTE and msg_id_lower_byte != RESERVED_BYTE:
+            return (msg_id_higher_byte, msg_id_lower_byte)
+
+
+def calculate_checksum(input_bytes: bytes | bytearray) -> int:
+    """Calculate the command checksum."""
+    if len(input_bytes) < 7:
+        raise ValueError("Commands must contain at least 7 bytes")
+    checksum = input_bytes[1]
+    for input_byte in input_bytes[2:]:
+        checksum = checksum ^ input_byte
+    return checksum
+
+
+def normalize_message_id(msg_id: tuple[int, int], *, avoid_reserved_byte: bool = True) -> tuple[int, int]:
+    """Return a message ID that is safe for the selected protocol variant."""
+    if not avoid_reserved_byte:
+        return msg_id
+    if msg_id[0] == RESERVED_BYTE or msg_id[1] == RESERVED_BYTE:
+        return next_message_id(msg_id)
+    return msg_id
+
+
+def create_command_encoding(
+    cmd_id: int,
+    cmd_mode: int,
+    msg_id: tuple[int, int],
+    parameters: list[int],
+    *,
+    avoid_reserved_byte: bool = True,
+    sanitize_parameters: bool | None = None,
+) -> bytearray:
+    """Encode a Chihiros BLE command."""
+    safe_msg_id = normalize_message_id(msg_id, avoid_reserved_byte=avoid_reserved_byte)
+    should_sanitize_parameters = avoid_reserved_byte if sanitize_parameters is None else sanitize_parameters
+    sanitized_params = [
+        value if not should_sanitize_parameters or value != RESERVED_BYTE else RESERVED_BYTE - 1 for value in parameters
+    ]
+    command = bytearray(
+        [cmd_id, 1, len(sanitized_params) + 5, safe_msg_id[0], safe_msg_id[1], cmd_mode] + sanitized_params
+    )
+
+    verification_byte = calculate_checksum(command)
+    if avoid_reserved_byte and verification_byte == RESERVED_BYTE:
+        return create_command_encoding(
+            cmd_id,
+            cmd_mode,
+            next_message_id(safe_msg_id),
+            sanitized_params,
+            avoid_reserved_byte=avoid_reserved_byte,
+            sanitize_parameters=sanitize_parameters,
+        )
+
+    return command + bytes([verification_byte])
+
+
+def encode_timestamp(ts: datetime.datetime) -> list[int]:
+    """Encode a timestamp as Chihiros command parameters."""
+    return [ts.year - 2000, ts.month, ts.isoweekday(), ts.hour, ts.minute, ts.second]
+
+
+def _notification_channels(color_channels: Mapping[str, int]) -> tuple[tuple[str, int], ...]:
+    """Return notification channels sorted by protocol channel id."""
+    return tuple(sorted(color_channels.items(), key=lambda color_channel: color_channel[1]))
+
+
+def parse_notification(
+    data: bytes | bytearray,
+    color_channels: Mapping[str, int] | None = None,
+) -> ParsedNotification | None:
+    """Parse known Chihiros notification payloads."""
+    if len(data) < 7 or data[0] != 0x5B:
+        return None
+
+    firmware_version = data[1]
+    mode = data[5]
+    if mode == 0x0A and len(data) >= 8:
+        # Current LED frames keep 0x01ff in bytes 6..7; the changing runtime
+        # counter is the final two payload bytes before the checksum. Reading
+        # from the tail also supports captured variants with an extra 0xff.
+        runtime_minutes = (data[-3] << 8) | data[-2] if len(data) >= 14 else (data[6] << 8) | data[7]
+        return RuntimeNotification(firmware_version, runtime_minutes, bytes(data))
+
+    if mode == 0xFE:
+        if color_channels is None:
+            return None
+        channels = _notification_channels(color_channels)
+        points: list[SchedulePoint] = []
+        for index in range(SCHEDULE_SNAPSHOT_POINTS_START, len(data), SCHEDULE_SNAPSHOT_POINT_SIZE):
+            point = data[index : index + SCHEDULE_SNAPSHOT_POINT_SIZE]
+            if len(point) < SCHEDULE_SNAPSHOT_POINT_SIZE:
+                break
+            hour = point[0]
+            minute = point[1]
+            level = point[2]
+            if hour > 23 or minute > 59 or level > 100:
+                continue
+            if hour == 0 and minute == 0 and level == 0:
+                continue
+            levels = {color: level for color, _channel_id in channels}
+            points.append(SchedulePoint(hour, minute, levels))
+        return ScheduleSnapshotNotification(firmware_version, tuple(points), bytes(data))
+
+    return None

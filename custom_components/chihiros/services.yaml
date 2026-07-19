@@ -1,0 +1,700 @@
+add_schedule:
+  name: Add schedule period
+  description: Add one auto mode schedule period to a Chihiros light.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Chihiros config entry ID. Required only when more than one Chihiros device is configured.
+      example: 01HZX3Z7K8M7YY9Y8H1C4BM2QA
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      description: Chihiros Bluetooth address. Required only when more than one Chihiros device is configured.
+      example: AA:BB:CC:DD:EE:FF
+      selector:
+        text:
+    start:
+      name: Start
+      description: Schedule start time.
+      required: true
+      example: "08:00"
+      selector:
+        time:
+    end:
+      name: End
+      description: Schedule end time.
+      required: true
+      example: "18:30"
+      selector:
+        time:
+    brightness:
+      name: Brightness
+      description: Brightness percentage for the primary channel, or a channel map in YAML mode.
+      default: 100
+      example: 70
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: slider
+          unit_of_measurement: "%"
+    levels:
+      name: Channel levels
+      description: Optional per-channel brightness levels. Use YAML mode for red, green, blue, and white maps.
+      example:
+        red: 40
+        green: 60
+        blue: 80
+        white: 50
+      selector:
+        object:
+    ramp_up_minutes:
+      name: Ramp up
+      description: Ramp up duration in minutes.
+      default: 1
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 255
+          mode: box
+          unit_of_measurement: min
+    weekdays:
+      name: Weekdays
+      description: Days when the period applies. Leave empty for every day.
+      selector:
+        select:
+          multiple: true
+          options:
+            - everyday
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
+    enable_auto_mode:
+      name: Enable auto mode first
+      description: Enable automatic mode before writing a new schedule. Disable when reactivating an existing schedule.
+      default: true
+      selector:
+        boolean:
+
+remove_schedule:
+  name: Remove schedule period
+  description: Remove one auto mode schedule period from a Chihiros light.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    start:
+      name: Start
+      required: true
+      example: "08:00"
+      selector:
+        time:
+    end:
+      name: End
+      required: true
+      example: "18:30"
+      selector:
+        time:
+    ramp_up_minutes:
+      name: Ramp up
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 255
+          mode: box
+          unit_of_measurement: min
+    weekdays:
+      name: Weekdays
+      selector:
+        select:
+          multiple: true
+          options:
+            - everyday
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
+
+enable_auto_mode:
+  name: Enable LED auto mode
+  description: Enable automatic mode and restore all active LED schedules stored for this device.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    entity_id:
+      name: LED entity
+      selector:
+        entity:
+          domain: light
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    debug:
+      name: Debug
+      description: Return transmitted protocol frames and received device notifications.
+      selector:
+        boolean:
+
+reset_schedule:
+  name: Reset schedule
+  description: Remove all auto mode schedule periods from a Chihiros light.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    debug:
+      name: Debug
+      description: Return additional debug output for the dashboard dialog.
+      selector:
+        boolean:
+    preserve_local:
+      name: Preserve local schedule
+      description: Reset only the device schedule and keep locally stored periods.
+      selector:
+        boolean:
+
+set_brightness:
+  name: Set LED brightness
+  description: Set one or more LED channels on a Chihiros light.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Chihiros config entry ID. Required only when more than one Chihiros device is configured.
+      selector:
+        text:
+    entity_id:
+      name: LED entity
+      description: A Chihiros LED entity used to resolve the owning config entry directly.
+      selector:
+        entity:
+          domain: light
+          integration: chihiros
+    address:
+      name: Bluetooth address
+      description: Chihiros Bluetooth address. Required only when more than one Chihiros device is configured.
+      example: AA:BB:CC:DD:EE:FF
+      selector:
+        text:
+    brightness:
+      name: Brightness
+      description: Brightness percentage for the primary channel, or a channel map in YAML mode.
+      required: true
+      example:
+        red: 100
+      selector:
+        object:
+    debug:
+      name: Debug
+      description: Return additional debug output for the dashboard dialog.
+      selector:
+        boolean:
+
+dose_ml:
+  name: Manual dose
+  description: Trigger a one-shot manual dose on a Chihiros dosing pump and add it to today's local total.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Chihiros config entry ID. Required only when more than one Chihiros device is configured.
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      description: Chihiros Bluetooth address. Required only when more than one Chihiros device is configured.
+      example: AA:BB:CC:DD:EE:FF
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    ml:
+      name: Volume
+      required: true
+      selector:
+        number:
+          min: 0.2
+          max: 999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+    debug:
+      name: Debug
+      description: Return the transmitted protocol frames and received device notifications.
+      selector:
+        boolean:
+
+set_schedule:
+  name: Set schedule
+  description: Replace auto mode schedule periods on a Chihiros light. Only one period per weekday is supported.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    periods:
+      name: Periods
+      description: Schedule periods to write. Use YAML mode.
+      required: true
+      example:
+        - start: "08:00"
+          end: "12:00"
+          brightness: 40
+          ramp_up_minutes: 30
+          weekdays:
+            - monday
+            - tuesday
+        - start: "09:00"
+          end: "17:00"
+          brightness: 55
+          weekdays:
+            - wednesday
+            - thursday
+      selector:
+        object:
+    send:
+      name: Send to device
+      description: Send the schedule to the lamp immediately. Disable to only save it in the local database.
+      default: true
+      selector:
+        boolean:
+    debug:
+      name: Debug
+      description: Return additional debug output for the dashboard dialog.
+      selector:
+        boolean:
+
+set_doser_schedule:
+  name: Set dosing pump schedule
+  description: Store and optionally send one dosing-pump schedule row.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    active:
+      name: Active
+      default: true
+      selector:
+        boolean:
+    kind:
+      name: Schedule kind
+      default: single_dose
+      selector:
+        select:
+          options:
+            - single_dose
+            - interval
+            - timer
+            - window
+    interval:
+      name: Interval minutes
+      description: Only for interval schedules. Valid range is 0-59 minutes.
+      selector:
+        number:
+          min: 0
+          max: 59
+          step: 1
+          mode: box
+    timers:
+      name: Timer-list entries
+      description: For timer schedules, provide 1-24 objects with time (HH:MM) and ml. Entries must be at least 10 minutes apart.
+      example:
+        - time: "07:00"
+          ml: 1.5
+        - time: "12:30"
+          ml: 2.0
+      selector:
+        object:
+    windows:
+      name: Custom time windows
+      description: For custom schedules, provide start, end, and doses. Across all windows, 1-24 doses are allowed, with no more than 30 minutes between doses inside each window.
+      example:
+        - start: "01:00"
+          end: "02:00"
+          doses: 3
+      selector:
+        object:
+    time:
+      name: Time
+      description: Required for non-interval schedules. For interval schedules, use interval instead.
+      example: "20:15"
+      selector:
+        time:
+    ml:
+      name: Dose
+      required: true
+      selector:
+        number:
+          min: 0.2
+          max: 999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+    weekdays:
+      name: Weekdays
+      default:
+        - everyday
+      selector:
+        select:
+          multiple: true
+          options:
+            - everyday
+            - monday
+            - tuesday
+            - wednesday
+            - thursday
+            - friday
+            - saturday
+            - sunday
+    send:
+      name: Send to device
+      description: Also send the isolated extension frame set. Leave disabled while protocol coverage is reviewed.
+      default: false
+      selector:
+        boolean:
+    valid_from_tomorrow:
+      name: Plan valid from tomorrow
+      description: Send the dosing schedule with app flag mode27[3]=1 so the device stores it but applies it from tomorrow.
+      default: false
+      selector:
+        boolean:
+    debug:
+      name: Debug output
+      description: Capture and return the Doser control debug output for the dashboard dialog.
+      default: false
+      selector:
+        boolean:
+
+reset_doser_schedule:
+  name: Reset dosing pump schedule
+  description: Remove one locally stored dosing-pump schedule row and optionally disable it on the device.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    send:
+      name: Send to device
+      description: Also send the dosing-pump scheduler disable command and store the send status in SQLite actions.
+      default: false
+      selector:
+        boolean:
+    debug:
+      name: Debug output
+      description: Capture and return the Doser reset debug output for the dashboard dialog.
+      default: false
+      selector:
+        boolean:
+
+set_doser_container:
+  name: Set dosing pump container
+  description: Store the local remaining container volume for one dosing-pump channel.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    ml:
+      name: Remaining volume
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+
+set_doser_safety:
+  name: Set dosing pump safety limits
+  description: Store overdose protection limits for automatic schedules, manual dosing, and daily dose.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    max_auto_ml:
+      name: Automatic dose limit
+      required: true
+      selector:
+        number:
+          min: 0.2
+          max: 999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+    max_manual_ml:
+      name: Manual dose limit
+      description: Set to 0.0 mL to block manual dosing completely.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+    max_daily_ml:
+      name: Daily dose limit
+      required: true
+      selector:
+        number:
+          min: 0.2
+          max: 9999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+
+set_doser_push_settings:
+  name: Set dosing pump push settings
+  description: Store low-container push notification settings and up to three notify services.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    enabled:
+      name: Enabled
+      required: true
+      selector:
+        boolean:
+    targets:
+      name: Notify services
+      description: Notify service names without the notify. prefix, for example mobile_app_phone.
+      selector:
+        select:
+          multiple: true
+          custom_value: true
+          options: []
+    message:
+      name: Message template
+      description: Supports placeholders {ch}, {channel}, {device}, {remaining}, and {threshold}.
+      example: "{ch} {channel}: only {remaining} mL left. Threshold: {threshold} mL."
+      selector:
+        text:
+          multiline: true
+
+start_doser_calibration:
+  name: Start dosing pump calibration
+  description: Send the observed calibration-start sequence for one dosing-pump channel.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    debug:
+      name: Debug
+      selector:
+        boolean:
+
+prime_doser_calibration:
+  name: Fill dosing pump calibration hose
+  description: Select one pump, run the hose-fill motor for a bounded duration, and always send stop.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    duration:
+      name: Fill duration
+      required: true
+      default: 3.0
+      selector:
+        number:
+          min: 0.5
+          max: 30
+          step: 0.5
+          mode: box
+          unit_of_measurement: s
+    debug:
+      name: Debug
+      selector:
+        boolean:
+
+submit_doser_calibration:
+  name: Submit dosing pump calibration
+  description: Submit a measured calibration volume and optionally run a test dose.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    ml:
+      name: Measured volume
+      required: true
+      selector:
+        number:
+          min: 0.2
+          max: 255.99
+          step: 0.01
+          mode: box
+          unit_of_measurement: mL
+    test_ml:
+      name: Test dose
+      selector:
+        number:
+          min: 0.2
+          max: 999.9
+          step: 0.1
+          mode: box
+          unit_of_measurement: mL
+    reminder_days:
+      name: Calibration reminder
+      description: Number of days until calibration should be renewed.
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 3650
+          step: 1
+          mode: box
+          unit_of_measurement: days
+    debug:
+      name: Debug
+      selector:
+        boolean:
+
+test_doser_calibration:
+  name: Test dosing pump calibration
+  description: Send the confirmed separate 4.0 mL calibration test dose without recording a manual dose.
+  fields:
+    entry_id:
+      name: Config entry ID
+      selector:
+        text:
+    address:
+      name: Bluetooth address
+      selector:
+        text:
+    pump:
+      name: Pump
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 4
+          step: 1
+          mode: box
+    debug:
+      name: Debug
+      selector:
+        boolean:

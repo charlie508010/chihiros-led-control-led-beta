@@ -1,0 +1,254 @@
+"""Development-only fake Chihiros devices for local Home Assistant testing."""
+
+from __future__ import annotations
+
+import asyncio
+import os
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import datetime
+
+from .dosing import normalize_pump_count
+from .vendor.chihiros_led_control.models import DOSING_PUMP, RGB_CHANNELS, WHITE_CHANNELS, WRGB_CHANNELS, DeviceModel
+from .vendor.chihiros_led_control.protocol import (
+    ParsedNotification,
+    RuntimeNotification,
+    SchedulePoint,
+    ScheduleSnapshotNotification,
+)
+
+FAKE_DEVICES_ENV = "CHIHIROS_FAKE_DEVICES"
+FAKE_ADDRESS_PREFIX = "FA:CE:C0"
+
+
+@dataclass(frozen=True)
+class FakeChihirosDeviceInfo:
+    """Static fake device metadata."""
+
+    address: str
+    name: str
+    model: DeviceModel
+
+
+FAKE_DEVICES = (
+    FakeChihirosDeviceInfo(
+        address=f"{FAKE_ADDRESS_PREFIX}:00:00:01",
+        name="DYNW60-fake",
+        model=DeviceModel("Fake WRGB II", ("DYNW60",), RGB_CHANNELS),
+    ),
+    FakeChihirosDeviceInfo(
+        address=f"{FAKE_ADDRESS_PREFIX}:00:00:02",
+        name="DYWPRO60-fake",
+        model=DeviceModel("Fake WRGB II Pro", ("DYWPRO60",), WRGB_CHANNELS),
+    ),
+    FakeChihirosDeviceInfo(
+        address=f"{FAKE_ADDRESS_PREFIX}:00:00:03",
+        name="DYNA2-fake",
+        model=DeviceModel("Fake A II", ("DYNA2",), WHITE_CHANNELS),
+    ),
+    FakeChihirosDeviceInfo(
+        address=f"{FAKE_ADDRESS_PREFIX}:00:00:04",
+        name="DYDOSE-fake",
+        model=DOSING_PUMP,
+    ),
+)
+FAKE_DEVICES_BY_ADDRESS = {device.address: device for device in FAKE_DEVICES}
+
+NotificationCallback = Callable[[ParsedNotification], None]
+
+
+def fake_devices_enabled() -> bool:
+    """Return whether fake devices are enabled for local development."""
+    return os.environ.get(FAKE_DEVICES_ENV, "").lower() in {"1", "true", "yes", "on"}
+
+
+def is_fake_address(address: str) -> bool:
+    """Return whether an address belongs to a configured fake device."""
+    return address in FAKE_DEVICES_BY_ADDRESS
+
+
+def create_fake_device(address: str, pump_count: int = 4) -> FakeChihirosDevice:
+    """Create a fake Chihiros device from a fake address."""
+    return FakeChihirosDevice(FAKE_DEVICES_BY_ADDRESS[address], pump_count)
+
+
+def iter_enabled_fake_devices(current_addresses: Iterable[str]) -> tuple[FakeChihirosDeviceInfo, ...]:
+    """Return fake devices that can be shown in discovery."""
+    if not fake_devices_enabled():
+        return ()
+    configured_addresses = set(current_addresses)
+    return tuple(device for device in FAKE_DEVICES if device.address not in configured_addresses)
+
+
+class FakeChihirosDevice:
+    """Small in-memory Chihiros device replacement for HA UI testing."""
+
+    def __init__(self, device_info: FakeChihirosDeviceInfo, pump_count: int = 4) -> None:
+        """Initialize the fake device."""
+        self._device_info = device_info
+        self.pump_count = normalize_pump_count(pump_count)
+        self.model = device_info.model
+        self._callbacks: set[NotificationCallback] = set()
+        self._brightness = {color: 0 for color in self.model.color_channels}
+        self._dosed_ml = [0.0] * self.pump_count
+        self._auto_mode = False
+        self.last_runtime_notification: RuntimeNotification | None = None
+        self.last_schedule_snapshot_notification: ScheduleSnapshotNotification | None = None
+
+    @property
+    def address(self) -> str:
+        """Return the fake BLE address."""
+        return self._device_info.address
+
+    @property
+    def name(self) -> str:
+        """Return the fake device name."""
+        return self._device_info.name
+
+    @property
+    def model_name(self) -> str:
+        """Return the fake model name."""
+        return self.model.name
+
+    @property
+    def colors(self) -> dict[str, int]:
+        """Return supported fake color channels."""
+        return dict(self.model.color_channels)
+
+    def add_notification_callback(self, callback: NotificationCallback) -> Callable[[], None]:
+        """Register a callback for fake parsed notifications."""
+        self._callbacks.add(callback)
+
+        def remove_callback() -> None:
+            self._callbacks.discard(callback)
+
+        return remove_callback
+
+    async def query_status(self) -> None:
+        """Publish fake runtime and schedule notifications."""
+        await asyncio.sleep(0)
+        self.last_runtime_notification = RuntimeNotification(
+            firmware_version=23,
+            runtime_minutes=511,
+            raw=bytes.fromhex("5b 17 0a 00 01 0a 01 ff ff ff ff 0c 36 2d"),
+        )
+        self.last_schedule_snapshot_notification = ScheduleSnapshotNotification(
+            firmware_version=23,
+            points=(
+                self._schedule_point(8, 0, 15),
+                self._schedule_point(12, 0, 70),
+                self._schedule_point(20, 30, 0),
+            ),
+        )
+        self._notify_callbacks(self.last_runtime_notification)
+        self._notify_callbacks(self.last_schedule_snapshot_notification)
+
+    async def set_brightness(self, brightness: int | Sequence[int] | Mapping[str | int, int]) -> None:
+        """Set fake brightness state."""
+        await asyncio.sleep(0)
+        if isinstance(brightness, int):
+            for color in self._brightness:
+                self._brightness[color] = brightness
+            return
+        if isinstance(brightness, Mapping):
+            for color, level in brightness.items():
+                if isinstance(color, str) and color in self._brightness:
+                    self._brightness[color] = level
+            return
+        for color, level in zip(self._brightness, brightness, strict=False):
+            self._brightness[color] = level
+
+    async def turn_on(self) -> None:
+        """Turn on all fake channels."""
+        await self.set_brightness(100)
+
+    async def turn_off(self) -> None:
+        """Turn off all fake channels."""
+        await self.set_brightness(0)
+
+    async def enable_auto_mode(
+        self,
+        timestamp: datetime | None = None,
+        settings: Sequence[tuple[object, ...]] | None = None,
+    ) -> None:
+        """Enable fake auto mode."""
+        del timestamp, settings
+        self._auto_mode = True
+        await self.query_status()
+
+    async def set_manual_mode(self) -> None:
+        """Enable fake manual mode."""
+        self._auto_mode = False
+        await self.turn_on()
+
+    async def add_setting(
+        self,
+        sunrise: datetime,
+        sunset: datetime,
+        max_brightness: int | Sequence[int] | Mapping[str | int, int] = 100,
+        ramp_up_in_minutes: int = 1,
+        weekdays: list[object] | None = None,
+        enable_auto_mode: bool = True,
+    ) -> None:
+        """Accept fake schedule writes."""
+        del sunrise, sunset, max_brightness, ramp_up_in_minutes, weekdays, enable_auto_mode
+        await self.query_status()
+
+    async def remove_setting(
+        self,
+        sunrise: datetime,
+        sunset: datetime,
+        ramp_up_in_minutes: int = 1,
+        weekdays: list[object] | None = None,
+    ) -> None:
+        """Accept fake schedule deletes."""
+        del sunrise, sunset, ramp_up_in_minutes, weekdays
+        await self.query_status()
+
+    async def replace_setting(
+        self,
+        previous_sunrise: datetime,
+        previous_sunset: datetime,
+        sunrise: datetime,
+        sunset: datetime,
+        max_brightness: int | Sequence[int] | Mapping[str | int, int],
+        previous_ramp_up_in_minutes: int = 1,
+        ramp_up_in_minutes: int = 1,
+        previous_weekdays: list[object] | None = None,
+        weekdays: list[object] | None = None,
+    ) -> None:
+        """Accept fake active schedule replacements."""
+        del previous_sunrise, previous_sunset, sunrise, sunset, max_brightness
+        del previous_ramp_up_in_minutes, ramp_up_in_minutes, previous_weekdays, weekdays
+        await self.query_status()
+
+    async def reset_settings(self) -> None:
+        """Accept fake schedule resets."""
+        await self.query_status()
+
+    async def replace_settings(self, settings: Sequence[tuple[object, ...]]) -> None:
+        """Accept replacing all fake active schedules."""
+        del settings
+        await self.query_status()
+
+    async def dose_ml(self, pump_idx: int, volume_ml: float) -> None:
+        """Record a fake manual dose for local dosing pump testing."""
+        await asyncio.sleep(0)
+        self._dosed_ml[pump_idx] = round(self._dosed_ml[pump_idx] + volume_ml, 1)
+
+    async def disconnect(self) -> None:
+        """Disconnect the fake device."""
+        await asyncio.sleep(0)
+
+    def _schedule_point(self, hour: int, minute: int, level: int) -> SchedulePoint:
+        """Create a schedule point for all fake channels."""
+        return SchedulePoint(
+            hour=hour,
+            minute=minute,
+            levels={color: level for color in self.model.color_channels},
+        )
+
+    def _notify_callbacks(self, notification: ParsedNotification) -> None:
+        """Notify fake subscribers."""
+        for callback in tuple(self._callbacks):
+            callback(notification)

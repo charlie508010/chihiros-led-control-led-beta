@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Chihiros Core</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #081113;
+        --panel: #0f1d21;
+        --line: rgba(81,154,190,.34);
+        --text: #e8eef0;
+        --muted: #9dadb2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      header {
+        min-height: 54px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 16px;
+        background: #1f1f1f;
+        border-bottom: 1px solid rgba(255,255,255,.08);
+      }
+      h1 { margin: 0; font-size: 18px; line-height: 1.2; }
+      .sub { color: var(--muted); font-size: 12px; }
+      .status { margin-left: auto; color: #65d46e; font-weight: 700; }
+      main { width: min(1460px, calc(100vw - 20px)); margin: 0 auto; padding: 12px 0 24px; }
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        overflow: hidden;
+      }
+      chihiros-doser-card-v3 {
+        display: block;
+        --primary-text-color: var(--text);
+        --secondary-text-color: var(--muted);
+        --card-background-color: var(--panel);
+        --ha-card-background: var(--panel);
+      }
+      ha-icon {
+        display: inline-grid;
+        width: var(--mdc-icon-size, 20px);
+        height: var(--mdc-icon-size, 20px);
+        place-items: center;
+        vertical-align: middle;
+      }
+      ha-icon::before {
+        content: attr(icon);
+        overflow: hidden;
+        max-width: 100%;
+        font-size: 0;
+      }
+      ha-icon::after {
+        content: "";
+        width: 70%;
+        height: 70%;
+        border: 1.8px solid currentColor;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="title">Chihiros Core</h1>
+      <span class="sub">Add-on Dashboard</span>
+      <span id="status" class="status">online</span>
+    </header>
+    <main>
+      <section class="panel" id="dashboard"></section>
+    </main>
+
+    <script>
+      if (!customElements.get("ha-icon")) {
+        customElements.define("ha-icon", class extends HTMLElement {});
+      }
+    </script>
+    <script type="module">
+      await import(`./dashboard/chihiros-doser-card-v3.js?v=${Date.now()}`);
+
+      const status = document.getElementById("status");
+      const title = document.getElementById("title");
+      let addonDatabase = {};
+      let addonKind = "core";
+      let addonTitle = "Chihiros Core";
+      let enabledTabs = ["led", "config"];
+      let installedPlugins = [];
+      let pluginAssets = {};
+      const loadedPluginModules = new Set();
+
+      function defaultTabForKind(kind) {
+        const map = { core: "led", doser: "doser", ruehrer: "ruehrer", heizer: "heizer" };
+        return map[kind] || "led";
+      }
+
+      function setAddonTitle(value) {
+        addonTitle = value || addonTitle;
+        document.title = addonTitle;
+        title.textContent = addonTitle;
+      }
+
+      const hassShell = {
+        states: {},
+        services: {},
+        locale: { language: "de" },
+        language: "de",
+        callApi: async (method, path) => {
+          const normalizedMethod = String(method || "").toUpperCase();
+          const normalizedPath = String(path || "").replace(/^\/+/, "");
+          if (normalizedMethod === "GET" && normalizedPath.startsWith("states/")) {
+            const entityId = normalizedPath.slice("states/".length);
+            const response = await fetch(`./api/ha-state?entity_id=${encodeURIComponent(entityId)}`);
+            const raw = await response.text();
+            let state = {};
+            try {
+              state = raw ? JSON.parse(raw) : {};
+            } catch (_err) {
+              const start = raw.indexOf("{");
+              const end = raw.lastIndexOf("}");
+              if (start < 0 || end <= start) {
+                throw new Error(`State Antwort ist kein JSON (${response.status}): ${raw.slice(0, 160)}`);
+              }
+              state = JSON.parse(raw.slice(start, end + 1));
+            }
+            if (!response.ok) throw new Error(state.message || `State Fehler ${response.status}: ${entityId}`);
+            hassShell.states = { ...hassShell.states, [entityId]: state };
+            if (!state) throw new Error(`State nicht gefunden: ${entityId}`);
+            return state;
+          }
+          throw new Error(`Nicht unterstuetzter HA API Aufruf: ${normalizedMethod} ${normalizedPath}`);
+        },
+        callService: async (domain, service, serviceData = {}, target = {}, returnResponse = false) => {
+          const response = await fetch("./api/ha-service", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ domain, service, service_data: serviceData, target, return_response: returnResponse }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            return {
+              response: {
+                ok: false,
+                send_status: "fail",
+                send_detail: data.message || data.error || `Home Assistant Service fehlgeschlagen (${response.status})`,
+                debug_output: "",
+              },
+            };
+          }
+          await refreshDashboard();
+          if (domain === "chihiros" && (service === "add_schedule" || service === "set_schedule")) {
+            scheduleVerificationDashboardRefresh();
+          }
+          return data.result;
+        },
+        connection: {
+          sendMessagePromise: async (message) => {
+            if (!message || message.type !== "call_service") return {};
+            const response = await fetch("./api/ha-service", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                domain: message.domain,
+                service: message.service,
+                service_data: message.service_data || {},
+                target: message.target || {},
+                return_response: Boolean(message.return_response),
+              }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              return {
+                response: {
+                  ok: false,
+                  send_status: "fail",
+                  send_detail: data.message || data.error || `Home Assistant Service fehlgeschlagen (${response.status})`,
+                  debug_output: "",
+                },
+              };
+            }
+            await refreshDashboard();
+            if (message.domain === "chihiros" && (message.service === "add_schedule" || message.service === "set_schedule")) {
+              scheduleVerificationDashboardRefresh();
+            }
+            return data.result;
+          },
+        },
+      };
+      let card = null;
+      let dashboardBoundaryTimer = null;
+      let dashboardVerificationTimer = null;
+
+      function scheduleVerificationDashboardRefresh() {
+        if (dashboardVerificationTimer) window.clearTimeout(dashboardVerificationTimer);
+        dashboardVerificationTimer = window.setTimeout(() => {
+          dashboardVerificationTimer = null;
+          refreshDashboard().catch(() => setStatus("offline", false));
+        }, 70000);
+      }
+
+      function ensureCard() {
+        if (card) return card;
+        card = document.createElement("chihiros-doser-card-v3");
+        document.getElementById("dashboard").appendChild(card);
+        return card;
+      }
+
+      function applyCardState(devices = []) {
+        if (!card) return;
+        hassShell.states = hassShell.states || {};
+        card.setConfig({
+          default_tab: card.activeTab || defaultTabForKind(addonKind),
+          enabled_tabs: enabledTabs,
+          plugin_kind: addonKind,
+          plugin_title: addonTitle,
+          installed_plugins: installedPlugins,
+          plugin_assets: pluginAssets,
+          language: "de",
+          doser_devices: devices,
+          addon_mode: true,
+          addon_database: addonDatabase,
+          show_mac: true,
+        });
+        card.hass = hassShell;
+      }
+
+      function setStatus(text, ok = true) {
+        status.textContent = text;
+        status.style.color = ok ? "#65d46e" : "#ff7373";
+      }
+
+      fetch("./api/status")
+        .then((response) => response.json())
+        .then(async (data) => {
+          addonKind = data.plugin_kind || addonKind;
+          setAddonTitle(data.plugin_title);
+          enabledTabs = Array.isArray(data.enabled_tabs) ? data.enabled_tabs : enabledTabs;
+          installedPlugins = Array.isArray(data.installed_plugins) ? data.installed_plugins : installedPlugins;
+          pluginAssets = data.plugin_assets && typeof data.plugin_assets === "object" ? data.plugin_assets : pluginAssets;
+          await loadPluginModules(pluginAssets);
+          ensureCard();
+          applyCardState(Array.isArray(data.devices) ? data.devices : []);
+          setStatus("online", true);
+          return refreshDashboard();
+        })
+        .catch(() => setStatus("offline", false));
+
+      async function refreshDashboard() {
+        const response = await fetch("./api/dashboard-state");
+        const data = await response.json();
+        addonDatabase = data.database || addonDatabase || {};
+        addonKind = data.plugin_kind || addonKind;
+        setAddonTitle(data.plugin_title);
+        enabledTabs = Array.isArray(data.enabled_tabs) ? data.enabled_tabs : enabledTabs;
+        installedPlugins = Array.isArray(data.installed_plugins) ? data.installed_plugins : installedPlugins;
+        pluginAssets = data.plugin_assets && typeof data.plugin_assets === "object" ? data.plugin_assets : pluginAssets;
+        await loadPluginModules(pluginAssets);
+        ensureCard();
+        hassShell.states = data.states || {};
+        applyCardState(Array.isArray(data.devices) ? data.devices : []);
+        setStatus("datenbank", true);
+        scheduleNextDashboardBoundary();
+      }
+
+      function scheduleNextDashboardBoundary() {
+        if (dashboardBoundaryTimer) window.clearTimeout(dashboardBoundaryTimer);
+        dashboardBoundaryTimer = null;
+        const schedules = addonDatabase && addonDatabase.led_schedules ? addonDatabase.led_schedules : {};
+        const now = new Date();
+        const weekdayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+        const candidates = [];
+        Object.values(schedules).flat().forEach((row) => {
+          if (!row || row.active === false) return;
+          const [startHour, startMinute] = String(row.start || "00:00").split(":").map(Number);
+          const [endHour, endMinute] = String(row.end || "00:00").split(":").map(Number);
+          const weekdays = new Set((Array.isArray(row.weekdays) ? row.weekdays : ["everyday"]).map((day) => String(day).toLowerCase()));
+          for (let offset = 0; offset < 8; offset += 1) {
+            const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+            if (!weekdays.has("everyday") && !weekdays.has(weekdayNames[day.getDay()])) continue;
+            const start = new Date(day.getFullYear(), day.getMonth(), day.getDate(), startHour || 0, startMinute || 0);
+            const overnight = ((endHour || 0) * 60 + (endMinute || 0)) <= ((startHour || 0) * 60 + (startMinute || 0));
+            const end = new Date(day.getFullYear(), day.getMonth(), day.getDate() + (overnight ? 1 : 0), endHour || 0, endMinute || 0);
+            if (start > now) candidates.push(start);
+            if (end > now) candidates.push(end);
+          }
+        });
+        if (!candidates.length) return;
+        const next = new Date(Math.min(...candidates.map((value) => value.getTime())));
+        dashboardBoundaryTimer = window.setTimeout(() => {
+          refreshDashboard().catch(() => setStatus("offline", false));
+        }, Math.max(100, next.getTime() - Date.now() + 150));
+      }
+
+      const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+      async function loadPluginModules(assets) {
+        const entries = Object.entries(assets || {});
+        for (const [name, asset] of entries) {
+          const modulePath = asset && asset.module ? String(asset.module) : "";
+          const version = asset && asset.mtime ? String(asset.mtime) : "";
+          const moduleUrl = version ? `${modulePath}?v=${encodeURIComponent(version)}` : modulePath;
+          if (!modulePath || loadedPluginModules.has(moduleUrl)) continue;
+          await import(moduleUrl);
+          loadedPluginModules.add(moduleUrl);
+          console.info(`Chihiros plugin loaded: ${name}`);
+        }
+      }
+
+      window.ChihirosAddonApi = {
+        saveDatabaseConfig: async (payload) => {
+          const response = await fetch("./api/dashboard-settings", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || "Speichern fehlgeschlagen");
+          addonDatabase = data;
+          await refreshDashboard();
+          return data;
+        },
+        databaseStatus: async (device = "") => {
+          const params = new URLSearchParams();
+          if (device) params.set("device", device);
+          const suffix = params.toString() ? `?${params.toString()}` : "";
+          const response = await fetch(`./api/database-status${suffix}`, { cache: "no-store" });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || "Datenbankstatus konnte nicht geladen werden");
+          return data;
+        },
+        runCtlCommand: async (command) => {
+          return await window.ChihirosAddonApi.callPluginBackend("ctl", "run_command", [command]);
+        },
+        runAddonUpdate: async () => {
+          throw new Error("Add-on Update API ist deaktiviert; Dashboard nutzt nur Store reload und Update-Entity refresh.");
+        },
+        callPluginBackend: async (plugin, functionName, args = []) => {
+          const response = await fetch("./api/plugin-backend", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ plugin, function: functionName, args }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || data.output || "Plugin Aktion fehlgeschlagen");
+          return data;
+        },
+        refreshDashboard,
+        refreshHassStates: refreshDashboard,
+      };
+
+      fetch("./api/dashboard-settings")
+        .then((response) => response.json())
+        .then((data) => {
+          addonDatabase = data || {};
+          return refreshDashboard();
+        })
+        .catch(async () => {
+        addonDatabase = {};
+        ensureCard();
+        setStatus("db fehlt", false);
+        await refreshDashboard();
+      });
+    </script>
+  </body>
+</html>

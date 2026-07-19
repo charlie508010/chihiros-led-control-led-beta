@@ -1,0 +1,130 @@
+Updated chihiros_beta\config.yaml: 0.2.346 -> 0.2.347
+warning: in the working copy of '.github/workflows/pre-commit.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.github/workflows/validation.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.pre-commit-config.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.pylintrc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of '.python-version', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'AGENTS.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'LICENSE', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_beta/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_beta/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_beta/run.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_beta/ui/chihirosctl_runner.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_beta/ui/index.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_beta/ui/server.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ctl/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ctl/config.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ctl/run.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_doser/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_doser/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_doser/run.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_heizer/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_heizer/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_heizer/config.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_heizer/run.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ruehrer/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ruehrer/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ruehrer/config.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_ruehrer/run.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_wireshark/Dockerfile', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_wireshark/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_wireshark/config.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'chihiros_wireshark/run.sh', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/button.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/config_flow.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/const.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/coordinator.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/discovery.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_entity.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_protocol.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_registry.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_services.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_storage.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_types.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/doser_watcher.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/dosing.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/entity.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/fake.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/light.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/manifest.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/models.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/number.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/ctl/backend.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/ctl/www/ctl-plugin.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/entity.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/protocol.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/registry.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/services.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/storage.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/types.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/watcher.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/doser/www/doser-plugin.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/heizer/www/heizer-plugin.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/ruehrer/www/ruehrer-plugin.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/wireshark/backend.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/plugins/wireshark/www/wireshark-plugin.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/runtime.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/sensor.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/services.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/strings.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/switch.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/translations/en.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/client.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/commands.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/factory.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/models.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/protocol.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/schedule_validation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/vendor/chihiros_led_control/store.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/www/chihiros-doser-card-v3.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/www/chihiros-panel.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'custom_components/chihiros/www/panels/chihiros-led-panel.js', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/architecture.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/esphome-protocol-findings.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'docs/protocol.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'hacs.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'pyproject.toml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'repository.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/bump_core_version.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'scripts/sync_vendor.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/__init__.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/cli.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/client.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/commands.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/factory.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/models.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/protocol.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/schedule_validation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/chihiros_led_control/store.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_addon_update.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_cli.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_client.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_factory.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_home_assistant_integration.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_manifest_requirements.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_protocol.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_schedule_validation.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_sync_vendor.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tests/test_weekday_encoding.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'uv.lock', LF will be replaced by CRLF the next time Git touches it
+[main 2445add] fix: restore pull7 manual doser command sequence
+ 2 files changed, 5 insertions(+), 2 deletions(-)
+Committed as 2445add: fix: restore pull7 manual doser command sequence
+Pushing to origin/main ...
+Enumerating objects: 13, done.
+Counting objects: 100% (13/13), done.
+Delta compression using up to 4 threads
+Compressing objects: 100% (6/6), done.
+Writing objects: 100% (7/7), 603 bytes | 603.00 KiB/s, done.
+Total 7 (delta 5), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (5/5), completed with 5 local objects.
+To https://github.com/charlie508010/chihiros-led-control-beta.git
+   9fe7c11..2445add  main -> main
+Push complete.

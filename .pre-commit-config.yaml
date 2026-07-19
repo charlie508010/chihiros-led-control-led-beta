@@ -1,0 +1,50 @@
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v4.6.0
+  hooks:
+  - id: trailing-whitespace
+  - id: end-of-file-fixer
+  - id: check-docstring-first
+  - id: check-yaml
+    exclude: "^.gitlab-ci.yml$"
+  - id: check-yaml
+    args:
+      - --unsafe
+    files: "^.gitlab-ci.yml$"
+  - id: check-toml
+  - id: debug-statements
+  - id: check-ast
+
+- repo: local
+  hooks:
+  - id: ruff-check
+    name: ruff check
+    entry: uv --cache-dir .uv-cache run --group dev ruff check --fix
+    language: system
+    types_or: [python, pyi]
+    require_serial: true
+  - id: ruff-format
+    name: ruff format
+    entry: uv --cache-dir .uv-cache run --group dev ruff format
+    language: system
+    types_or: [python, pyi]
+    require_serial: true
+  - id: sync-vendor-check
+    name: sync vendor check
+    entry: uv --cache-dir .uv-cache run python scripts/sync_vendor.py --check
+    language: system
+    pass_filenames: false
+    always_run: true
+    require_serial: true
+  - id: pytest
+    name: pytest
+    entry: uv --cache-dir .uv-cache run --group dev pytest -s
+    language: system
+    pass_filenames: false
+    always_run: true
+    require_serial: true
+
+- repo: https://github.com/PyCQA/doc8
+  rev: v1.1.1
+  hooks:
+  - id: doc8

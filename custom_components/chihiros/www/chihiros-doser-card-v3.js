@@ -1,0 +1,4574 @@
+import "./chihiros-notification-ui.js?v=0.1.0";
+import "./panels/chihiros-led-panel.js?v=0.2.1004";
+
+class ChihirosDoserCard extends window.ChihirosLedPanelMixin(HTMLElement) {
+  setConfig(config) {
+    this.config = config || {};
+    this.attachPluginMethods("doser");
+    const defaultChannels = this.config.channels || [
+      { id: 1, name: "Nitrat", color: "#2ea8ff" },
+      { id: 2, name: "Phosphat", color: "#39d353" },
+      { id: 3, name: "Eisen", color: "#ff9300" },
+      { id: 4, name: "Kalium", color: "#a855f7" },
+    ];
+    this.baseChannels = Array.isArray(defaultChannels) && defaultChannels.length ? defaultChannels : [];
+    this.channels = this.baseChannels.map((channel) => ({ ...channel }));
+    const previousLedDeviceId = this.activeLedDeviceId || "";
+    const previousLedDevice = this.activeLedDevice || null;
+    this.ledDevices = this.resolveLedDevices();
+    const selectedLedDevice = this.ledDevices.find((device) => String(device.id) === String(previousLedDeviceId));
+    if (selectedLedDevice) {
+      this.applyLedDevice(previousLedDeviceId, false);
+    } else if (previousLedDeviceId && previousLedDevice) {
+      this.ledDevices = [...this.ledDevices, previousLedDevice];
+    } else {
+      this.activeLedDeviceId = (this.ledDevices[0] && this.ledDevices[0].id) || "";
+      this.applyLedDevice(this.activeLedDeviceId);
+    }
+    this.uiSettings = this.loadUiSettings();
+    this.uiSettings.plugins = this.uiSettings.plugins || {};
+    this.applyChannelNames();
+    this.dialogState = this.dialogState || null;
+    this.ledScheduleEditorOpen = Boolean(this.ledScheduleEditorOpen);
+    this.activeTab = this.ensureEnabledTab(this.uiSettings.activeTab || this.activeTab || this.config.default_tab || "doser");
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (typeof this.resolveLedDevices === "function") {
+      const previousLedDeviceId = this.activeLedDeviceId || "";
+      const previousLedDevice = this.activeLedDevice || null;
+      this.ledDevices = this.resolveLedDevices();
+      const stillAvailable = this.ledDevices.some((device) => String(device.id) === String(previousLedDeviceId));
+      if (stillAvailable) {
+        this.activeLedDeviceId = previousLedDeviceId;
+        if (typeof this.applyLedDevice === "function") this.applyLedDevice(this.activeLedDeviceId, false);
+      } else if (!previousLedDeviceId) {
+        this.activeLedDeviceId = (this.ledDevices[0] && this.ledDevices[0].id) || "";
+        if (typeof this.applyLedDevice === "function") this.applyLedDevice(this.activeLedDeviceId, false);
+      } else if (previousLedDevice) {
+        this.ledDevices = [...this.ledDevices, previousLedDevice];
+      }
+    }
+    if (this.dialogState) return;
+    this.render();
+  }
+
+  connectedCallback() {
+    if (!this.__ledChannelHistoryCaptureBound) {
+      this.__ledChannelHistoryCaptureBound = true;
+      const openLedChannelHistory = (ev) => {
+        const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+        const button = path.find((node) => node && typeof node.hasAttribute === "function" && node.hasAttribute("data-led-channel-history"))
+          || (ev.target && typeof ev.target.closest === "function" ? ev.target.closest("[data-led-channel-history]") : null);
+        if (!button) return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.activeTab = "led";
+        this.ledScheduleEditorOpen = false;
+        this.dialogState = {
+          type: "led-history",
+          channel: Number(button.getAttribute("data-led-channel-history") || 1),
+        };
+        this.render();
+        window.requestAnimationFrame(() => {
+          const list = this.querySelector(".led-channel-history-list");
+          if (list) list.scrollTop = 0;
+        });
+      };
+      this.addEventListener("pointerdown", openLedChannelHistory, true);
+      this.addEventListener("click", openLedChannelHistory, true);
+    }
+    if (!this.__notificationDialogCaptureBound) {
+      this.__notificationDialogCaptureBound = true;
+      this.addEventListener("click", (ev) => {
+        const path = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+        const button = path.find((node) => {
+          if (!node || typeof node.getAttribute !== "function") return false;
+          const action = String(node.getAttribute("data-action") || "");
+          const notificationOpen = action === "led-notification-open" || action.startsWith("dialog:doser-notification:");
+          const notificationClose = action === "close-dialog"
+            && ["led-notification", "doser-notification"].includes(String(this.dialogState && this.dialogState.type));
+          return notificationOpen || notificationClose;
+        }) || (ev.target && typeof ev.target.closest === "function"
+          ? ev.target.closest('[data-action="led-notification-open"], [data-action^="dialog:doser-notification:"], [data-action="close-dialog"]')
+          : null);
+        if (!button) return;
+        const action = String(button.getAttribute("data-action") || "");
+        if (action === "close-dialog") {
+          if (!["led-notification", "doser-notification"].includes(String(this.dialogState && this.dialogState.type))) return;
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          this.closeDialogState();
+          return;
+        }
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const isDoser = action.startsWith("dialog:doser-notification:");
+        const channel = isDoser ? Number(action.split(":")[2] || 1) : 1;
+        this.openDialogState(isDoser ? "doser-notification" : "led-notification", channel, {
+          activeTab: isDoser ? "doser" : "led",
+        });
+      }, true);
+    }
+    window.setTimeout(() => {
+      if (typeof this.refreshDoserEntities === "function") this.refreshDoserEntities();
+    }, 750);
+  }
+
+  getCardSize() {
+    return 8;
+  }
+
+  language() {
+    const uiLanguage = String((this.uiSettings && this.uiSettings.language) || "").toLowerCase();
+    if (uiLanguage === "de" || uiLanguage === "en") return uiLanguage;
+    const configured = String(this.config.language || "").toLowerCase();
+    if (configured === "de" || configured === "en") return configured;
+    const hassLanguage = String(
+      (this._hass && this._hass.locale && this._hass.locale.language) ||
+      (this._hass && this._hass.language) ||
+      ""
+    ).toLowerCase();
+    const lang = configured || hassLanguage;
+    return lang.startsWith("en") ? "en" : "de";
+  }
+
+  enabledTabs() {
+    const tabs = Array.isArray(this.config.enabled_tabs) ? this.config.enabled_tabs : null;
+    const values = tabs ? tabs.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    return values.length ? values : ["led", "config"];
+  }
+
+  visibleTabs() {
+    const coreTabs = new Set(["led", "config"]);
+    return this.enabledTabs().filter((tab) => coreTabs.has(tab) || this.isPluginInstalled(tab) || this.isPluginLoaded(tab));
+  }
+
+  isTabEnabled(tab) {
+    const requested = String(tab || "");
+    if (!this.enabledTabs().includes(requested)) return false;
+    if (requested === "led" || requested === "config") return true;
+    return this.isPluginInstalled(requested) || this.isPluginLoaded(requested);
+  }
+
+  isPluginInstalled(plugin) {
+    const installed = Array.isArray(this.config.installed_plugins) ? this.config.installed_plugins : [];
+    return installed.includes(String(plugin || ""));
+  }
+
+  isPluginLoaded(plugin) {
+    return !!(window.ChihirosPlugins && window.ChihirosPlugins[String(plugin || "")]);
+  }
+
+  attachPluginMethods(kind) {
+    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[kind];
+    if (!plugin || typeof plugin.attach !== "function") return;
+    plugin.attach(this);
+    const lockedMethods = new Set(["dialog", "openDialog", "closeDialog", "renderPanel", "bindEvents", "attach"]);
+    lockedMethods.forEach((name) => {
+      if (Object.prototype.hasOwnProperty.call(this, name) && typeof window.ChihirosPlugins?.[kind]?.[name] === "function") {
+        delete this[name];
+      }
+    });
+  }
+
+  ensureEnabledTab(tab) {
+    const requested = String(tab || "");
+    if (requested && this.isTabEnabled(requested)) return requested;
+    return this.visibleTabs().find((item) => this.isTabEnabled(item)) || "led";
+  }
+
+  uiSettingsKey() {
+    return `chihiros-doser-card-v3:${String(this.deviceAddress || "default").toLowerCase()}:ui`;
+  }
+
+  loadUiSettings() {
+    const defaults = {
+      language: String(this.config.language || "").toLowerCase().startsWith("en") ? "en" : "de",
+      showMac: this.config.show_mac !== false,
+      dashboardDebug: false,
+      activeTab: "",
+      channelNames: {},
+      doserSafety: {
+        maxAutoMl: 50.0,
+        maxManualMl: 50.0,
+        maxDailyMl: 250.0,
+      },
+    };
+    try {
+      const raw = window.localStorage.getItem(this.uiSettingsKey());
+      if (!raw) return defaults;
+      const parsed = JSON.parse(raw);
+      return { ...defaults, ...parsed };
+    } catch (_err) {
+      return defaults;
+    }
+  }
+
+  saveUiSettings() {
+    try {
+      window.localStorage.setItem(this.uiSettingsKey(), JSON.stringify(this.uiSettings || {}));
+    } catch (_err) {
+      // Local storage can be unavailable in restricted browser modes.
+    }
+  }
+
+  applyChannelNames() {
+    const names = (this.uiSettings && this.uiSettings.channelNames) || {};
+    const baseChannels = Array.isArray(this.baseChannels) ? this.baseChannels : [];
+    this.channels = baseChannels.map((channel) => ({
+      ...channel,
+      name: String(names[channel.id] || channel.name || "").trim() || channel.name,
+    }));
+  }
+
+  tr(key) {
+    const dict = {
+      de: {
+        unknown: "Unbekannt",
+        press: "Drücken",
+        start: "Start",
+        change: "Ändern",
+        add: "Hinzufügen",
+        show: "Anzeigen",
+        edit: "Bearbeiten",
+        details: "Details",
+        close: "Schließen",
+        cancel: "Abbrechen",
+        apply: "Übernehmen",
+        save: "Speichern",
+        save_send: "Speichern und senden",
+        delete: "Löschen",
+        delete_send: "Löschen und senden",
+        delete_all: "Alle Zeitpläne auf Gerät löschen",
+        enable_auto_mode: "Auto-Modus aktivieren",
+        new: "Neu",
+        on: "an",
+        off: "aus",
+        auto_mode: "Auto Mode",
+        control: "Steuerung",
+        send_to_device: "An Gerät senden",
+        until: "bis",
+        template: "Vorlage",
+        template_name_prompt: "Name für Vorlage",
+        template_saved: "Template gespeichert",
+        template_deleted: "Vorlage gelöscht",
+        template_delete_blocked: "Nur lokale Vorlagen können im Dialog gelöscht werden.",
+        template_not_found: "Template nicht gefunden",
+        template_list: "Vorlagenliste",
+        template_count: "Vorlagen",
+        schedule_count: "Zeitpläne",
+        template_source: "Template-Quelle",
+        template_standard: "Standard",
+        template_local: "Lokal",
+        share: "Teilen",
+        share_template: "Template teilen",
+        target_device: "Zielgerät",
+        template_shared: "Template geteilt",
+        no_compatible_led: "Keine andere LED mit gleicher Kanalanzahl gefunden.",
+        share_schedule: "Zeitplan teilen",
+        schedule_shared: "Zeitplan geteilt",
+        send_to_device_now: "Direkt an Gerät senden",
+        start_time: "Startzeit",
+        end_time: "Endzeit",
+        switch_on: "Einschalten",
+        switch_off: "Ausschalten",
+        hours: "Stunden",
+        minutes: "Minuten",
+        all: "Alle",
+        run_weekdays: "An welchen Tagen ausführen",
+        sunrise_sunset: "Sonnenaufgang / Sonnenuntergang",
+        ramp_templates: "Ramp-Vorlagen",
+        minutes_0: "0 Minuten",
+        minutes_30: "30 Minuten",
+        hour_1_short: "1 Std",
+        hour_1: "1 Stunde",
+        hour_1_5_short: "1.5 Std",
+        hour_1_5: "1 Stunde 30 Minuten",
+        hour_2_short: "2 Std",
+        hour_2: "2 Stunden",
+        hour_2_5_short: "2.5 Std",
+        hour_2_5: "2 Stunden 30 Minuten",
+        red: "Rot",
+        green: "Grün",
+        blue: "Blau",
+        white: "Weiß",
+        color_channels: "Farbkanäle",
+        total: "Gesamt",
+        complete_lamp: "Lampe komplett",
+        complete_lamp_toggle: "Lampe komplett einschalten / ausschalten",
+        complete_lamp_on: "Lampe komplett einschalten",
+        complete_lamp_off: "Lampe komplett ausschalten",
+        led_scheduler: "LED Zeitplan",
+        led_schedule_summary_subtitle: "Zusammenfassung der aktiven Zeitfenster",
+        led_schedule_save_send: "LED Zeitplan speichern und senden",
+        led_schedule_save_local: "LED Zeitplan speichern",
+        led_schedule_saved: "Zeitplan gespeichert",
+        led_schedule_sent_action: "Zeitplan an Gerät gesendet",
+        led_schedule_sent: "an Gerät gesendet",
+        led_schedule_not_sent: "lokal gespeichert, nicht gesendet",
+        led_schedule_rows: "Zeitplan-Zeilen",
+        schedule_sent: "Zeitplan gesendet",
+        schedules_sent: "Zeitpläne gesendet",
+        schedule_deleted: "Zeitplan gelöscht",
+        schedules_deleted: "Zeitpläne gelöscht",
+        schedule_local_deleted: "Zeitplan lokal gelöscht",
+        schedules_device_deleted_local_kept: "Alle Zeitpläne am Gerät gelöscht; lokale Daten unverändert",
+        led_set: "LED gesetzt",
+        all_days: "Alle Tage",
+        channels: "Kanäle",
+        brightness_changed: "Helligkeit geändert",
+        channel_switched_off: "Kanal ausgeschaltet",
+        sending: "Senden läuft...",
+        saving: "Speichern läuft...",
+        local_save_failed: "Lokales Speichern fehlgeschlagen",
+        send_failed: "Senden fehlgeschlagen",
+        service_unavailable: "Service nicht verfügbar",
+        led_set_failed: "LED konnte nicht gesetzt werden",
+        notification_fetch: "Gerätemeldungen abrufen",
+        notification_fetch_none: "Keine Geräteantwort empfangen",
+        notification_fetch_received: "Geräterückmeldungen empfangen",
+        notification_fetch_unauthorized: "BLE-Zugriff abgelehnt. Andere Bluetooth-Verbindungen zum Gerät trennen.",
+        no_led_channels: "Keine Chihiros-LED-Kanäle gefunden",
+        reply: "Antwort",
+        reply_sent: "an Gerät gesendet",
+        reply_local: "nur lokal gespeichert",
+        running: "LÄUFT",
+        last_notification: "Letzte Meldung",
+        fetched_at: "Geholt um",
+        notification_type: "Meldungstyp",
+        raw_frame: "Rohframe",
+        decode: "Dekodierung",
+        encode_hex: "Encode / Hex",
+        parameters: "Parameter",
+        message_id: "Message-ID",
+        checksum: "Prüfsumme",
+        direction: "Richtung",
+        command: "Befehl",
+        length: "Länge",
+        meaning: "Bedeutung",
+        verified: "Geprüft",
+        schedule_verification: "Zeitplan geprüft",
+        schedule_verification_ok: "Gerätezeitplan stimmt überein",
+        schedule_verification_failed: "Gerätezeitplan weicht ab",
+        check_short: "OK",
+        mismatch: "Abweichung",
+        not_checked: "Nicht geprüft",
+        schedule_count: "Zeitpläne",
+        firmware: "Firmware",
+        runtime: "Laufzeit",
+        runtime_day: "Tag",
+        runtime_days: "Tage",
+        runtime_hour_short: "Std.",
+        runtime_minute_short: "Min.",
+        schedule_sensor: "Zeitplan-Sensor",
+        no_schedule_read: "Kein Zeitplan gelesen",
+        led_manual_schedule_warning: "Manuelle Steuerung ist aktiv. Automatikmodus wieder aktivieren, bevor automatische Zeitpläne ausgeführt werden.",
+        max_value: "Max",
+        max_range: "Bereich",
+        current_plan: "Aktueller Plan",
+        device: "Gerät",
+        led: "LED",
+        doser: "Doser",
+        ruehrer: "Rührer",
+        heizer: "Heizer",
+        config: "Config",
+        display: "Anzeige",
+        language_label: "Sprache",
+        language_de: "Deutsch",
+        language_en: "Englisch",
+        show_mac: "MAC-Adresse anzeigen",
+        channel_names: "Kanalnamen",
+        database: "Datenbank",
+        database_subtitle: "Quelle für Add-on-Dashboard und Tageswerte",
+        own_database: "Eigene DB",
+        active_sqlite: "Aktive SQLite",
+        database_diagnostics: "DB-Diagnose",
+        database_diagnostics_hint: "Gespeicherte LED-Zeitpläne und offene Prüfaufträge anzeigen",
+        database_status: "Scheduler-Datenbankstatus",
+        database_open: "Geöffnet",
+        database_closed: "Nicht geöffnet",
+        database_stored_schedules: "Gespeicherte Zeitpläne",
+        database_verification_jobs: "Offene Zeitplanprüfungen",
+        database_request: "Abfrage",
+        database_no_rows: "Kein Ergebnis für dieses Gerät.",
+        database_result: "Ergebnis",
+        loading: "Wird geladen...",
+        inactive: "Inaktiv",
+        failed: "Fehlgeschlagen",
+        database_column_position: "Nr.",
+        database_column_time_window: "Zeit",
+        database_column_levels: "Kanäle",
+        database_column_ramp_minutes: "Rampe",
+        database_column_active: "Aktiv",
+        database_column_verification: "Prüfung",
+        database_column_verified_at: "Geprüft am",
+        database_column_target: "Zielzeitplan",
+        database_column_restore_rows: "Wiederherstellung",
+        database_column_due_at: "Fällig",
+        database_column_created_at: "Erstellt",
+        database_file: "Datei",
+        database_size: "Größe",
+        database_rows: "Zeilen",
+        database_parameters: "Parameter",
+        error: "Fehler",
+        reload: "Neu laden",
+        command_copied: "Befehl kopiert",
+        no_entities: "Keine passenden Home-Assistant-Entities gefunden.",
+        fetch_data: "Daten holen",
+        read_daily: "Tageswerte lesen",
+        catch_up: "Nachholen",
+        catch_up_edit: "Nachholen bearbeiten",
+        catch_up_timer_status: "Nächster Nachhol-Lauf",
+        status: "Status",
+        calibrate: "Kalibrieren",
+        calibrate_channel: "kalibrieren",
+        next: "Weiter",
+        step_label: "Schritt",
+        manual: "Manuell",
+        automatic: "Automatisch",
+        daily_amounts: "Tagesmengen",
+        container: "Behälter",
+        container_volume: "Behältervolumen",
+        active: "Aktiv",
+        today: "Heute",
+        time: "Zeit",
+        planned_amount: "Planmenge",
+        history: "Historie",
+        history_total: "Historie gesamt",
+        history_filter: "Filter",
+        history_type: "Art",
+        history_type_scheduler: "Scheduler",
+        history_type_device: "Geräteinformation",
+        history_type_control: "Steuerung",
+        history_type_calibration: "Kalibrierung",
+        history_type_settings: "Einstellungen",
+        history_type_other: "Sonstige",
+        led_no_history: "Noch keine LED-Aktionen gespeichert",
+        no_history: "Noch keine Doser-Aktionen gespeichert",
+        dose: "Dosieren",
+        dose_now: "Direkt dosieren",
+        schedule_title: "Doser Zeitplan",
+        channel: "Kanal",
+        schedule: "Zeitplan",
+        scheduler: "Scheduler",
+        amount: "Menge",
+        weekdays: "Wochentage",
+        actions: "Aktionen",
+        single_dose: "Einzeldosis",
+        interval: "Intervall",
+        interval_minutes: "Intervall Minuten",
+        timer_list: "Timerliste",
+        timer_add: "Einzeldosierung hinzufügen",
+        timer_remove: "Entfernen",
+        timer_time: "Uhrzeit",
+        timer_amount: "Einzelmenge",
+        timer_hint: "Bis zu 24 Einzeldosierungen; mindestens 10 Minuten Abstand.",
+        timer_count_error: "Timerlisten brauchen 1 bis 24 Einzeldosierungen.",
+        timer_gap_error: "Zwischen Einzeldosierungen müssen mindestens 10 Minuten liegen.",
+        time_window: "Benutzerdefiniert",
+        custom_schedule: "Benutzerdefiniert",
+        window_daily_amount: "Tagesdosierung gesamt",
+        window_hint: "Insgesamt höchstens 24 Dosierungen; innerhalb eines Zeitfensters höchstens 30 Minuten Abstand.",
+        window_total_doses: "Dosierungen gesamt",
+        window_start: "Von",
+        window_end: "Bis",
+        window_doses: "Dosierungen",
+        window_add: "Zeitfenster hinzufügen",
+        window_count_error: "Mindestens ein Zeitfenster und insgesamt höchstens 24 Dosierungen angeben.",
+        window_gap_error: "Innerhalb eines Zeitfensters dürfen zwischen Dosierungen höchstens 30 Minuten liegen.",
+        everyday: "täglich",
+        every_day: "Jeden Tag",
+        reset: "Zurücksetzen",
+        reset_schedule: "Zeitplan zurücksetzen",
+        reset_schedule_question: "Soll der Zeitplan für diesen Kanal wirklich zurückgesetzt werden?",
+        reset_schedule_effect: "Dabei wird der Scheduler für diesen Kanal am Gerät deaktiviert und lokal gelöscht. Der Sendestatus wird in der Datenbank gespeichert.",
+        led_reset_schedule_question: "Soll der LED-Zeitplan wirklich gelöscht und an das Gerät gesendet werden?",
+        led_reset_schedule_effect: "Der aktuelle LED-Zeitplan wird am Gerät zurückgesetzt. Diese Aktion kann nicht automatisch rückgängig gemacht werden.",
+        led_reset_device_question: "Alle Zeitpläne nur am Gerät löschen?",
+        led_reset_device_effect: "Die lokal gespeicherten Zeitpläne bleiben unverändert.",
+        reset_schedule_yes: "Ja, zurücksetzen",
+        reset_schedule_no: "Nein, behalten",
+        valid_from_tomorrow: "Plan gültig ab morgen",
+        valid_from_tomorrow_note: "Sendet den Zeitplan mit App-Flag mode27[3]=1. Nutzen, wenn der Kanal heute bereits automatisch dosiert hat.",
+        auto_limit_reached: "Automatik Limit erreicht",
+        auto_limit_reached_note: "Zeitplan wird als gültig ab morgen gesendet.",
+        settings: "Schutz & Einstellungen",
+        overdose: "Überdosierungsschutz",
+        auto_limit: "Automatisch Limit",
+        manual_limit: "Manuell Limit pro Kanal",
+        daily_limit: "Tagesmenge Limit",
+        manual_limit_note: "0.00 mL sperrt manuelle Dosierung komplett.",
+        safety_edit: "Überdosierungsschutz bearbeiten",
+        max_auto_ml: "Automatisch Limit",
+        max_manual_ml: "Manuell Limit pro Kanal",
+        max_daily_ml: "Maximale Tagesdosis",
+        auto_fill: "Automatisch befüllen",
+        threshold: "Schwellwert",
+        low_container_push: "Push bei niedrigem Behälter",
+        auto_fill_edit: "Automatisches Befüllen bearbeiten",
+        push_targets: "Push-Geräte",
+        push_target_1: "Push-Gerät 1",
+        push_target_2: "Push-Gerät 2",
+        push_target_3: "Push-Gerät 3",
+        no_push_target: "Kein Zusatzgerät",
+        push_message: "Push-Nachricht",
+        push_message_hint: "Platzhalter: {ch}, {channel}, {device}, {remaining}, {threshold}",
+        push_message_default: "{ch} {channel}: nur noch {remaining} mL im Behälter. Schwellwert: {threshold} mL.",
+        connection: "Verbindung",
+        device: "Gerät",
+        model: "Modell",
+        source: "Quelle",
+        ble_on_action: "bei Aktion",
+        presets: "Voreinstellungen",
+        online: "Online",
+        offline: "Offline",
+        prepare: "Vorbereiten",
+        prepare_text: "Schlauch vollständig mit Flüssigkeit füllen.",
+        hose_fill: "Schlauch spülen / befüllen",
+        hose_fill_hint: "Pumpe läuft für die gewählte Dauer und wird danach automatisch gestoppt.",
+        measure_prepare_text: "Messzylinder an das Ende des Dosierschlauchs stellen und danach „Kalibrierung starten“ drücken.",
+        start_measure: "Kalibrierung starten",
+        start_measure_hint: "Es werden ungefähr 2–4 mL dosiert. Der Vorgang kann bis zu 5 Sekunden dauern.",
+        doser_app_connection_busy: "Das Doser-Gerät ist wahrscheinlich noch mit der Chihiros-App verbunden. Verbindung in der App trennen oder die App vollständig schließen. Danach die Chihiros-Integration neu laden beziehungsweise Home Assistant neu starten und erneut versuchen.",
+        fill_duration: "Spüldauer in Sekunden",
+        start_sequence: "Startsequenz senden",
+        start_sequence_text: "Pumpe laufen lassen, bis die Kalibrier-Menge im Messbecher ist.",
+        measured_save: "Exakte Menge eingeben",
+        measure_exact_hint: "Messzylinder auf eine ebene Fläche stellen, die exakte Menge ablesen und den Wert auf 0,05 mL genau eingeben.",
+        measured_amount: "Gemessene Menge in mL",
+        optional_check: "Optional prüfen",
+        send_test: "Danach Testdosierung senden",
+        test_amount: "Testmenge in mL",
+        save_calibration: "Kalibrierwert speichern",
+        calibration_failed: "Kalibrierung fehlgeschlagen",
+        enter_measured: "Bitte die gemessene Menge eintragen.",
+        calibration_last: "Letzte Kalibrierung",
+        calibration_not_recorded: "Noch nicht gespeichert",
+        calibration_reminder_days: "Erneut erinnern in Tagen",
+        calibration_reminder_at: "Erneuern am",
+        calibration_test_prepare: "Messzylinder vollständig leeren und trocknen. Danach die 4-ml-Prüfdosierung starten.",
+        calibration_test_dose: "4 ml dosieren",
+        calibration_test_question: "Wurden genau 4 ml dosiert? (zwischen 3,95 und 4,05 ml)",
+        calibration_test_yes: "Ja, weiter",
+        calibration_test_retry: "Nein, neu kalibrieren",
+        calibration_completed: "Kalibrierung abgeschlossen",
+        calibration_summary_measured: "Gemessene Kalibriermenge",
+        calibration_summary_test: "Prüfdosierung bestätigt",
+        calibration_summary_date: "Kalibriert am",
+        calibration_summary_reminder: "Erneut kalibrieren am",
+        schedule_edit: "Zeitplan bearbeiten",
+        debug_output: "Debug Ausgabe",
+        result_output: "Rückmeldung",
+        debug_capture: "Debug-Ausgabe anzeigen",
+        debug_output_short: "Debug ausgeben",
+        dashboard_debug: "Dashboard-Debug für Einzelaktionen",
+        dashboard_debug_hint: "Zeigt bei einzelnen Geräteaktionen ein Debug-Fenster mit HA-Aufruf, Payload und Protokolldaten.",
+        debug_sending: "Sende Zeitplan an das Gerät...",
+        debug_empty: "Keine Debug-Ausgabe zurückgegeben.",
+        led_schedule_time_invalid: "Ungültiges Zeitfenster",
+        led_schedule_time_conflict: "Zeitfenster überschneidet vorhandenen Eintrag",
+        led_schedule_time_conflict_detail: "Bitte Zeiten so ändern, dass sich keine Bereiche überlappen.",
+        container_edit: "Behälter bearbeiten",
+        manual_dose: "Manuell dosieren",
+        manual_blocked: "Manuell gesperrt",
+        mode: "Modus",
+        next_time: "Nächste Zeit",
+        auto_today: "Automatisch heute",
+        manual_today: "Manuell heute",
+        today_total: "Heute gesamt",
+      },
+      en: {
+        unknown: "Unknown",
+        press: "Press",
+        start: "Start",
+        change: "Change",
+        add: "Add",
+        show: "Show",
+        edit: "Edit",
+        details: "Details",
+        close: "Close",
+        cancel: "Cancel",
+        apply: "Apply",
+        save: "Save",
+        save_send: "Save and send",
+        delete: "Delete",
+        delete_send: "Delete and send",
+        delete_all: "Delete all schedules on device",
+        enable_auto_mode: "Enable auto mode",
+        new: "New",
+        on: "on",
+        off: "off",
+        auto_mode: "Auto Mode",
+        control: "Control",
+        send_to_device: "Send to device",
+        until: "to",
+        template: "Template",
+        template_name_prompt: "Template name",
+        template_saved: "Template saved",
+        template_deleted: "Template deleted",
+        template_delete_blocked: "Only local templates can be deleted in the dialog.",
+        template_not_found: "Template not found",
+        template_list: "Template list",
+        template_count: "templates",
+        schedule_count: "schedules",
+        template_source: "Template source",
+        template_standard: "Standard",
+        template_local: "Local",
+        share: "Share",
+        share_template: "Share template",
+        target_device: "Target device",
+        template_shared: "Template shared",
+        no_compatible_led: "No other LED with the same number of channels was found.",
+        share_schedule: "Share schedule",
+        schedule_shared: "Schedule shared",
+        send_to_device_now: "Send directly to device",
+        start_time: "Start time",
+        end_time: "End time",
+        switch_on: "Turn on",
+        switch_off: "Turn off",
+        hours: "Hours",
+        minutes: "Minutes",
+        all: "All",
+        run_weekdays: "Run on days",
+        sunrise_sunset: "Sunrise / sunset",
+        ramp_templates: "Ramp presets",
+        minutes_0: "0 minutes",
+        minutes_30: "30 minutes",
+        hour_1_short: "1 h",
+        hour_1: "1 hour",
+        hour_1_5_short: "1.5 h",
+        hour_1_5: "1 hour 30 minutes",
+        hour_2_short: "2 h",
+        hour_2: "2 hours",
+        hour_2_5_short: "2.5 h",
+        hour_2_5: "2 hours 30 minutes",
+        red: "Red",
+        green: "Green",
+        blue: "Blue",
+        white: "White",
+        color_channels: "Color channels",
+        total: "Total",
+        complete_lamp: "Complete lamp",
+        complete_lamp_toggle: "Turn complete lamp on / off",
+        complete_lamp_on: "Turn complete lamp on",
+        complete_lamp_off: "Turn complete lamp off",
+        led_scheduler: "LED Scheduler",
+        led_schedule_summary_subtitle: "Summary of active time windows",
+        led_schedule_save_send: "Save and send LED schedule",
+        led_schedule_save_local: "Save LED schedule",
+        led_schedule_saved: "Schedule saved",
+        led_schedule_sent_action: "Schedule sent to device",
+        led_schedule_sent: "sent to device",
+        led_schedule_not_sent: "saved locally, not sent",
+        led_schedule_rows: "schedule rows",
+        schedule_sent: "Schedule sent",
+        schedules_sent: "Schedules sent",
+        schedule_deleted: "Schedule deleted",
+        schedules_deleted: "Schedules deleted",
+        schedule_local_deleted: "Schedule deleted locally",
+        schedules_device_deleted_local_kept: "All schedules deleted from device; local data unchanged",
+        led_set: "LED set",
+        all_days: "Every day",
+        channels: "Channels",
+        brightness_changed: "Brightness changed",
+        channel_switched_off: "Channel switched off",
+        sending: "Sending...",
+        saving: "Saving...",
+        local_save_failed: "Saving locally failed",
+        send_failed: "Sending failed",
+        service_unavailable: "Service unavailable",
+        led_set_failed: "LED could not be set",
+        notification_fetch: "Fetch device notifications",
+        notification_fetch_none: "No device notification received",
+        notification_fetch_received: "device notifications received",
+        notification_fetch_unauthorized: "BLE access rejected. Disconnect other Bluetooth connections to the device.",
+        no_led_channels: "No Chihiros LED channels found",
+        reply: "Response",
+        reply_sent: "sent to device",
+        reply_local: "saved locally only",
+        running: "RUNNING",
+        last_notification: "Last notification",
+        fetched_at: "Fetched at",
+        notification_type: "Notification type",
+        raw_frame: "Raw frame",
+        decode: "Decode",
+        encode_hex: "Encode / Hex",
+        parameters: "Parameters",
+        message_id: "Message ID",
+        checksum: "Checksum",
+        direction: "Direction",
+        command: "Command",
+        length: "Length",
+        meaning: "Meaning",
+        verified: "Verified",
+        schedule_verification: "Schedule verified",
+        schedule_verification_ok: "Device schedule matches",
+        schedule_verification_failed: "Device schedule differs",
+        check_short: "OK",
+        mismatch: "Mismatch",
+        not_checked: "Not checked",
+        schedule_count: "Schedules",
+        firmware: "Firmware",
+        runtime: "Runtime",
+        runtime_day: "day",
+        runtime_days: "days",
+        runtime_hour_short: "hr",
+        runtime_minute_short: "min",
+        schedule_sensor: "Schedule sensor",
+        no_schedule_read: "No schedule read",
+        led_manual_schedule_warning: "Manual control is active. Enable automatic mode again before automatic schedules can run.",
+        max_value: "Max",
+        max_range: "Range",
+        current_plan: "Current plan",
+        device: "Device",
+        led: "LED",
+        doser: "Doser",
+        ruehrer: "Stirrer",
+        heizer: "Heater",
+        config: "Config",
+        display: "Display",
+        language_label: "Language",
+        language_de: "German",
+        language_en: "English",
+        show_mac: "Show MAC address",
+        channel_names: "Channel names",
+        database: "Database",
+        database_subtitle: "Source for add-on dashboard and daily values",
+        own_database: "Own DB",
+        active_sqlite: "Active SQLite",
+        database_diagnostics: "DB diagnostics",
+        database_diagnostics_hint: "Show stored LED schedules and pending verification jobs",
+        database_status: "Scheduler database status",
+        database_open: "Open",
+        database_closed: "Not open",
+        database_stored_schedules: "Stored schedules",
+        database_verification_jobs: "Pending schedule verifications",
+        database_request: "Request",
+        database_no_rows: "No result for this device.",
+        database_result: "Result",
+        loading: "Loading...",
+        inactive: "Inactive",
+        failed: "Failed",
+        database_column_position: "No.",
+        database_column_time_window: "Time",
+        database_column_levels: "Channels",
+        database_column_ramp_minutes: "Ramp",
+        database_column_active: "Active",
+        database_column_verification: "Verification",
+        database_column_verified_at: "Verified at",
+        database_column_target: "Target schedule",
+        database_column_restore_rows: "Restore rows",
+        database_column_due_at: "Due",
+        database_column_created_at: "Created",
+        database_file: "File",
+        database_size: "Size",
+        database_rows: "Rows",
+        database_parameters: "Parameters",
+        error: "Error",
+        reload: "Reload",
+        command_copied: "Command copied",
+        no_entities: "No matching Home Assistant entities found.",
+        fetch_data: "Fetch data",
+        read_daily: "Read daily values",
+        catch_up: "Catch-up",
+        catch_up_edit: "Edit catch-up",
+        catch_up_timer_status: "Next catch-up run",
+        status: "Status",
+        calibrate: "Calibrate",
+        calibrate_channel: "calibrate",
+        next: "Next",
+        step_label: "Step",
+        manual: "Manual",
+        automatic: "Automatic",
+        daily_amounts: "Daily amounts",
+        container: "Container",
+        container_volume: "Container volume",
+        active: "Active",
+        today: "Today",
+        time: "Time",
+        planned_amount: "Planned amount",
+        history: "History",
+        history_total: "Full history",
+        history_filter: "Filter",
+        history_type: "Type",
+        history_type_scheduler: "Scheduler",
+        history_type_device: "Device information",
+        history_type_control: "Control",
+        history_type_calibration: "Calibration",
+        history_type_settings: "Settings",
+        history_type_other: "Other",
+        led_no_history: "No LED actions saved yet",
+        no_history: "No doser actions saved yet",
+        dose: "Dose",
+        dose_now: "Dose now",
+        schedule_title: "Doser schedule",
+        channel: "Channel",
+        schedule: "Schedule",
+        scheduler: "Scheduler",
+        amount: "Amount",
+        weekdays: "Weekdays",
+        actions: "Actions",
+        single_dose: "Single dose",
+        interval: "Interval",
+        interval_minutes: "Interval minutes",
+        timer_list: "Timer list",
+        timer_add: "Add single dose",
+        timer_remove: "Remove",
+        timer_time: "Time",
+        timer_amount: "Dose amount",
+        timer_hint: "Up to 24 single doses with at least 10 minutes between them.",
+        timer_count_error: "Timer lists need 1 to 24 single doses.",
+        timer_gap_error: "Single doses must be at least 10 minutes apart.",
+        time_window: "Custom",
+        custom_schedule: "Custom",
+        window_daily_amount: "Total daily dose",
+        window_hint: "Up to 24 doses in total and no more than 30 minutes between doses within a window.",
+        window_total_doses: "Total doses",
+        window_start: "From",
+        window_end: "To",
+        window_doses: "Doses",
+        window_add: "Add time window",
+        window_count_error: "Enter at least one time window and no more than 24 doses in total.",
+        window_gap_error: "Doses within a time window must be no more than 30 minutes apart.",
+        everyday: "daily",
+        every_day: "Every day",
+        reset: "Reset",
+        reset_schedule: "Reset schedule",
+        reset_schedule_question: "Do you really want to reset the schedule for this channel?",
+        reset_schedule_effect: "This disables the scheduler for this channel on the device and removes it locally. The send status is stored in the database.",
+        led_reset_schedule_question: "Do you really want to delete the LED schedule and send the reset to the device?",
+        led_reset_schedule_effect: "The current LED schedule will be reset on the device. This action cannot be automatically undone.",
+        led_reset_device_question: "Delete all schedules from the device only?",
+        led_reset_device_effect: "Locally stored schedules remain unchanged.",
+        reset_schedule_yes: "Yes, reset",
+        reset_schedule_no: "No, keep it",
+        valid_from_tomorrow: "Plan valid from tomorrow",
+        valid_from_tomorrow_note: "Sends the schedule with app flag mode27[3]=1. Use this when the channel already dosed automatically today.",
+        auto_limit_reached: "Automatic limit reached",
+        auto_limit_reached_note: "Schedule will be sent as valid from tomorrow.",
+        settings: "Protection & settings",
+        overdose: "Overdose protection",
+        auto_limit: "Automatic limit",
+        manual_limit: "Manual limit per channel",
+        daily_limit: "Daily limit",
+        manual_limit_note: "0.00 mL blocks manual dosing completely.",
+        safety_edit: "Edit overdose protection",
+        max_auto_ml: "Automatic limit",
+        max_manual_ml: "Manual limit per channel",
+        max_daily_ml: "Max daily dose",
+        auto_fill: "Auto refill",
+        threshold: "Threshold",
+        low_container_push: "Low container push",
+        auto_fill_edit: "Edit auto refill",
+        push_targets: "Push devices",
+        push_target_1: "Push device 1",
+        push_target_2: "Push device 2",
+        push_target_3: "Push device 3",
+        no_push_target: "No extra device",
+        push_message: "Push message",
+        push_message_hint: "Placeholders: {ch}, {channel}, {device}, {remaining}, {threshold}",
+        push_message_default: "{ch} {channel}: only {remaining} mL left in the container. Threshold: {threshold} mL.",
+        connection: "Connection",
+        device: "Device",
+        model: "Model",
+        source: "Source",
+        ble_on_action: "on action",
+        presets: "Presets",
+        online: "Online",
+        offline: "Offline",
+        prepare: "Prepare",
+        prepare_text: "Fill the tube completely with liquid.",
+        hose_fill: "Flush / fill hose",
+        hose_fill_hint: "The pump runs for the selected duration and then stops automatically.",
+        measure_prepare_text: "Place the measuring cylinder at the end of the dosing tube, then press Start calibration.",
+        start_measure: "Start calibration",
+        start_measure_hint: "Approximately 2–4 mL are dispensed. This process can take up to 5 seconds.",
+        doser_app_connection_busy: "The dosing pump is probably still connected to the Chihiros app. Disconnect it in the app or close the app completely. Then reload the Chihiros integration or restart Home Assistant and try again.",
+        fill_duration: "Fill duration in seconds",
+        start_sequence: "Send start sequence",
+        start_sequence_text: "Run the pump until the calibration amount is in the measuring cup.",
+        measured_save: "Enter exact amount",
+        measure_exact_hint: "Place the measuring cylinder on a level surface, read the exact amount, and enter the value to the nearest 0.05 mL.",
+        measured_amount: "Measured amount in mL",
+        optional_check: "Optional check",
+        send_test: "Send test dose afterwards",
+        test_amount: "Test amount in mL",
+        save_calibration: "Save calibration value",
+        calibration_failed: "Calibration failed",
+        enter_measured: "Enter the measured amount.",
+        calibration_last: "Last calibration",
+        calibration_not_recorded: "Not stored yet",
+        calibration_reminder_days: "Remind again in days",
+        calibration_reminder_at: "Renew on",
+        calibration_test_prepare: "Empty and dry the measuring cylinder completely. Then start the 4 mL test dose.",
+        calibration_test_dose: "Dose 4 mL",
+        calibration_test_question: "Were exactly 4 mL dispensed? (between 3.95 and 4.05 mL)",
+        calibration_test_yes: "Yes, continue",
+        calibration_test_retry: "No, recalibrate",
+        calibration_completed: "Calibration completed",
+        calibration_summary_measured: "Measured calibration amount",
+        calibration_summary_test: "Test dose confirmed",
+        calibration_summary_date: "Calibrated on",
+        calibration_summary_reminder: "Recalibrate on",
+        schedule_edit: "Edit schedule",
+        debug_output: "Debug output",
+        result_output: "Response",
+        debug_capture: "Show debug output",
+        debug_output_short: "Output debug",
+        dashboard_debug: "Dashboard debug for single actions",
+        dashboard_debug_hint: "Shows a debug window with the HA action, payload, and protocol data for individual device actions.",
+        debug_sending: "Sending schedule to device...",
+        debug_empty: "No debug output returned.",
+        led_schedule_time_invalid: "Invalid time window",
+        led_schedule_time_conflict: "Time window overlaps an existing entry",
+        led_schedule_time_conflict_detail: "Please change the times so no ranges overlap.",
+        container_edit: "Edit container",
+        manual_dose: "Manual dose",
+        manual_blocked: "Manual blocked",
+        mode: "Mode",
+        next_time: "Next time",
+        auto_today: "Automatic today",
+        manual_today: "Manual today",
+        today_total: "Today total",
+      },
+    };
+    const lang = this.language();
+    return (dict[lang] && dict[lang][key]) || dict.de[key] || key;
+  }
+
+  channelSlug(ch) {
+    const channel = this.baseChannels.find((item) => item.id === Number(ch));
+    const name = channel ? channel.name : "";
+    const suffix = name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+    return suffix ? `ch${ch}_${suffix}` : `ch${ch}`;
+  }
+
+  entityMap() {
+    if (this.activeDoserDevice && this.activeDoserDevice.entities) return this.activeDoserDevice.entities;
+    return this.config.entities || {};
+  }
+
+  entityPrefix() {
+    return String(
+      (this.activeDoserDevice && this.activeDoserDevice.entity_prefix) ||
+      this.config.entity_prefix ||
+      ""
+    ).toLowerCase();
+  }
+
+  entity(prefix, ch, suffix) {
+    const map = this.entityMap();
+    const key = `${prefix}${ch}_${suffix}`;
+    if (map[key]) return map[key];
+    const mac = this.entityPrefix();
+    if (prefix === "sensor") return `sensor.${mac}_${this.channelSlug(ch)}_${suffix}`;
+    return "";
+  }
+
+  entities(ch) {
+    const map = this.entityMap();
+    const mac = this.entityPrefix();
+    const slug = this.channelSlug(ch);
+    return {
+      daily: this.entity("sensor", ch, "daily_dose"),
+      autoDaily: this.entity("sensor", ch, "auto_daily_dose"),
+      manualDaily: this.entity("sensor", ch, "manual_daily_dose"),
+      remainingSensor: this.entity("sensor", ch, "remaining"),
+      scheduleTimeSensor: this.entity("sensor", ch, "schedule_time"),
+      scheduleDoseSensor: this.entity("sensor", ch, "schedule_amount"),
+      calibrationSensor: this.entity("sensor", ch, "calibration"),
+      active: map[`switch${ch}_active`] || `switch.${mac}_${slug}_schedule_active`,
+      scheduleDose: map[`number${ch}_schedule_amount`] || `number.${mac}_${slug}_schedule_amount`,
+      remaining: map[`number${ch}_remaining`] || `number.${mac}_${slug}_remaining_volume`,
+      manual: map[`number${ch}_manual`] || `number.${mac}_pump_${ch}_dose_volume`,
+      doseNow: map[`button${ch}_dose_now`] || `button.${mac}_dose_pump_${ch}`,
+      reset: map[`button${ch}_reset`] || `button.${mac}_${slug}_reset_schedule`,
+      calibrate: map[`button${ch}_calibrate`] || `button.${mac}_${slug}_start_calibration`,
+    };
+  }
+
+  historyEntity() {
+    const map = this.entityMap();
+    const mac = this.entityPrefix();
+    return map.history || `sensor.${mac}_doser_history`;
+  }
+
+  timerStatusEntity() {
+    const map = this.entityMap();
+    const mac = this.entityPrefix();
+    return map.timer_status || `sensor.${mac}_doser_timer_status`;
+  }
+
+  lowContainerNotificationSwitch() {
+    const map = this.entityMap();
+    const mac = this.entityPrefix();
+    return map.low_container_notification || `switch.${mac}_low_container_notification`;
+  }
+
+  lowContainerPushSettings() {
+    const entity = this.historyEntity();
+    const attrs = this._hass && this._hass.states[entity] ? this._hass.states[entity].attributes : {};
+    const targets = Array.isArray(attrs.low_container_push_targets) ? attrs.low_container_push_targets : [];
+    return {
+      enabled: typeof attrs.low_container_push_enabled === "boolean" ? attrs.low_container_push_enabled : this.isOn(this.lowContainerNotificationSwitch()),
+      targets: targets.map((target) => String(target || "").replace(/^notify\./, "")).filter(Boolean).slice(0, 3),
+      message: String(attrs.low_container_push_message || this.tr("push_message_default")),
+    };
+  }
+
+  notifyServices() {
+    const services = this._hass && this._hass.services && this._hass.services.notify ? this._hass.services.notify : {};
+    return Object.keys(services)
+      .filter((service) => service && service !== "persistent_notification")
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  notifyOptions(selected = "") {
+    const services = this.notifyServices();
+    const value = String(selected || "").replace(/^notify\./, "");
+    if (value && !services.includes(value)) services.unshift(value);
+    return [
+      `<option value="">${this.tr("no_push_target")}</option>`,
+      ...services.map((service) => `<option value="${this.escapeHtml(service)}" ${service === value ? "selected" : ""}>notify.${this.escapeHtml(service)}</option>`),
+    ].join("");
+  }
+
+  state(entity) {
+    if (!entity || !this._hass || !this._hass.states[entity]) return this.tr("unknown");
+    const obj = this._hass.states[entity];
+    if (obj.state === "unknown" || obj.state === "unavailable") return this.tr("unknown");
+    const unit = obj.attributes.unit_of_measurement || "";
+    return unit ? `${obj.state} ${unit}` : obj.state;
+  }
+
+  stateFallback(entity, fallbackEntity, fallbackText = "0.0 mL") {
+    const value = this.state(entity);
+    if (value !== this.tr("unknown")) return value;
+    if (fallbackEntity) {
+      const fallback = this.state(fallbackEntity);
+      if (fallback !== this.tr("unknown")) return fallback;
+    }
+    return fallbackText;
+  }
+
+  numericState(entity, fallback = "1.0") {
+    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
+    const value = Number.parseFloat(this._hass.states[entity].state);
+    return Number.isFinite(value) ? value.toFixed(1) : fallback;
+  }
+
+  numericValue(entity, fallback = 0) {
+    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
+    const value = Number.parseFloat(this._hass.states[entity].state);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  autoLimitReached(e) {
+    const safety = this.doserSafetySettings();
+    return this.numericValue(e.autoDaily, 0) >= safety.maxAutoMl;
+  }
+
+  rawState(entity, fallback = "") {
+    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
+    const value = this._hass.states[entity].state;
+    if (value === "unknown" || value === "unavailable") return fallback;
+    return value;
+  }
+
+  stateAttr(entity, attr, fallback = "") {
+    if (!entity || !this._hass || !this._hass.states[entity]) return fallback;
+    const value = this._hass.states[entity].attributes[attr];
+    if (value === undefined || value === null || value === "") return fallback;
+    return String(value);
+  }
+
+  scheduleKindFromId(timeEntity) {
+    const typeId = Number.parseInt(this.stateAttr(timeEntity, "schedule_type_id", "1"), 10);
+    const kinds = {
+      1: "single_dose",
+      2: "interval",
+      3: "timer",
+      4: "window",
+    };
+    return kinds[typeId] || "single_dose";
+  }
+
+  scheduleKindLabel(timeEntity) {
+    const value = this.scheduleKindFromId(timeEntity);
+    const labels = {
+      single_dose: this.tr("single_dose"),
+      interval: this.tr("interval"),
+      timer: this.tr("timer_list"),
+      window: this.tr("time_window"),
+    };
+    return labels[value] || value || this.tr("single_dose");
+  }
+
+  setNumber(entity, value) {
+    const number = Number.parseFloat(value);
+    if (!entity || !this._hass || !Number.isFinite(number)) return;
+    this._hass.callService("number", "set_value", { entity_id: entity, value: number });
+  }
+
+  isOn(entity) {
+    return this._hass && this._hass.states[entity] && this._hass.states[entity].state === "on";
+  }
+
+  press(entity) {
+    if (!entity || !this._hass) return;
+    const [domain] = entity.split(".");
+    if (domain === "button") {
+      this._hass.callService("button", "press", { entity_id: entity });
+    } else if (domain === "switch") {
+      this._hass.callService("switch", "toggle", { entity_id: entity });
+    } else if (domain === "light") {
+      this._hass.callService("light", "toggle", { entity_id: entity });
+    }
+  }
+
+  async callChihiros(service, data = {}, returnResponse = false) {
+    if (!this._hass) return;
+    const serviceData = {
+      address: this.deviceAddress,
+      ...data,
+    };
+    const isMissingResponseSupport = (err) => {
+      const message = String(err && err.message ? err.message : err || "");
+      const body = String(err && err.body ? err.body : "");
+      const code = Number(err && (err.code ?? err.status_code ?? err.status) || 0);
+      return /Service does not support responses/i.test(message)
+        || /Service does not support responses/i.test(body)
+        || /400:\s*Bad Request/i.test(message)
+        || /400:\s*Bad Request/i.test(body)
+        || (code === 400 && (/Bad Request/i.test(message) || /Bad Request/i.test(body)));
+    };
+    const fallbackResponse = (err) => ({
+      response: {
+        ok: true,
+        send_status: "ok",
+        send_detail: "an Gerät gesendet",
+        debug_output: "",
+        response_fallback: true,
+        response_fallback_error: String((err && err.message) || (err && err.body) || err || "400 Bad Request"),
+      },
+    });
+    try {
+      if (returnResponse && this._hass.connection && this._hass.connection.sendMessagePromise) {
+        return await this._hass.connection.sendMessagePromise({
+          type: "call_service",
+          domain: "chihiros",
+          service,
+          service_data: serviceData,
+          return_response: true,
+        });
+      }
+      return await this._hass.callService("chihiros", service, {
+        ...serviceData,
+      }, undefined, true, returnResponse);
+    } catch (err) {
+      if (!returnResponse || !isMissingResponseSupport(err)) throw err;
+      await this._hass.callService("chihiros", service, { ...serviceData });
+      return fallbackResponse(err);
+    }
+  }
+
+  serviceResponse(response, service = "") {
+    if (!response) return response;
+    const payload = response.response !== undefined ? response.response : response;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+    if (payload.debug_output !== undefined || payload.debug_data !== undefined || payload.send_status !== undefined || payload.ok !== undefined) return payload;
+    const serviceKey = service ? `chihiros.${service}` : "";
+    if (serviceKey && payload[serviceKey]) return payload[serviceKey];
+    if (service && payload[service]) return payload[service];
+    const values = Object.values(payload).filter((value) => value && typeof value === "object" && !Array.isArray(value));
+    const match = values.find((value) => value.debug_output !== undefined || value.debug_data !== undefined || value.send_status !== undefined || value.ok !== undefined);
+    return match || payload;
+  }
+
+  serviceSendOk(serviceResponse) {
+    if (!serviceResponse || typeof serviceResponse !== "object") return true;
+    if (serviceResponse.ok === false) return false;
+    if (serviceResponse.ok === true) return true;
+    return !serviceResponse.send_status || serviceResponse.send_status === "ok" || serviceResponse.send_status === "local";
+  }
+
+  normalizeDebugOutput(debugOutput = "") {
+    let text = String(debugOutput || "");
+    for (let index = 0; index < 2; index += 1) {
+      const trimmed = text.trim();
+      if (!(trimmed.startsWith("\"") && trimmed.endsWith("\""))) break;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed !== "string") break;
+        text = parsed;
+      } catch (_err) {
+        break;
+      }
+    }
+    if (text.includes("\\n") || text.includes("\\t") || text.includes("\\r") || text.includes("\\\"")) {
+      const slashPlaceholder = "\uE000";
+      text = text
+        .replace(/\\\\/g, slashPlaceholder)
+        .replace(/\\r\\n/g, "\n")
+        .replace(/\\n/g, "\n")
+        .replace(/\\r/g, "\r")
+        .replace(/\\t/g, "\t")
+        .replace(/\\"/g, "\"")
+        .replace(new RegExp(slashPlaceholder, "g"), "\\");
+    }
+    const lines = text.split("\n").map((line) => line.trimEnd());
+    const filtered = [];
+    let skipJsonBlock = false;
+    let jsonDepth = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (!skipJsonBlock) filtered.push(line);
+        continue;
+      }
+      if (/^Service Debug Marker:/i.test(trimmed)) continue;
+      if (/^Response JSON:/i.test(trimmed)) {
+        skipJsonBlock = true;
+        jsonDepth = 0;
+        continue;
+      }
+      if (skipJsonBlock) {
+        jsonDepth += (trimmed.match(/\{/g) || []).length;
+        jsonDepth -= (trimmed.match(/\}/g) || []).length;
+        if (trimmed === "{") {
+          jsonDepth = Math.max(jsonDepth, 1);
+          continue;
+        }
+        if (jsonDepth <= 0 && !trimmed.startsWith("\"")) {
+          skipJsonBlock = false;
+        }
+        if (skipJsonBlock) continue;
+      }
+      filtered.push(line);
+    }
+    const compact = filtered.filter((line) => line.trim());
+    const reordered = [];
+    const pendingDebug = [];
+    let index = 0;
+    while (index < compact.length) {
+      const line = compact[index];
+      const trimmed = line.trim();
+      if (trimmed.startsWith("DEBUG") && trimmed.includes("Sending commands [")) {
+        pendingDebug.push(line);
+        index += 1;
+        continue;
+      }
+      if (!trimmed.startsWith("[TX #")) {
+        reordered.push(line);
+        index += 1;
+        continue;
+      }
+      const txBlock = [line];
+      if (pendingDebug.length) txBlock.unshift(pendingDebug.shift());
+      index += 1;
+      while (index < compact.length) {
+        const current = compact[index];
+        const currentTrimmed = current.trim();
+        const isSeparator = currentTrimmed && [...new Set(currentTrimmed)].length === 1 && currentTrimmed[0] === "-";
+        if (isSeparator) {
+          const next = compact[index + 1] || "";
+          const nextTrimmed = String(next).trim();
+          if (nextTrimmed.startsWith("DEBUG") && nextTrimmed.includes("Sending commands [")) {
+            pendingDebug.push(next);
+            reordered.push(...txBlock, current);
+            index += 2;
+            break;
+          }
+          const debugInside = txBlock.filter((entry) => {
+            const value = String(entry).trim();
+            return value.startsWith("DEBUG") && value.includes("Sending commands [");
+          });
+          const otherInside = txBlock.filter((entry) => {
+            const value = String(entry).trim();
+            return !(value.startsWith("DEBUG") && value.includes("Sending commands ["));
+          });
+          reordered.push(...debugInside, ...otherInside, current);
+          index += 1;
+          break;
+        }
+        txBlock.push(current);
+        index += 1;
+      }
+      if (txBlock.length && (index >= compact.length)) {
+        const debugInside = txBlock.filter((entry) => {
+          const value = String(entry).trim();
+          return value.startsWith("DEBUG") && value.includes("Sending commands [");
+        });
+        const otherInside = txBlock.filter((entry) => {
+          const value = String(entry).trim();
+          return !(value.startsWith("DEBUG") && value.includes("Sending commands ["));
+        });
+        reordered.push(...debugInside, ...otherInside);
+      }
+    }
+    const collapsed = [];
+    let previousSeparator = false;
+    for (const line of reordered) {
+      const trimmed = String(line).trim();
+      const isSeparator = trimmed && [...new Set(trimmed)].length === 1 && trimmed[0] === "-";
+      if (isSeparator && previousSeparator) continue;
+      collapsed.push(line);
+      previousSeparator = Boolean(isSeparator);
+    }
+    return collapsed.join("\n");
+  }
+
+  stripDebugJsonBlocks(debugOutput = "", labels = []) {
+    const labelSet = new Set((Array.isArray(labels) ? labels : []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean));
+    if (!labelSet.size) return String(debugOutput || "");
+    const lines = String(debugOutput || "").split("\n");
+    const filtered = [];
+    let skipJsonBlock = false;
+    let jsonDepth = 0;
+    for (const line of lines) {
+      const trimmed = line.trim();
+      const normalized = trimmed.toLowerCase();
+      if (!skipJsonBlock && labelSet.has(normalized.replace(/:$/, ""))) {
+        skipJsonBlock = true;
+        jsonDepth = 0;
+        continue;
+      }
+      if (skipJsonBlock) {
+        jsonDepth += (trimmed.match(/\{/g) || []).length;
+        jsonDepth -= (trimmed.match(/\}/g) || []).length;
+        if (trimmed === "{") {
+          jsonDepth = Math.max(jsonDepth, 1);
+          continue;
+        }
+        if (jsonDepth <= 0 && !trimmed.startsWith("\"")) {
+          skipJsonBlock = false;
+        }
+        if (skipJsonBlock) continue;
+        if (!trimmed) continue;
+      }
+      filtered.push(line);
+    }
+    return filtered.join("\n");
+  }
+
+  stripDebugMetaLines(debugOutput = "", labels = []) {
+    const labelSet = new Set((Array.isArray(labels) ? labels : []).map((label) => String(label || "").trim().toLowerCase()).filter(Boolean));
+    if (!labelSet.size) return String(debugOutput || "");
+    return String(debugOutput || "")
+      .split("\n")
+      .filter((line) => {
+        const trimmed = String(line || "").trim().toLowerCase();
+        if (!trimmed) return true;
+        if (trimmed === "debug") return false;
+        return ![...labelSet].some((label) => trimmed === label || trimmed.startsWith(`${label}:`));
+      })
+      .join("\n");
+  }
+
+  formatDebugJsonBlock(label, value) {
+    if (value === undefined) return "";
+    return `${label}:\n${JSON.stringify(value, null, 2)}`;
+  }
+
+  formatSharedDebugSection(section = {}) {
+    if (!section || typeof section !== "object") return "";
+    const title = String(section.title || "").trim();
+    const type = String(section.type || "").trim().toLowerCase();
+    const titleKey = title.toLowerCase();
+    if (type === "json" && Object.prototype.hasOwnProperty.call(section, "value")) {
+      if (titleKey === "request json") return "";
+      if (titleKey === "response json") return "";
+      return this.formatDebugJsonBlock(title || "JSON", section.value);
+    }
+    const value = String(section.value || section.text || "").trim();
+    if (titleKey === "protocol debug") {
+      const normalized = this.normalizeDebugOutput(value);
+      return normalized && normalized.toLowerCase() !== "protocol debug" ? `Raw Debug\n${normalized}` : "";
+    }
+    if (titleKey === "raw debug") {
+      const normalized = this.normalizeDebugOutput(value);
+      return normalized ? `Raw Debug\n${normalized}` : "";
+    }
+    if (!value) return "";
+    return title ? `${title}\n${value}` : value;
+  }
+
+  formatSharedDebugData(service, serviceResponse, options = {}) {
+    const debugData = serviceResponse && serviceResponse.debug_data && typeof serviceResponse.debug_data === "object"
+      ? serviceResponse.debug_data
+      : null;
+    const sectionOutput = Array.isArray(debugData && debugData.sections)
+      ? debugData.sections.map((section) => this.formatSharedDebugSection(section)).filter(Boolean).join("\n\n")
+      : "";
+    if (sectionOutput) return sectionOutput;
+    const rawDebug = this.normalizeDebugOutput(
+      debugData && debugData.raw_debug !== undefined
+        ? debugData.raw_debug
+        : (serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "")
+    );
+    const debugService = debugData && debugData.service ? String(debugData.service) : `chihiros.${service}`;
+    const lines = ["Debug", `Service: ${debugService}`];
+    if (debugData && debugData.summary) lines.push(`Summary: ${debugData.summary}`);
+    if (debugData && debugData.device) lines.push(`Device: ${debugData.device}`);
+    if (debugData && debugData.address) lines.push(`Address: ${debugData.address}`);
+    if (debugData && debugData.action) lines.push(`Action: ${debugData.action}`);
+    const blocks = [lines.join("\n")];
+    const responseJson = debugData && Object.prototype.hasOwnProperty.call(debugData, "response")
+      ? debugData.response
+      : serviceResponse;
+    const detailsJson = debugData && Object.prototype.hasOwnProperty.call(debugData, "details")
+      ? debugData.details
+      : undefined;
+    const detailsBlock = this.formatDebugJsonBlock("Details JSON", detailsJson);
+    if (detailsBlock) blocks.push(detailsBlock);
+    if (rawDebug) {
+      const duplicateLines = new Set(["Debug", ...lines.slice(1)].map((line) => String(line || "").trim()).filter(Boolean));
+      const sanitizedRawDebug = this.stripDebugMetaLines(
+        this.stripDebugJsonBlocks(rawDebug, ["Request JSON", "Response JSON", "Details JSON"]),
+        ["Summary", "Device", "Address", "Action", "Service"]
+      );
+      const rawLines = sanitizedRawDebug
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && !duplicateLines.has(line) && !/^Protocol Debug$/i.test(line) && !/^Raw Debug$/i.test(line) && !/^[{}]+$/.test(line));
+      const filteredRawDebug = rawLines.join("\n");
+      if (filteredRawDebug) {
+        blocks.push(`Raw Debug:\n${filteredRawDebug}`);
+      }
+    }
+    return blocks.filter(Boolean).join("\n\n");
+  }
+
+  serviceResultOutput(service, response, debug = false, options = {}) {
+    const serviceResponse = this.serviceResponse(response, service);
+    const ok = this.serviceSendOk(serviceResponse);
+    const title = options && options.title ? String(options.title) : "";
+    const serviceLabel = String(service || "").includes(".") ? String(service || "") : `chihiros.${service}`;
+    const status = serviceResponse && serviceResponse.send_status ? String(serviceResponse.send_status) : "";
+    const reply = serviceResponse && serviceResponse.send_detail ? String(serviceResponse.send_detail) : "";
+    const debugOutput = this.normalizeDebugOutput(serviceResponse && serviceResponse.debug_output ? serviceResponse.debug_output : "");
+    const header = [
+      ok ? "OK" : "FAIL",
+      title,
+      status ? `Status: ${status}` : "",
+      reply ? `Antwort: ${reply}` : "",
+    ].filter(Boolean).join("\n");
+    const cleanupFinalDebug = (text) => String(text || "")
+      .split("\n")
+      .filter((line) => line.trim().toLowerCase() !== "protocol debug")
+      .join("\n")
+      .replace(/(?:\n\s*)+Raw Debug:\s*$/i, "")
+      .replace(/(?:\n\s*)+Raw Debug\s*$/i, "")
+      .trim();
+    if (debug && (serviceResponse && serviceResponse.debug_data || debugOutput)) {
+      return cleanupFinalDebug(`${header}\n\n${this.formatSharedDebugData(service, serviceResponse, options)}`);
+    }
+    if (debug && serviceResponse && serviceResponse.response_fallback) {
+      return cleanupFinalDebug(`${header}\n\nDebug\nService: ${serviceLabel}\nHome Assistant nutzt noch die alte Service-Registrierung ohne Response-Support.\nDer Aufruf wurde automatisch ohne return_response wiederholt.`);
+    }
+    if (debug && options && options.payload !== undefined) {
+      return cleanupFinalDebug(`${header}\n\nDebug\nService: ${serviceLabel}\nPayload:\n${JSON.stringify(options.payload, null, 2)}`);
+    }
+    return cleanupFinalDebug(header || this.tr("debug_empty"));
+  }
+
+  async callChihirosWithDialog(service, data = {}, options = {}) {
+    const channel = Number(options.channel || data.pump || 1);
+    const debug = Boolean(options.debug);
+    const wantsResponse = options.returnResponse !== undefined ? Boolean(options.returnResponse) : false;
+    this.dialogState = { type: "debug", channel, output: this.tr("debug_sending"), running: true, debug, noChannel: Boolean(options.noChannel), level: "pending" };
+    this.render();
+    try {
+      const response = await this.callChihiros(service, data, wantsResponse);
+      const output = this.serviceResultOutput(service, response, debug, options);
+      this.dialogState = {
+        type: "debug",
+        channel,
+        output,
+        debug,
+        noChannel: Boolean(options.noChannel),
+        running: false,
+        level: output.trim().startsWith("FAIL") ? "error" : "ok",
+      };
+      this.render();
+      return response;
+    } catch (err) {
+      this.dialogState = {
+        type: "debug",
+        channel,
+        output: `FAIL\nService: chihiros.${service}\n${err && err.message ? err.message : err}`,
+        debug,
+        noChannel: Boolean(options.noChannel),
+        running: false,
+        level: "error",
+      };
+      this.render();
+      return null;
+    }
+  }
+
+  async callAddonServiceWithDialog(service, data = {}, options = {}) {
+    const mergedOptions = {
+      noChannel: true,
+      returnResponse: true,
+      ...options,
+    };
+    const response = await this.callChihirosWithDialog(service, data, mergedOptions);
+    const serviceResponse = this.serviceResponse(response, service);
+    return {
+      ok: this.serviceSendOk(serviceResponse),
+      response,
+      serviceResponse,
+    };
+  }
+
+  async runDeviceService({ service = "", data = {}, title = "", debug = false, dialog = false, channel = 1, noChannel = true } = {}) {
+    const serviceData = debug ? { ...data, debug: true } : data;
+    if (dialog && typeof this.callAddonServiceWithDialog === "function") {
+      const result = await this.callAddonServiceWithDialog(service, serviceData, {
+        channel,
+        noChannel,
+        title,
+        payload: serviceData,
+        debug,
+      });
+      return {
+        ok: Boolean(result && result.ok),
+        output: typeof this.serviceResultOutput === "function"
+          ? this.serviceResultOutput(service, result && result.response, debug, { title, payload: serviceData })
+          : `${result && result.ok ? "OK" : "FAIL"}\n${title}`,
+        response: result && result.response,
+        serviceResponse: result && result.serviceResponse,
+      };
+    }
+    if (typeof this.callChihiros !== "function") return { ok: false, output: `${title}\n${this.tr("service_unavailable")}` };
+    try {
+      const response = await this.callChihiros(service, serviceData, true);
+      const serviceResponse = typeof this.serviceResponse === "function" ? this.serviceResponse(response, service) : response;
+      const ok = typeof this.serviceSendOk === "function" ? this.serviceSendOk(serviceResponse) : true;
+      const output = typeof this.serviceResultOutput === "function"
+        ? this.serviceResultOutput(service, response, debug, { title, payload: serviceData })
+        : `${ok ? "OK" : "FAIL"}\n${title}`;
+      return { ok, output, response, serviceResponse };
+    } catch (err) {
+      return { ok: false, output: `FAIL\n${title}\n${err && err.message ? err.message : err}` };
+    }
+  }
+
+  async refreshEntities(entityIds = [], options = {}) {
+    const ids = [...new Set((Array.isArray(entityIds) ? entityIds : [entityIds]).filter(Boolean))];
+    if (!this._hass || !ids.length) return;
+    const lockKey = String(options.lockKey || "_entityRefreshRunning");
+    if (this[lockKey]) return;
+    this[lockKey] = true;
+    try {
+      await this._hass.callService("homeassistant", "update_entity", { entity_id: ids });
+      if (!this.dialogState || options.renderWithDialog) {
+        window.setTimeout(() => this.render(), Number(options.renderDelay || 250));
+      }
+    } catch (_err) {
+      // Ignore refresh failures; Home Assistant keeps the last pushed state.
+    } finally {
+      this[lockKey] = false;
+    }
+  }
+
+  addOverlayEntries(field, entries, limit = 8) {
+    const current = Array.isArray(this[field]) ? this[field] : [];
+    this[field] = [...entries, ...current].slice(0, limit);
+  }
+
+  nowOverlayEntry(action, detail = "", extra = {}) {
+    const now = new Date();
+    return {
+      ts: now.toISOString(),
+      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      date: now.toISOString().slice(0, 10),
+      action,
+      detail,
+      ...extra,
+    };
+  }
+
+  openConfirmDialog(options = {}) {
+    const confirmId = `confirm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this._confirmDialogActions = this._confirmDialogActions || {};
+    this._confirmDialogActions[confirmId] = {
+      onConfirm: typeof options.onConfirm === "function" ? options.onConfirm : null,
+      onCancel: typeof options.onCancel === "function" ? options.onCancel : null,
+    };
+    this.dialogState = {
+      type: "confirm",
+      channel: Number(options.channel || 1),
+      title: String(options.title || this.tr("reset_schedule")),
+      message: String(options.message || ""),
+      detail: String(options.detail || ""),
+      confirmLabel: String(options.confirmLabel || this.tr("reset_schedule_yes")),
+      cancelLabel: String(options.cancelLabel || this.tr("reset_schedule_no")),
+      confirmId,
+      noChannel: Boolean(options.noChannel),
+    };
+    this.render();
+  }
+
+  async resolveConfirmDialog(confirmed) {
+    const state = this.dialogState;
+    const confirmId = state && state.confirmId ? String(state.confirmId) : "";
+    const actions = (this._confirmDialogActions && confirmId) ? this._confirmDialogActions[confirmId] : null;
+    if (this._confirmDialogActions && confirmId) delete this._confirmDialogActions[confirmId];
+    if (!actions) {
+      this.closeDialog();
+      return;
+    }
+    if (confirmed) {
+      if (actions.onConfirm) await actions.onConfirm();
+      return;
+    }
+    if (actions.onCancel) await actions.onCancel();
+    else this.closeDialog();
+  }
+
+  async fetchCoreHistory(options = {}) {
+    const deviceKey = String(options.device || "").trim().toUpperCase();
+    const overlayKey = String(options.overlayKey || "historyOverlay");
+    const loadingKey = String(options.loadingKey || `_${overlayKey}LoadingKey`);
+    const scope = String(options.scope || "").trim();
+    const limit = Math.max(1, Math.min(500, Number(options.limit || 200)));
+    const force = Boolean(options.force);
+    if (!deviceKey || (!force && this[loadingKey] === deviceKey)) return false;
+    this[loadingKey] = deviceKey;
+    try {
+      const params = new URLSearchParams({ device: deviceKey, limit: String(limit) });
+      if (scope) params.set("scope", scope);
+      const response = await fetch(`./api/history?${params.toString()}`);
+      if (!response.ok) return false;
+      const data = await response.json();
+      const entries = Array.isArray(data && data.entries) ? data.entries : [];
+      const currentDevice = typeof options.currentDevice === "function"
+        ? String(options.currentDevice() || "").trim().toUpperCase()
+        : deviceKey;
+      if (currentDevice !== deviceKey) return false;
+      this[overlayKey] = entries.filter((entry) => entry && typeof entry === "object").slice(0, limit);
+      this.render();
+      return true;
+    } catch (_err) {
+      return false;
+    } finally {
+      if (this[loadingKey] === deviceKey) this[loadingKey] = "";
+    }
+  }
+
+  async persistCoreHistory(entry, options = {}) {
+    try {
+      const response = await fetch("./api/history", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          device: String(options.device || "").trim().toUpperCase(),
+          scope: String(options.scope || "").trim(),
+          action: entry && entry.action ? entry.action : "History",
+          detail: entry && entry.detail ? entry.detail : "",
+          channel: entry && entry.channel ? entry.channel : null,
+          status: entry && Object.prototype.hasOwnProperty.call(entry, "status") ? entry.status : "",
+          params: entry && entry.params && typeof entry.params === "object" ? entry.params : {},
+        }),
+      });
+      return response.ok;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  async addCoreHistory(action, detail = "", channel = null, options = {}) {
+    const now = new Date();
+    const overlayKey = String(options.overlayKey || "historyOverlay");
+    const current = Array.isArray(this[overlayKey]) ? this[overlayKey] : [];
+    const params = options.params && typeof options.params === "object" ? options.params : {};
+    const status = Object.prototype.hasOwnProperty.call(options, "status") ? String(options.status || "") : "";
+    const limit = Math.max(1, Math.min(500, Number(options.limit || 200)));
+    const entry = {
+      ts: now.toISOString(),
+      date: now.toISOString().slice(0, 10),
+      time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      action,
+      detail,
+      channel,
+      status,
+      params,
+    };
+    this[overlayKey] = [entry, ...current].slice(0, limit);
+    this.render();
+    const persisted = await this.persistCoreHistory(entry, options);
+    if (persisted && typeof options.refresh === "function") await options.refresh();
+    return entry;
+  }
+
+  sharedHistoryRowsMarkup(entries = [], options = {}) {
+    return this.sharedHistoryTimelineMarkup(entries, options);
+  }
+
+  formatHistoryTimestamp(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    const parsed = new Date(text.includes("T") ? text : text.replace(" ", "T"));
+    if (!Number.isFinite(parsed.getTime())) return text;
+    const configuredTimeZone = String(this._hass && this._hass.config && this._hass.config.time_zone || "").trim();
+    return new Intl.DateTimeFormat(this.language() === "en" ? "en-US" : "de-DE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      ...(configuredTimeZone ? { timeZone: configuredTimeZone } : {}),
+    }).format(parsed);
+  }
+
+  sharedHistoryIconSymbol(title = "") {
+    const text = String(title || "").toLowerCase();
+    if (text.includes("firmware")) return "&#9881;";
+    if (text.includes("meldung") || text.includes("notification")) return "&#128276;";
+    if (text.includes("laufzeit") || text.includes("runtime")) return "&#9201;";
+    if (text.includes("zeitplan") || text.includes("schedule")) return "&#128197;";
+    if (text.includes("gelöscht") || text.includes("deleted") || text.includes("reset")) return "&#128465;";
+    if (text.includes("gespeichert") || text.includes("saved")) return "&#128190;";
+    if (text.includes("gesendet") || text.includes("sent")) return "&#8599;";
+    if (text.includes("dosier") || text.includes("dose")) return "&#128167;";
+    if (text.includes("auto")) return "&#8635;";
+    if (text.includes("kalibrier") || text.includes("calibrat")) return "&#9881;";
+    if (text.includes("behälter") || text.includes("behaelter") || text.includes("container")) return "&#128167;";
+    return "&#9679;";
+  }
+
+  sharedHistoryTimelineMarkup(entries = [], options = {}) {
+    const rows = Array.isArray(entries) ? entries : [];
+    const emptyLabel = String(options.emptyLabel || this.tr("no_history"));
+    const emptyAction = options.emptyAction ? String(options.emptyAction) : "";
+    const rowAction = typeof options.rowAction === "function" ? options.rowAction : null;
+    const colorFallback = String(options.color || "#03c9ff");
+    const expanded = Boolean(options.expanded);
+    if (!rows.length) {
+      return `
+        <div class="history-empty"${emptyAction ? ` data-action="${this.escapeHtml(emptyAction)}"` : ""}>
+          <ha-icon icon="mdi:history"></ha-icon>
+          <span>${this.escapeHtml(emptyLabel)}</span>
+        </div>`;
+    }
+    const items = rows.map((entry) => {
+      const action = rowAction ? rowAction(entry) : (entry && entry.actionTarget ? String(entry.actionTarget) : "");
+      const normalized = this.normalizeHistoryEntry(entry, {
+        title: entry && entry.action ? entry.action : "History",
+        color: entry && entry.color ? entry.color : colorFallback,
+      });
+      const rawStatus = String(entry && entry.status ? entry.status : "").trim().toLowerCase();
+      const suffixStatus = String(normalized.title || "").match(/\s+(ok|fail|error)$/i)?.[1]?.toLowerCase() || "";
+      const status = rawStatus || suffixStatus;
+      const failed = ["fail", "failed", "failure", "error"].includes(status);
+      const title = String(normalized.title || "History").replace(/\s+(?:ok|fail|error)$/i, "").trim();
+      const detail = String(normalized.detail || "")
+        .replace(/\b(?:light|switch|sensor)\.[a-z0-9_.]+\b/gi, "")
+        .replace(/(?:^|\s*[·;]\s*)Status:\s*(?:ok|fail)(?=\s*[·;]|$)/gi, "")
+        .replace(/\s*[·;]\s*$/, "")
+        .trim();
+      const timestamp = this.formatHistoryTimestamp(normalized.timestamp);
+      const color = failed ? "#ff5b63" : String(normalized.color || colorFallback);
+      return `
+        <article class="led-history-timeline-entry ${failed ? "fail" : ""}"${action ? ` data-action="${this.escapeHtml(action)}"` : ""}>
+          <span class="led-history-timeline-icon" style="color:${this.escapeHtml(color)}" aria-hidden="true">${this.sharedHistoryIconSymbol(title)}</span>
+          <div class="led-history-timeline-copy">
+            <div><strong>${this.escapeHtml(title)}</strong>${status ? `<span class="led-history-status ${failed ? "fail" : status}">${this.escapeHtml(status.toUpperCase())}</span>` : ""}${timestamp ? `<time>${this.escapeHtml(timestamp)}</time>` : ""}</div>
+            ${detail ? `<p>${this.escapeHtml(detail)}</p>` : ""}
+          </div>
+        </article>`;
+    }).join("");
+    return `<div class="led-history-timeline ${expanded ? "expanded" : ""}">${items}</div>`;
+  }
+
+  historyStatusFilterValue(scope = "history") {
+    const value = String((this._historyStatusFilters && this._historyStatusFilters[scope]) || "all").toLowerCase();
+    return ["all", "ok", "error"].includes(value) ? value : "all";
+  }
+
+  historyEntryStatus(entry = {}) {
+    const normalized = this.normalizeHistoryEntry(entry);
+    const rawStatus = String(entry && entry.status ? entry.status : "").trim().toLowerCase();
+    const suffixStatus = String(normalized.title || "").match(/\s+(ok|fail|failed|failure|error)$/i)?.[1]?.toLowerCase() || "";
+    const status = rawStatus || suffixStatus;
+    if (["fail", "failed", "failure", "error"].includes(status)) return "error";
+    if (["ok", "success", "successful"].includes(status)) return "ok";
+    return "other";
+  }
+
+  historyTypeFilterValue(scope = "history") {
+    const value = String((this._historyTypeFilters && this._historyTypeFilters[scope]) || "all").toLowerCase();
+    return ["all", "scheduler", "device", "control", "calibration", "settings", "other"].includes(value)
+      ? value
+      : "all";
+  }
+
+  historyEntryType(entry = {}) {
+    const normalized = this.normalizeHistoryEntry(entry);
+    const text = [entry && entry.action, normalized.title]
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean)
+      .join(" ");
+    if (/kalibrier|calibrat/.test(text)) return "calibration";
+    if (/beh(?:ä|ae)lter|container|dosierschutz|dosing protection|safety|push|einstellung|setting|(?:ü|ue)berdos|overdos/.test(text)) return "settings";
+    if (/scheduler|schedule|zeitplan|timer|auto[ -]?differenz|automatic dose|automatische dosierung|auto[ -]?mode|automodus/.test(text)) return "scheduler";
+    if (/ger(?:ä|ae)temeld|notification|firmware|laufzeit|runtime|tageswert|daily (?:value|total)|ger(?:ä|ae)teinformation|device information/.test(text)) return "device";
+    if (/manuell|manual|dosier|dose|led gesetzt|led set|an ger(?:ä|ae)t gesendet|device send|einschalten|ausschalten/.test(text)) return "control";
+    return "other";
+  }
+
+  historyCombinedFilterValue(scope = "history") {
+    const value = String((this._historyFilters && this._historyFilters[scope]) || "all").toLowerCase();
+    const allowed = new Set([
+      "all",
+      "status:ok",
+      "status:error",
+      "type:scheduler",
+      "type:device",
+      "type:control",
+      "type:calibration",
+      "type:settings",
+      "type:other",
+    ]);
+    return allowed.has(value) ? value : "all";
+  }
+
+  filterHistoryEntries(entries = [], scope = "history") {
+    const rows = Array.isArray(entries) ? entries : [];
+    const selected = this.historyCombinedFilterValue(scope);
+    if (selected.startsWith("status:")) {
+      return rows.filter((entry) => this.historyEntryStatus(entry) === selected.slice(7));
+    }
+    if (selected.startsWith("type:")) {
+      return rows.filter((entry) => this.historyEntryType(entry) === selected.slice(5));
+    }
+    return rows;
+  }
+
+  historyStatusFilterMarkup(scope = "history") {
+    const selected = this.historyStatusFilterValue(scope);
+    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
+    return `<label class="history-status-filter">
+      <span>${this.tr("status")}</span>
+      <select data-history-status-filter="${this.escapeHtml(scope)}">
+        ${option("all", this.tr("all"))}
+        ${option("ok", "OK")}
+        ${option("error", "ERROR / FAIL")}
+      </select>
+    </label>`;
+  }
+
+  historyTypeFilterMarkup(scope = "history") {
+    const selected = this.historyTypeFilterValue(scope);
+    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
+    return `<label class="history-status-filter history-type-filter">
+      <span>${this.tr("history_type")}</span>
+      <select data-history-type-filter="${this.escapeHtml(scope)}">
+        ${option("all", this.tr("all"))}
+        ${option("scheduler", this.tr("history_type_scheduler"))}
+        ${option("device", this.tr("history_type_device"))}
+        ${option("control", this.tr("history_type_control"))}
+        ${option("calibration", this.tr("history_type_calibration"))}
+        ${option("settings", this.tr("history_type_settings"))}
+        ${option("other", this.tr("history_type_other"))}
+      </select>
+    </label>`;
+  }
+
+  historyFiltersMarkup(scope = "history") {
+    const selected = this.historyCombinedFilterValue(scope);
+    const option = (value, label) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`;
+    return `<div class="history-filter-bar">
+      <label class="history-status-filter history-combined-filter">
+        <span>${this.tr("history_filter")}</span>
+        <select data-history-filter="${this.escapeHtml(scope)}">
+          ${option("all", this.tr("all"))}
+          <optgroup label="${this.tr("status")}">
+            ${option("status:ok", "OK")}
+            ${option("status:error", "ERROR / FAIL")}
+          </optgroup>
+          <optgroup label="${this.tr("history_type")}">
+            ${option("type:scheduler", this.tr("history_type_scheduler"))}
+            ${option("type:device", this.tr("history_type_device"))}
+            ${option("type:control", this.tr("history_type_control"))}
+            ${option("type:calibration", this.tr("history_type_calibration"))}
+            ${option("type:settings", this.tr("history_type_settings"))}
+            ${option("type:other", this.tr("history_type_other"))}
+          </optgroup>
+        </select>
+      </label>
+    </div>`;
+  }
+
+  normalizeHistoryEntry(entry = {}, options = {}) {
+    const source = entry && typeof entry === "object" ? entry : {};
+    const color = String(source.color || options.color || "#03c9ff");
+    const rawTitle = String(
+      source.title
+      || options.title
+      || source.action
+      || "History"
+    );
+    const timestamp = String(
+      source.timestamp
+      || source.ts
+      || [source.date || "", source.time || ""].filter(Boolean).join(" ").trim()
+      || options.timestamp
+      || ""
+    );
+    let detail = String(source.detail || options.detail || "");
+    if (Array.isArray(options.detailParts)) {
+      detail = options.detailParts.filter(Boolean).join(" · ");
+    }
+    const translated = this.localizeLedHistoryText(rawTitle, detail);
+    return {
+      ...source,
+      title: translated.title,
+      detail: translated.detail,
+      timestamp,
+      color,
+      actionTarget: source.actionTarget || options.actionTarget || "",
+    };
+  }
+
+  localizeLedHistoryText(title = "", detail = "") {
+    const currentSavedTitle = this.tr("led_schedule_saved");
+    const currentSentText = this.tr("led_schedule_sent");
+    const currentLocalText = this.tr("led_schedule_not_sent");
+    const normalizedTitle = String(title || "").trim();
+    const normalizedDetail = String(detail || "").trim();
+    let localizedDetail = normalizedDetail
+      .replace(/\b(?:Alle Tage|Every day)\b/gi, this.tr("all_days"))
+      .replace(/\b(?:Kanal\/Kanaele|Kanal\/Kanäle|Channels?)\b/gi, this.tr("channels"))
+      .replace(/\bZeitplaene\b/gi, "Zeitpläne")
+      .replace(/\bGeraet\b/gi, "Gerät")
+      .replace(/\bgeloescht\b/gi, "gelöscht")
+      .replace(/\bunveraendert\b/gi, "unverändert");
+    localizedDetail = localizedDetail
+      .replace(/^(?:Zeitplan|Schedule)\s+(\d+)\s+(?:gesendet|sent)$/i, (_match, index) => `${this.tr("schedule")} ${index} ${this.tr("led_schedule_sent")}`)
+      .replace(/^(?:Zeitplan|Schedule)\s+(\d+):/i, (_match, index) => `${this.tr("schedule")} ${index}:`)
+      .replace(/Alle Zeitpläne am Gerät gelöscht; lokal unverändert/gi, this.tr("schedules_device_deleted_local_kept"));
+    const detailRowsMatch = localizedDetail.match(/^(\d+)\s+.+?(?:sent to device|an Ger(?:ae|ä)t gesendet|lokal gespeichert, nicht gesendet)$/i);
+    const isSavedTitle = /^(schedule saved|zeitplan gespeichert)$/i.test(normalizedTitle);
+    const isScheduleSavedDetail = /(schedule rows sent to device|zeitplan-zeilen an geraet gesendet)$/i.test(normalizedDetail);
+    const isLocalSavedDetail = /(saved locally, not sent|lokal gespeichert, nicht gesendet)$/i.test(normalizedDetail);
+    if (/^schedule$/i.test(normalizedTitle)) {
+      return { title: this.tr("schedule"), detail: localizedDetail };
+    }
+    if (/^last notification$/i.test(normalizedTitle)) {
+      return { title: this.tr("last_notification"), detail: localizedDetail };
+    }
+    if (/^led notification fetch$/i.test(normalizedTitle)) {
+      const received = normalizedDetail.match(/^(\d+) notification\(s\) received$/i);
+      return {
+        title: this.tr("notification_fetch"),
+        detail: /insufficient authorization/i.test(normalizedDetail)
+          ? this.tr("notification_fetch_unauthorized")
+          : (received
+            ? `${received[1]} ${this.tr("notification_fetch_received")}`
+            : (/^no device notification received$/i.test(normalizedDetail) ? this.tr("notification_fetch_none") : localizedDetail)),
+      };
+    }
+    if (/^led schedule verification$/i.test(normalizedTitle)) {
+      const range = normalizedDetail.match(/^(\d{2}:\d{2}-\d{2}:\d{2}):/);
+      const failed = /:\s*failed$/i.test(normalizedDetail);
+      return {
+        title: this.tr("schedule_verification"),
+        detail: `${range ? `${range[1]} · ` : ""}${this.tr(failed ? "schedule_verification_failed" : "schedule_verification_ok")}`,
+      };
+    }
+    if (/^firmware$/i.test(normalizedTitle)) {
+      return { title: this.tr("firmware"), detail: localizedDetail };
+    }
+    if (/^schedule sensor$/i.test(normalizedTitle)) {
+      return { title: this.tr("schedule_sensor"), detail: localizedDetail };
+    }
+    if (isSavedTitle) {
+      if (detailRowsMatch && isScheduleSavedDetail) {
+        return { title: currentSavedTitle, detail: `${detailRowsMatch[1]} ${this.tr("led_schedule_rows")} ${currentSentText}` };
+      }
+      if (detailRowsMatch && isLocalSavedDetail) {
+        return { title: currentSavedTitle, detail: `${detailRowsMatch[1]} ${this.tr("led_schedule_rows")} ${currentLocalText}` };
+      }
+      if (isScheduleSavedDetail) return { title: currentSavedTitle, detail: currentSentText };
+      if (isLocalSavedDetail) return { title: currentSavedTitle, detail: currentLocalText };
+      return { title: currentSavedTitle, detail: localizedDetail };
+    }
+    if (/^(schedule sent to device|zeitplan an ger(?:ae|ä)t gesendet)(?:\s+(ok|fail))?$/i.test(normalizedTitle)) {
+      const status = normalizedTitle.match(/\s+(ok|fail)$/i)?.[1] || "";
+      return { title: `${this.tr("led_schedule_sent_action")}${status ? ` ${status}` : ""}`, detail: localizedDetail };
+    }
+    if (/^(schedule deleted|zeitplan gel(?:oe|ö)scht)$/i.test(normalizedTitle)) {
+      return { title: this.tr("schedule_deleted"), detail: localizedDetail };
+    }
+    if (/^(led gesetzt|led set)$/i.test(normalizedTitle)) {
+      return { title: this.tr("led_set"), detail: localizedDetail };
+    }
+    if (/^(enable auto mode|auto-modus aktivieren)$/i.test(normalizedTitle)) {
+      return { title: this.tr("enable_auto_mode"), detail: localizedDetail };
+    }
+    if (/^(off|aus)$/i.test(normalizedTitle)) {
+      return { title: this.tr("off"), detail: localizedDetail };
+    }
+    if (/^(on|an)$/i.test(normalizedTitle)) {
+      return { title: this.tr("on"), detail: localizedDetail };
+    }
+    return { title: normalizedTitle, detail: localizedDetail };
+  }
+
+  sharedHistoryPanel(options = {}) {
+    const title = String(options.title || this.tr("history_total"));
+    const action = String(options.action || "");
+    const emptyLabel = String(options.emptyLabel || this.tr("no_history"));
+    const rows = Array.isArray(options.entries) ? options.entries : [];
+    const content = this.sharedHistoryRowsMarkup(rows, {
+      emptyLabel,
+      emptyAction: action,
+      rowAction: typeof options.rowAction === "function" ? options.rowAction : null,
+      color: options.color || "#03c9ff",
+    });
+    return `<section class="card history-card ${options.className ? this.escapeHtml(String(options.className)) : ""}">
+      <h2 class="card-title-action">
+        <span>${this.escapeHtml(title)}</span>
+        ${action ? `<button class="mini eye-action" data-action="${this.escapeHtml(action)}" title="${this.escapeHtml(title)}"><ha-icon icon="mdi:eye"></ha-icon></button>` : ""}
+      </h2>
+      <div class="front-history-list">
+        ${content}
+      </div>
+    </section>`;
+  }
+
+  sharedHistoryDialog(options = {}) {
+    const title = String(options.title || this.tr("history"));
+    const statusScope = this.dialogState && this.dialogState.type === "history-all" ? "doser" : "";
+    const entries = statusScope
+      ? this.filterHistoryEntries(options.entries || [], statusScope)
+      : (options.entries || []);
+    const rowsMarkup = this.sharedHistoryRowsMarkup(entries, { ...options, expanded: true });
+    const filterHtml = statusScope ? this.historyFiltersMarkup(statusScope) : "";
+    const bodyHtml = options.bodyHtml ? String(options.bodyHtml) : "";
+    const headerHtml = statusScope ? `
+      <header class="led-channel-history-head">
+        <h2>${this.escapeHtml(title)}</h2>
+        <div class="history-dialog-head-actions">
+          ${filterHtml}
+          <button type="button" class="led-channel-history-close" data-action="close-dialog" title="${this.escapeHtml(this.tr("close"))}" aria-label="${this.escapeHtml(this.tr("close"))}"><span aria-hidden="true">&#10005;</span></button>
+        </div>
+      </header>` : "";
+    return this.sharedModalDialog({
+      title,
+      sectionClass: "modal card history-modal",
+      headerHtml,
+      bodyHtml: `${bodyHtml}<div class="dialog-history-list all-history-list">${rowsMarkup}</div>`,
+      actions: statusScope ? [] : [
+        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
+      ],
+    });
+  }
+
+  sharedDialogActions(buttons = []) {
+    const items = Array.isArray(buttons) ? buttons : [];
+    return items.map((button) => {
+      const type = String(button && button.type ? button.type : "button");
+      const action = button && button.action ? ` data-action="${this.escapeHtml(String(button.action))}"` : "";
+      const classes = String(button && button.className ? button.className : "").trim();
+      const attrs = String(button && button.attrs ? button.attrs : "");
+      const icon = button && button.icon
+        ? `<ha-icon icon="${this.escapeHtml(String(button.icon))}"></ha-icon>`
+        : "";
+      const label = button && button.label ? `<span>${this.escapeHtml(String(button.label))}</span>` : "";
+      return `<button type="${type}" class="${this.escapeHtml(classes)}"${action}${attrs ? ` ${attrs}` : ""}>${icon}${label}</button>`;
+    }).join("");
+  }
+
+  sharedIconActionButtons(buttons = [], options = {}) {
+    const items = Array.isArray(buttons) ? buttons : [];
+    const wrapperClass = String(options.wrapperClass || "led-schedule-front-actions").trim();
+    const defaultButtonClass = String(options.buttonClass || "mini").trim();
+    const html = items.map((button) => {
+      const type = String(button && button.type ? button.type : "button");
+      const action = button && button.action ? ` data-action="${this.escapeHtml(String(button.action))}"` : "";
+      const attrs = String(button && button.attrs ? button.attrs : "");
+      const classes = [defaultButtonClass, String(button && button.className ? button.className : "").trim()]
+        .filter(Boolean)
+        .join(" ");
+      const title = button && button.title ? ` title="${this.escapeHtml(String(button.title))}"` : "";
+      const icon = button && button.icon
+        ? `<ha-icon icon="${this.escapeHtml(String(button.icon))}"></ha-icon>`
+        : "";
+      const label = button && button.label ? `<span>${this.escapeHtml(String(button.label))}</span>` : "";
+      return `<button class="${this.escapeHtml(classes)}" type="${type}"${action}${title}${attrs ? ` ${attrs}` : ""}>${icon}${label}</button>`;
+    }).join("");
+    return `<div class="${this.escapeHtml(wrapperClass)}">${html}</div>`;
+  }
+
+  sharedDebugDialog(options = {}) {
+    const levelClass = options.level === "error" ? " error" : "";
+    const title = String(options.title || (options.debug ? this.tr("debug_output") : this.tr("result_output")));
+    const output = String(options.output || "");
+    return this.sharedModalDialog({
+      title,
+      sectionClass: `modal card debug-modal${levelClass}`,
+      bodyHtml: `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`,
+      actions: [
+        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
+      ],
+    });
+  }
+
+  sharedModalDialog(options = {}) {
+    const title = String(options.title || "");
+    const sectionClass = String(options.sectionClass || "modal card");
+    const headerHtml = options.headerHtml ? String(options.headerHtml) : `<h2>${this.escapeHtml(title)}</h2>`;
+    const bodyHtml = options.bodyHtml ? String(options.bodyHtml) : "";
+    const footerHtml = options.footerHtml ? String(options.footerHtml) : "";
+    const actionsHtml = Array.isArray(options.actions) && options.actions.length
+      ? `<div class="modal-actions${options.actionsClass ? ` ${this.escapeHtml(String(options.actionsClass))}` : ""}">${this.sharedDialogActions(options.actions)}</div>`
+      : "";
+    return `
+      <div class="modal-backdrop">
+        <section class="${this.escapeHtml(sectionClass)}">
+          ${headerHtml}
+          ${bodyHtml}
+          ${footerHtml || actionsHtml}
+        </section>
+      </div>`;
+  }
+
+  addonUpdateTargets() {
+    const registry = {
+      core: {
+        key: "core",
+        slug: "chihiros_beta",
+        updateEntity: "update.chihiros_beta_update",
+        title: "Chihiros Core",
+      },
+      chihiros_beta: {
+        key: "core",
+        slug: "chihiros_beta",
+        updateEntity: "update.chihiros_beta_update",
+        title: "Chihiros Core",
+      },
+    };
+    const plugins = window.ChihirosPlugins || {};
+    Object.entries(plugins).forEach(([kind, plugin]) => {
+      const slug = plugin && plugin.addonSlug ? String(plugin.addonSlug).trim() : "";
+      if (!slug) return;
+      const target = {
+        key: String(kind || "").trim() || slug,
+        slug,
+        updateEntity: plugin && plugin.updateEntity ? String(plugin.updateEntity).trim() : "",
+        title: plugin && plugin.title ? String(plugin.title).trim() : slug,
+      };
+      registry[target.key] = target;
+      registry[target.slug] = target;
+    });
+    return registry;
+  }
+
+  resolveAddonUpdateTarget(addon = "chihiros_beta") {
+    const requested = String(addon || "chihiros_beta").trim().toLowerCase() || "chihiros_beta";
+    const registry = this.addonUpdateTargets();
+    return registry[requested] || {
+      key: requested,
+      slug: requested,
+      updateEntity: "",
+      title: requested,
+    };
+  }
+
+  async runAddonUpdate(addon = "chihiros_beta") {
+    const resolvedTarget = this.resolveAddonUpdateTarget(addon);
+    const target = resolvedTarget.slug;
+    const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const refreshAddonUpdateSource = async () => {
+      try {
+        const response = await fetch("./api/addon-refresh", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ addon: target }),
+        });
+        const raw = await response.text();
+        let data = {};
+        if (raw) {
+          try {
+            data = JSON.parse(raw);
+          } catch (_err) {
+            data = { output: raw };
+          }
+        }
+        this._lastAddonRefresh = response.ok && data && typeof data === "object" ? data : null;
+        return response.ok
+          ? String(data.output || "Addon store reload: OK")
+          : `Addon store reload: ${response.status} ${data.message || data.output || raw || ""}`.trim();
+      } catch (err) {
+        this._lastAddonRefresh = null;
+        return `Add-on-Store-Neuladen übersprungen: ${err && err.message ? err.message : err}`;
+      }
+    };
+    const runHomeAssistantUpdate = async (entityId) => {
+      const debug = [];
+      const readState = async () => {
+        if (this._hass && typeof this._hass.callApi === "function") {
+          try {
+            return { source: "callApi", state: await this._hass.callApi("GET", `states/${entityId}`) };
+          } catch (err) {
+            const message = err && err.message ? err.message : String(err);
+            if (message.includes("502") || message.toLowerCase().includes("bad gateway")) {
+              return {
+                source: "addon-restart",
+                state: null,
+                transient: true,
+                message: "Add-on/Ingress startet gerade neu; warte auf erneute Verbindung.",
+              };
+            }
+            debug.push(`State source callApi failed: ${message}`);
+          }
+        }
+        if (this._hass && this._hass.connection && this._hass.connection.sendMessagePromise) {
+          try {
+            const states = await this._hass.connection.sendMessagePromise({ type: "get_states" });
+            if (Array.isArray(states)) {
+              return { source: "get_states", state: states.find((item) => item && item.entity_id === entityId) || null };
+            }
+          } catch (err) {
+            debug.push(`State source get_states failed: ${err && err.message ? err.message : err}`);
+          }
+        }
+        return { source: "hass.states", state: this._hass && this._hass.states ? this._hass.states[entityId] : null };
+      };
+      const versionInfo = (state) => {
+        const attrs = state && state.attributes ? state.attributes : {};
+        return {
+          state: state ? String(state.state || "") : "",
+          installed: attrs.installed_version ? String(attrs.installed_version) : "",
+          latest: attrs.latest_version ? String(attrs.latest_version) : "",
+          inProgress: Boolean(attrs.in_progress),
+        };
+      };
+      debug.push(await refreshAddonUpdateSource());
+      await this._hass.callService("homeassistant", "update_entity", { entity_id: entityId });
+      debug.push(`homeassistant.update_entity ${entityId}: OK`);
+      let read = await readState();
+      let state = read.state;
+      let info = versionInfo(state);
+      debug.push(`State source: ${read.source}`);
+      debug.push(this.updateDebug(state, "Nach update_entity poll 1"));
+      for (let poll = 1; poll < 60 && info.state !== "on"; poll += 1) {
+        await sleep(1000);
+        read = await readState();
+        if (read.transient) {
+          debug.push(`Nach update_entity poll ${poll + 1}: ${read.message}`);
+          continue;
+        }
+        state = read.state;
+        info = versionInfo(state);
+        debug.push(`State source: ${read.source}`);
+        debug.push(this.updateDebug(state, `Nach update_entity poll ${poll + 1}`));
+      }
+      if (info.state !== "on") {
+        const line = info.installed || info.latest ? `Installiert: ${info.installed || "?"}\nLatest: ${info.latest || "?"}` : "Kein Update verfügbar.";
+        return {
+          output: `OK\nKein Update verfügbar.\n${entityId}\n${line}\n\n${debug.join("\n\n")}`,
+        };
+      }
+      let startError = "";
+      try {
+        await this._hass.callService("update", "install", { backup: false }, { entity_id: entityId });
+        debug.push("update.install: OK");
+      } catch (err) {
+        startError = err && err.message ? err.message : String(err);
+        debug.push(`update.install: Startantwort ignoriert (${startError})`);
+      }
+      for (let poll = 0; poll < 30; poll += 1) {
+        await sleep(1000);
+        try {
+          read = await readState();
+        } catch (err) {
+          const message = err && err.message ? err.message : String(err);
+          debug.push(`update.install poll ${poll + 1}: ${message}`);
+          if (message.includes("502") || message.toLowerCase().includes("bad gateway")) {
+            continue;
+          }
+          throw err;
+        }
+        if (read.transient) {
+          debug.push(`update.install poll ${poll + 1}: ${read.message}`);
+          continue;
+        }
+        state = read.state;
+        debug.push(`State source: ${read.source}`);
+        debug.push(this.updateDebug(state, `update.install poll ${poll + 1}`));
+        info = versionInfo(state);
+        if (info.state !== "on" && !info.inProgress) break;
+      }
+      if (info.installed && info.latest && info.installed === info.latest && info.state !== "on") {
+        return {
+          output: `OK\nUpdate abgeschlossen.\n${entityId}\nInstalliert: ${info.installed}\nLatest: ${info.latest}\n\n${debug.join("\n\n")}`,
+        };
+      }
+      if (startError) {
+        throw new Error(`update.install fehlgeschlagen: ${startError}\n\n${debug.join("\n\n")}`);
+      }
+      return {
+        output: `OK\nUpdate gestartet.\n${entityId}\n${info.installed || "?"} -> ${info.latest || "?"}\n\n${debug.join("\n\n")}`,
+      };
+    };
+    const api = window.ChihirosAddonApi;
+    this.dialogState = {
+      type: "debug",
+      channel: 1,
+      output: `OK\nUpdate wird vorbereitet...\n${target}`,
+      running: true,
+      noChannel: true,
+      level: "pending",
+    };
+    this.render();
+    try {
+      if (!resolvedTarget.updateEntity) throw new Error(`Update-Entity fehlt für ${target}`);
+      if (!this._hass) throw new Error("Home-Assistant-Verbindung fehlt für Update-Entity-Refresh");
+      const result = await runHomeAssistantUpdate(resolvedTarget.updateEntity);
+      const output = String(result && result.output ? result.output : "Update angefordert.");
+      this.dialogState = {
+        type: "debug",
+        channel: 1,
+        output: `OK\n${output}`,
+        running: false,
+        noChannel: true,
+        level: "ok",
+      };
+      this.render();
+      return result;
+    } catch (err) {
+      this.dialogState = {
+        type: "debug",
+        channel: 1,
+        output: `FAIL\n${err && err.message ? err.message : err}`,
+        running: false,
+        noChannel: true,
+        level: "error",
+      };
+      this.render();
+      return null;
+    }
+  }
+
+  updateDebug(state, label) {
+    const lines = [label || "Update state"];
+    if (!state) return `${lines[0]}: nicht vorhanden`;
+    lines.push(`state: ${state.state}`);
+    lines.push(`restored: ${Boolean(state.attributes && state.attributes.restored)}`);
+    lines.push(`installed_version: ${state.attributes && state.attributes.installed_version ? state.attributes.installed_version : ""}`);
+    lines.push(`latest_version: ${state.attributes && state.attributes.latest_version ? state.attributes.latest_version : ""}`);
+    lines.push(`in_progress: ${Boolean(state.attributes && state.attributes.in_progress)}`);
+    lines.push(`supported_features: ${state.attributes && state.attributes.supported_features !== undefined ? state.attributes.supported_features : ""}`);
+    lines.push(`release_url: ${state.attributes && state.attributes.release_url !== undefined ? state.attributes.release_url : ""}`);
+    return lines.join("\n");
+  }
+
+  openDialog(type, channel = 1) {
+    if (String(type || "").startsWith("led-")) {
+      return this.openDialogState(type, channel, { activeTab: "led" });
+    }
+    return this.openDialogState(type, channel);
+  }
+
+  testLedScheduleDialog() {
+    return `
+      <div class="modal-backdrop">
+        <section class="modal card debug-modal">
+          <h2>Test Dialog</h2>
+          <div class="debug-output">OK\nLED dialog path works.\nWenn du das hier siehst, funktioniert das Oeffnen eines Dialogs.</div>
+          <div class="modal-actions">
+            <button type="button" class="link" data-action="close-dialog">${this.tr("close")}</button>
+          </div>
+        </section>
+      </div>`;
+  }
+
+  closeDialog() {
+    return this.closeDialogState();
+  }
+
+  escapeHtml(value = "") {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  moreInfo(entity) {
+    if (!entity) return;
+    const event = new Event("hass-more-info", { bubbles: true, composed: true });
+    event.detail = { entityId: entity };
+    this.dispatchEvent(event);
+  }
+
+  actionButton(label, icon, action, accent = false) {
+    return `
+      <button class="tile ${accent ? "accent" : ""}" data-action="${action}">
+        <ha-icon icon="${icon}"></ha-icon>
+        <span>${label}</span>
+      </button>`;
+  }
+
+  row(icon, label, value, action = "") {
+    const attr = action ? ` data-action="${action}"` : "";
+    return `
+      <div class="row"${attr}>
+        <ha-icon icon="${icon}"></ha-icon>
+        <span>${label}</span>
+        <strong>${value}</strong>
+      </div>`;
+  }
+
+  scheduleToggle(entity) {
+    const on = this.isOn(entity);
+    return `
+      <button class="schedule-toggle ${on ? "on" : ""}" data-action="press:${entity}" title="${this.tr("active")}">
+        <span class="toggle ${on ? "on" : ""}"></span>
+        <span>${on ? this.tr("on") : this.tr("off")}</span>
+      </button>`;
+  }
+
+  formatTimerTime(value) {
+    if (!value || value === "-") return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  topActions() {
+    const mac = this.entityPrefix();
+    const read = this.config.read_button || `button.${mac}_${this.channelSlug(1)}_read_daily_values`;
+    const timerStatus = this.timerStatusEntity();
+    const nextBaseline = this.stateAttr(timerStatus, "next_baseline", "-");
+    const nextResult = this.stateAttr(timerStatus, "next_result", "-");
+    const timerRange = `${this.escapeHtml(this.formatTimerTime(nextBaseline))} -> ${this.escapeHtml(this.formatTimerTime(nextResult))}`;
+    const calibrationRows = this.channels.map((ch) => `
+        <button class="action-row" data-action="dialog:calibration:${ch.id}">
+          <ha-icon icon="mdi:scale-balance"></ha-icon>
+          <span>CH${ch.id} ${this.tr("calibrate_channel")}</span>
+          <b>${this.tr("start")}</b>
+        </button>`).join("");
+    return `
+      <section class="card top-card tools-card">
+        <h2>${this.tr("fetch_data")}</h2>
+        <button class="action-row" data-press="${read}">
+          <ha-icon icon="mdi:download-circle"></ha-icon>
+          <span>${this.tr("read_daily")}</span>
+          <b>${this.tr("press")}</b>
+        </button>
+        <h2 class="sub-head">${this.tr("catch_up")}</h2>
+        <button class="action-row" data-action="more:${timerStatus}">
+          <ha-icon icon="mdi:timer-cog-outline"></ha-icon>
+          <span>${this.tr("catch_up_timer_status")}<small class="timer-range">${timerRange}</small></span>
+          <b>${this.state(timerStatus)}</b>
+        </button>
+        <button class="action-row" data-action="more:${read}">
+          <ha-icon icon="mdi:pencil"></ha-icon>
+          <span>${this.tr("catch_up_edit")}</span>
+          <b>${this.tr("change")}</b>
+        </button>
+        <h2 class="sub-head">${this.tr("calibrate")}</h2>
+        ${calibrationRows}
+      </section>`;
+  }
+
+  deviceTabs() {
+    const tab = this.ensureEnabledTab(this.activeTab);
+    this.activeTab = tab;
+    const coreTabs = new Set(["led", "config"]);
+    const pluginTabs = this.visibleTabs().filter((id) => !coreTabs.has(id) && this.isPluginLoaded(id));
+    const item = (id, label) => `
+        <button type="button" data-tab="${id}" class="${tab === id ? "active" : ""}">
+          ${this.tabIcon(id)}
+          <span>${label}</span>
+        </button>`;
+    const maybeItem = (id, label) => this.isTabEnabled(id) ? item(id, label) : "";
+    return `
+      <nav class="device-tabs" aria-label="Chihiros Bereiche">
+        ${maybeItem("led", this.tr("led"))}
+        ${pluginTabs.map((id) => item(id, this.pluginTitle(id))).join("")}
+        ${maybeItem("config", this.tr("config"))}
+        ${this.config.addon_mode ? `<button type="button" class="addon-update-button" data-addon-update="chihiros_beta">${this.tabIcon("update")}<span>Update</span></button>` : ""}
+      </nav>`;
+  }
+
+  pluginTitle(id) {
+    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[id];
+    return (plugin && plugin.title) || String(id || "").replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  }
+
+  tabIcon(id) {
+    const common = `class="tab-icon tab-icon-${id}" viewBox="0 0 24 24" aria-hidden="true" focusable="false"`;
+    const icons = {
+      led: `<path d="M4 8h16v8H4z"/><path d="M7 8V5m5 3V5m5 3V5M7 19v-3m5 3v-3m5 3v-3"/>`,
+      doser: `<path d="M12 3c3 4 5 6.5 5 10a5 5 0 0 1-10 0c0-3.5 2-6 5-10z"/><path d="M9 14c.7 1.4 1.8 2.1 3.4 2.1"/>`,
+      ruehrer: `<circle cx="12" cy="12" r="2"/><path d="M12 4c2.2 1.9 2.7 4.1 1.5 6.4M20 13c-2.7 1-4.8.5-6.3-1.5M7 19c.5-2.8 2-4.5 4.7-5"/>`,
+      heizer: `<path d="M8 4v10a4 4 0 1 0 8 0V4"/><path d="M8 8h8M8 12h8"/>`,
+      ctl: `<path d="M6 7h12M6 12h8M6 17h10"/><path d="M16 12h2m-2 0 1.4-1.4M16 12l1.4 1.4"/>`,
+      config: `<circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/>`,
+      update: `<path d="M19 12a7 7 0 1 1-2.1-5"/><path d="M19 4v5h-5"/>`,
+    };
+    return `<svg ${common}>${icons[id] || icons.update}</svg>`;
+  }
+
+  iconSvg(icon, extraClass = "ui-icon") {
+    const key = String(icon || "").trim();
+    const paths = {
+      "mdi:calendar-check": `<path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z"/><path d="m8 14 2.2 2.2L16 10.5"/>`,
+      "mdi:calendar-remove": `<path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z"/><path d="m9 12 6 6m0-6-6 6"/>`,
+      "mdi:calendar-sync": `<path d="M7 3v3m10-3v3M4 8h16M5 5h14v15H5z"/><path d="M9 14a3 3 0 0 1 5-2.2l1 1M15 10v3h-3m3 2a3 3 0 0 1-5 2.2l-1-1m0 2v-3h3"/>`,
+      "mdi:bug-outline": `<path d="M8 7V5m8 2V5M7 11H4m16 0h-3M7 15H4m16 0h-3"/><path d="M8 9h8v7a4 4 0 0 1-8 0z"/><path d="M9 9a3 3 0 0 1 6 0M10 13h.01M14 13h.01"/>`,
+      "mdi:chip": `<path d="M8 8h8v8H8z"/><path d="M4 10h4m8 0h4M4 14h4m8 0h4M10 4v4m4-4v4m-4 8v4m4-4v4"/>`,
+      "mdi:clock-outline": `<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>`,
+      "mdi:cog": `<circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1m0-12.8-2.1 2.1m-8.6 8.6-2.1 2.1"/>`,
+      "mdi:plus": `<path d="M12 5v14M5 12h14"/>`,
+      "mdi:console": `<path d="M4 5h16v14H4z"/><path d="M7 9l3 3-3 3m6 0h4"/>`,
+      "mdi:content-copy": `<path d="M8 8h10v12H8z"/><path d="M6 16H4V4h10v2"/>`,
+      "mdi:content-save-all-outline": `<path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/><path d="M3 7v15h15"/>`,
+      "mdi:content-save-outline": `<path d="M5 4h12l2 2v14H5z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/>`,
+      "mdi:cup-water": `<path d="M6 5h12l-1.2 15H7.2z"/><path d="M8 10c2 1.2 5 1.2 8 0"/>`,
+      "mdi:download": `<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>`,
+      "mdi:download-circle": `<circle cx="12" cy="12" r="9"/><path d="M12 6v9m-4-4 4 4 4-4"/>`,
+      "mdi:delete-outline": `<path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13"/><path d="M10 10v7m4-7v7"/>`,
+      "mdi:eye": `<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="3"/>`,
+      "mdi:eye-outline": `<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="3"/>`,
+      "mdi:fan": `<circle cx="12" cy="12" r="2"/><path d="M12 4c2.2 1.9 2.7 4.1 1.5 6.4M20 13c-2.7 1-4.8.5-6.3-1.5M7 19c.5-2.8 2-4.5 4.7-5"/>`,
+      "mdi:fish": `<path d="M4 12c3-4 8-5 14-2l3-3v10l-3-3c-6 3-11 2-14-2z"/><circle cx="15" cy="11" r=".7"/>`,
+      "mdi:gesture-tap-button": `<path d="M6 17h12v4H6z"/><path d="M12 17V8m0 0-2 2m2-2 2 2"/><circle cx="12" cy="6" r="3"/>`,
+      "mdi:hand-water": `<path d="M7 12V5a2 2 0 0 1 4 0v5m0-3a2 2 0 0 1 4 0v5m0-3a2 2 0 0 1 4 0v7c0 3-2 5-6 5H9c-3 0-5-2-5-5v-4a2 2 0 0 1 3-1"/><path d="M18 3c1.5 1.8 2.2 3 2.2 4a2.2 2.2 0 0 1-4.4 0c0-1 .7-2.2 2.2-4z"/>`,
+      "mdi:history": `<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 5v5h5M12 7v5l3 2"/>`,
+      "mdi:lightbulb": `<path d="M9 18h6M10 22h4M8 14a6 6 0 1 1 8 0c-.8.8-1 1.7-1 3H9c0-1.3-.2-2.2-1-3z"/>`,
+      "mdi:lock-outline": `<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>`,
+      "mdi:numeric": `<path d="M8 7v10M6 9l2-2 2 2M14 7h2a2 2 0 0 1 0 4h-2v6h5"/>`,
+      "mdi:open-in-new": `<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M18 13v7H4V6h7"/>`,
+      "mdi:pencil": `<path d="M4 20h4l11-11-4-4L4 16z"/><path d="m13 7 4 4"/>`,
+      "mdi:play-circle": `<circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/>`,
+      "mdi:radiator": `<path d="M8 4v16m4-16v16m4-16v16M5 6h14v12H5z"/><path d="M7 21h10"/>`,
+      "mdi:scale-balance": `<path d="M12 3v18M6 6h12M8 6l-4 7h8zm8 0-4 7h8z"/>`,
+      "mdi:share-variant": `<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"/>`,
+      "mdi:toggle-switch": `<rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="9" cy="12" r="3"/>`,
+      "mdi:timer-cog-outline": `<circle cx="12" cy="13" r="8"/><path d="M12 13V8m-3-5h6M9 2h6"/><circle cx="16" cy="16" r="2"/><path d="M16 13v1m0 4v1m-3-3h1m4 0h1"/>`,
+      "mdi:weather-sunset": `<path d="M4 19h16M6 15a6 6 0 0 1 12 0"/><path d="M12 4v4M4 12h3m10 0h3M6.5 6.5l2.1 2.1m6.8 0 2.1-2.1"/>`,
+      "mdi:white-balance-sunny": `<circle cx="12" cy="12" r="4"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1m0-15.6-2.1 2.1M6.3 17.7l-2.1 2.1"/>`,
+      "mdi:brightness-7": `<circle cx="12" cy="12" r="5"/><path d="M12 1v3m0 16v3M1 12h3m16 0h3M4.2 4.2l2.1 2.1m11.4 11.4 2.1 2.1m0-15.6-2.1 2.1M6.3 17.7l-2.1 2.1"/>`,
+      "mdi:bottle-tonic-outline": `<path d="M9 3h6v4l2 3v10H7V10l2-3z"/><path d="M9 7h6M9 13h6"/>`,
+    };
+    const body = paths[key] || paths["mdi:chip"];
+    return `<svg class="${extraClass}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${body}</svg>`;
+  }
+
+  replaceHaIcons() {
+    this.querySelectorAll("ha-icon").forEach((node) => {
+      const holder = document.createElement("span");
+      holder.innerHTML = this.iconSvg(node.getAttribute("icon"));
+      const svg = holder.firstElementChild;
+      if (svg) node.replaceWith(svg);
+    });
+  }
+
+  setTab(tab) {
+    this.activeTab = this.ensureEnabledTab(tab);
+    this.uiSettings.activeTab = this.activeTab;
+    this.saveUiSettings();
+    this.render();
+  }
+
+  entityLabel(entityId, state) {
+    return (state && state.attributes && state.attributes.friendly_name) || entityId;
+  }
+
+  entityValue(entityId, state) {
+    if (!state || state.state === "unknown" || state.state === "unavailable") return this.tr("unknown");
+    const unit = state.attributes.unit_of_measurement || "";
+    return unit ? `${state.state} ${unit}` : state.state;
+  }
+
+  entityIcon(entityId, state) {
+    if (state && state.attributes && state.attributes.icon) return state.attributes.icon;
+    const domain = entityId.split(".")[0];
+    if (domain === "light") return "mdi:lightbulb";
+    if (domain === "switch") return "mdi:toggle-switch";
+    if (domain === "button") return "mdi:gesture-tap-button";
+    if (domain === "number") return "mdi:numeric";
+    if (domain === "sensor") return "mdi:eye";
+    return "mdi:chip";
+  }
+
+  findEntities(kind) {
+    const configured = this.config[`${kind}_entities`];
+    if (Array.isArray(configured) && configured.length) return configured;
+    if (!this._hass) return [];
+    const patterns = {
+      led: ["led", "light", "wrgb", "rgb", "dyu1000", "chihiros"],
+      ruehrer: ["ruehrer", "rührer", "stirrer", "magstirrer", "mix", "dymix"],
+      heizer: ["heizer", "heater", "heat", "thermostat", "temperature"],
+    }[kind] || [];
+    const allowed = new Set(["light", "switch", "button", "number", "sensor", "binary_sensor", "climate"]);
+    return Object.entries(this._hass.states)
+      .filter(([entityId, state]) => {
+        const domain = entityId.split(".")[0];
+        if (!allowed.has(domain)) return false;
+        const haystack = `${entityId} ${this.entityLabel(entityId, state)}`.toLowerCase();
+        return patterns.some((pattern) => haystack.includes(pattern));
+      })
+      .map(([entityId]) => entityId)
+      .slice(0, 48);
+  }
+
+  entityRow(entityId) {
+    const state = this._hass && this._hass.states[entityId];
+    const domain = entityId.split(".")[0];
+    const action = domain === "button" || domain === "switch" || domain === "light"
+      ? `press:${entityId}`
+      : `more:${entityId}`;
+    const value = domain === "button" ? this.tr("press") : this.entityValue(entityId, state);
+    return `
+      <button class="entity-row" data-action="${action}">
+        <ha-icon icon="${this.entityIcon(entityId, state)}"></ha-icon>
+        <span>${this.entityLabel(entityId, state)}</span>
+        <b>${value}</b>
+      </button>`;
+  }
+
+  haDevicePanel(kind, title) {
+    const entities = this.findEntities(kind);
+    const rows = entities.length
+      ? entities.map((entityId) => this.entityRow(entityId)).join("")
+      : `<div class="empty-note">${this.tr("no_entities")}</div>`;
+    return `
+      <div class="ha-tab-page">
+        ${this.pageHeader(title, `${entities.length} Entities`, kind === "ruehrer" ? "mdi:fan" : "mdi:radiator")}
+        <section class="card ha-entities-card">
+          <h2>${title}</h2>
+          <div class="entity-grid">${rows}</div>
+        </section>
+      </div>`;
+  }
+
+  pageHeader(title, subtitle = "", icon = "mdi:fish") {
+    return `
+      <section class="page-hero">
+        <div class="page-hero-icon"><ha-icon icon="${icon}"></ha-icon></div>
+        <div>
+          <h1>${this.escapeHtml(title)}</h1>
+          ${subtitle ? `<p>${this.escapeHtml(subtitle)}</p>` : ""}
+        </div>
+      </section>`;
+  }
+
+  tabContent() {
+    this.activeTab = this.ensureEnabledTab(this.activeTab);
+    if (this.activeTab === "led") return this.ledPanel();
+    if (this.activeTab === "config") return this.configPanel();
+    const pluginPanel = this.pluginPanel(this.activeTab);
+    if (pluginPanel !== null) return pluginPanel;
+    return `<section class="card"><h2>${this.escapeHtml(this.pluginTitle(this.activeTab))}</h2><div class="empty-note">Plugin is not installed.</div></section>`;
+  }
+
+  pluginPanel(id) {
+    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[id];
+    if (!plugin) return null;
+    if (typeof plugin.renderPanel === "function") return plugin.renderPanel(this);
+    return `<section class="card"><h2>${this.escapeHtml(this.pluginTitle(id))}</h2><div class="empty-note">Plugin ist nicht geladen.</div></section>`;
+  }
+
+  addonDatabasePanel() {
+    if (!this.config.addon_mode) return "";
+    const db = this.config.addon_database || {};
+    const mode = String(db.mode || "hass");
+    const stateDbPath = String(db.state_db_path || db.hass_state_db_path || "/config/.chihiros/chihiros_state.sqlite3");
+    const effectiveState = String(db.effective_state_db_path || stateDbPath);
+    const diagnosticsEnabled = Boolean(db.database_diagnostics_enabled);
+    return `
+        <section class="card config-card database-card">
+          <div class="config-card-head">
+            <div>
+              <h2>${this.tr("database")}</h2>
+              <small>${this.tr("database_subtitle")}</small>
+            </div>
+            <span class="db-pill">${mode === "custom" ? this.tr("own_database") : "Home Assistant"}</span>
+          </div>
+          <form data-addon-db-form>
+            <div class="db-mode">
+              <label class="${mode === "hass" ? "active" : ""}">
+                <input type="radio" name="mode" value="hass" ${mode === "hass" ? "checked" : ""}>
+                <span>Home Assistant</span>
+              </label>
+              <label class="${mode === "custom" ? "active" : ""}">
+                <input type="radio" name="mode" value="custom" ${mode === "custom" ? "checked" : ""}>
+                <span>${this.tr("own_database")}</span>
+              </label>
+            </div>
+            <label class="config-row wide">
+              <span>State SQLite</span>
+              <input type="text" name="state_db_path" value="${this.escapeHtml(stateDbPath)}" placeholder="/config/.chihiros/chihiros_state.sqlite3">
+            </label>
+            <div class="db-current">
+              <p><b>${this.tr("active_sqlite")}</b><span>${this.escapeHtml(effectiveState)}</span></p>
+            </div>
+            <label class="config-check">
+              <input type="checkbox" name="database_diagnostics_enabled" ${diagnosticsEnabled ? "checked" : ""}>
+              <span><b>${this.tr("database_diagnostics")}</b><small>${this.tr("database_diagnostics_hint")}</small></span>
+            </label>
+            <div class="db-actions">
+              <button type="button" class="link" data-addon-db-refresh>${this.tr("reload").toUpperCase()}</button>
+              <button type="submit" class="primary">${this.tr("save").toUpperCase()}</button>
+            </div>
+          </form>
+        </section>`;
+  }
+
+  pluginConfigPanels() {
+    if (!this.config.addon_mode) return "";
+    const plugins = window.ChihirosPlugins || {};
+    return this.visibleTabs().map((id) => {
+      const plugin = plugins[id];
+      if (!plugin || typeof plugin.renderConfig !== "function" || !this.isPluginLoaded(id)) return "";
+      return plugin.renderConfig(this);
+    }).join("");
+  }
+
+  configPanel() {
+    const lang = this.language();
+    const showMac = this.uiSettings && this.uiSettings.showMac !== false;
+    const dashboardDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
+    const channelNameRows = this.visibleTabs().includes("doser") ? this.channels.map((ch) => `
+          <label class="config-row">
+            <span>CH${ch.id}</span>
+            <input type="text" value="${this.escapeHtml(ch.name)}" data-channel-name="${ch.id}">
+          </label>`).join("") : "";
+    const channelNamePanel = channelNameRows ? `
+          <h2 class="sub-head">${this.tr("channel_names")}</h2>
+          ${channelNameRows}` : "";
+    return `
+      <div class="config-page">
+        ${this.addonDatabasePanel()}
+        ${this.pluginConfigPanels()}
+        <section class="card config-card">
+          <h2>${this.tr("display")}</h2>
+          <label class="config-row">
+            <span>${this.tr("language_label")}</span>
+            <select data-ui-setting="language">
+              <option value="de" ${lang === "de" ? "selected" : ""}>${this.tr("language_de")}</option>
+              <option value="en" ${lang === "en" ? "selected" : ""}>${this.tr("language_en")}</option>
+            </select>
+          </label>
+          <label class="config-check">
+            <input type="checkbox" data-ui-setting="showMac" ${showMac ? "checked" : ""}>
+            <span>${this.tr("show_mac")}</span>
+          </label>
+          <label class="config-check">
+            <input type="checkbox" data-ui-setting="dashboardDebug" ${dashboardDebug ? "checked" : ""}>
+            <span>${this.tr("dashboard_debug")}</span>
+          </label>
+          <small class="settings-note">${this.tr("dashboard_debug_hint")}</small>
+          ${channelNamePanel}
+        </section>
+      </div>`;
+  }
+
+  dialog() {
+    if (this.dialogState && this.dialogState.type === "debug") {
+      return this.sharedDebugDialog({
+        title: this.dialogState.title || (this.dialogState.debug ? this.tr("debug_output") : this.tr("result_output")),
+        output: this.dialogState.output || "",
+        debug: Boolean(this.dialogState.debug),
+        level: this.dialogState.level || "",
+      });
+    }
+    if (this.dialogState && this.dialogState.type === "confirm") {
+      return this.sharedModalDialog({
+        title: this.dialogState.title || this.tr("reset_schedule"),
+        sectionClass: "modal card debug-modal",
+        bodyHtml: `<div class="debug-output">${this.escapeHtml([this.dialogState.message || "", this.dialogState.detail || ""].filter(Boolean).join("\n\n"))}</div>`,
+        actions: [
+          { action: "confirm-dialog-no", label: this.dialogState.cancelLabel || this.tr("reset_schedule_no"), className: "link", type: "button" },
+          { action: "confirm-dialog-yes", label: this.dialogState.confirmLabel || this.tr("reset_schedule_yes"), className: "primary", type: "button" },
+        ],
+      });
+    }
+    if (this.dialogState && this.dialogState.type === "test-led-schedule" && typeof this.testLedScheduleDialog === "function") {
+      return this.testLedScheduleDialog();
+    }
+    if (this.ledScheduleEditorOpen && typeof this.ledScheduleDialog === "function") {
+      return this.ledScheduleDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-history-all" && typeof this.ledHistoryAllDialog === "function") {
+      return this.ledHistoryAllDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-history" && typeof this.ledChannelHistoryDialog === "function") {
+      return this.ledChannelHistoryDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-notification" && typeof this.ledNotificationDialog === "function") {
+      return this.ledNotificationDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-database-status" && typeof this.databaseStatusDialog === "function") {
+      return this.databaseStatusDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-template-editor" && typeof this.ledTemplateDialog === "function") {
+      return this.ledTemplateDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-template-share" && typeof this.ledTemplateShareDialog === "function") {
+      return this.ledTemplateShareDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-schedule-share" && typeof this.ledScheduleShareDialog === "function") {
+      return this.ledScheduleShareDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-auto-mode-editor" && typeof this.ledAutoModeDialog === "function") {
+      return this.ledAutoModeDialog();
+    }
+    if (this.dialogState && this.dialogState.type === "led-device-power-editor" && typeof this.ledDevicePowerDialog === "function") {
+      return this.ledDevicePowerDialog();
+    }
+    const plugins = window.ChihirosPlugins || {};
+    const dialogType = this.dialogState && this.dialogState.type;
+    const plugin = Object.values(plugins).find((item) => item && typeof item.dialog === "function" && typeof item.canHandleDialog === "function" && item.canHandleDialog(dialogType));
+    if (plugin) {
+      return plugin.dialog(this);
+    }
+    return "";
+  }
+
+  render() {
+    if (!this._hass) return;
+    this.innerHTML = `
+      <style>
+        :host { display:block; color: var(--primary-text-color); }
+        .wrap { max-width: 1640px; margin: 0 auto; padding: 0 14px 24px; }
+        .ui-icon { width:20px; height:20px; display:inline-block; flex:0 0 20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; color:#3d82b8; }
+        .device-tabs { position:sticky; top:0; z-index:100; display:flex; flex-wrap:wrap; gap:8px; margin:0 -14px 18px; padding:6px 8px; border:1px solid rgba(81,154,190,.22); border-top:0; border-radius:0 0 8px 8px; background:rgba(5,14,17,.98); backdrop-filter:blur(8px); box-shadow:0 10px 24px rgba(0,0,0,.22); }
+        .device-tabs button { min-height:32px; min-width:104px; border:1px solid rgba(81,154,190,.28); border-radius:7px; background:rgba(10,18,21,.88); color:var(--primary-text-color); font:inherit; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:0 12px; }
+        .device-tabs button:hover { border-color:rgba(3,201,255,.52); background:rgba(0,122,166,.12); }
+        .device-tabs button.active { border-color:#03c9ff; color:#03c9ff; background:rgba(0,122,166,.18); font-weight:700; }
+        .device-tabs .tab-icon { width:18px; height:18px; flex:0 0 18px; color:currentColor; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+        .device-tabs button[data-tab="led"] .tab-icon { color:#ffd43b; }
+        .device-tabs button[data-tab="doser"] .tab-icon { color:#2ea8ff; }
+        .device-tabs button[data-tab="ruehrer"] .tab-icon { color:#39d353; }
+        .device-tabs button[data-tab="heizer"] .tab-icon { color:#ff7b72; }
+        .device-tabs button[data-tab="wireshark"] .tab-icon { color:#03c9ff; }
+        .device-tabs button[data-tab="ctl"] .tab-icon { color:#ff9300; }
+        .device-tabs button[data-tab="config"] .tab-icon { color:#a78bfa; }
+        .device-tabs .addon-update-button { margin-left:auto; border-color:rgba(255,147,0,.58); color:#ffc078; background:rgba(255,147,0,.10); }
+        .device-tabs .addon-update-button:hover { border-color:#ff9300; background:rgba(255,147,0,.18); }
+        .device-tabs .addon-update-button .tab-icon { color:#ff9300; }
+        .plugin-update-row { display:flex; justify-content:flex-end; margin:0 0 8px; }
+        .plugin-update-row button { display:inline-flex; align-items:center; gap:8px; min-height:30px; border:1px solid rgba(255,147,0,.58); border-radius:7px; background:rgba(255,147,0,.10); color:#ffc078; font:inherit; padding:0 11px; cursor:pointer; }
+        .plugin-update-row button:hover { border-color:#ff9300; background:rgba(255,147,0,.18); }
+        .device-tabs button.active .tab-icon { filter:drop-shadow(0 0 7px currentColor); }
+        .doser-device-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:-2px 0 12px; }
+        .doser-device-tabs button { min-height:32px; min-width:96px; border:1px solid rgba(81,154,190,.28); border-radius:8px; background:rgba(10,18,21,.72); color:var(--primary-text-color); font:inherit; cursor:pointer; padding:0 12px; }
+        .doser-device-tabs button.active { border-color:#03c9ff; color:#03c9ff; background:rgba(0,122,166,.18); font-weight:700; }
+        .page-hero { grid-column:1 / -1; min-height:76px; display:grid; grid-template-columns:52px minmax(0, 1fr); align-items:center; gap:12px; margin:0 0 12px; padding:12px 14px; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:linear-gradient(135deg, rgba(0,122,166,.18), rgba(14,24,27,.92)); }
+        .page-hero-icon { width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid rgba(3,201,255,.35); background:rgba(3,201,255,.10); }
+        .page-hero-icon ha-icon { --mdc-icon-size:28px; color:#03c9ff; }
+        .page-hero h1 { margin:0; font-size:21px; font-weight:700; }
+        .page-hero p { margin:4px 0 0; color:rgba(255,255,255,.66); line-height:1.35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .ha-tab-page { display:grid; grid-template-columns:1fr; gap:12px; }
+        .ha-entities-card { min-height:220px; }
+        .entity-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:8px 14px; }
+        .led-page { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); gap:12px; align-items:start; }
+        .led-connection-card { grid-column:2; grid-row:3; min-height:150px; width:100%; height:100%; align-self:stretch; display:flex; flex-direction:column; gap:3px; padding-top:11px; padding-bottom:11px; }
+        .led-connection-card h2 { margin:0 0 3px; }
+        .card.led-connection-card p { flex:0 0 auto; min-height:24px; align-items:center; margin:0; line-height:1.2; }
+        .led-connection-card p span { text-align:right; overflow-wrap:anywhere; }
+        .led-device-control-card { grid-column:1; grid-row:4; min-height:132px; }
+        .led-device-presets-card { grid-column:2; grid-row:4; min-height:132px; }
+        .led-device-presets-card h2 { margin:0 0 12px; }
+        .led-device-head { display:grid; grid-template-columns:48px 1fr auto; align-items:start; gap:12px; margin-bottom:10px; }
+        .led-device-head > ha-icon { --mdc-icon-size:38px; color:#f0f6fc; }
+        .led-device-head h2 { margin-bottom:2px; }
+        .led-device-head span, .led-device-head small { display:block; color:rgba(255,255,255,.66); line-height:1.35; }
+        .led-device-head b { align-self:start; padding:3px 10px; border-radius:999px; background:rgba(57,211,83,.14); border:1px solid rgba(57,211,83,.35); font-size:12px; }
+        .led-device-edit-box { margin:10px 0 0; padding:10px; border:1px solid rgba(81,154,190,.22); border-radius:8px; background:rgba(0,0,0,.14); }
+        .led-device-control-card .led-device-edit-box { margin:0; padding:0; border:0; background:transparent; display:grid; grid-template-columns:1fr; gap:10px; align-items:center; }
+        .led-device-control-card .led-device-edit-box h2 { grid-column:1; margin:0; }
+        .led-device-edit-box h3 { margin:0 0 8px; color:rgba(255,255,255,.82); font-size:12px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; }
+        .led-device-edit-actions { display:grid; gap:7px; }
+        .led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0, 1.35fr) minmax(170px, .65fr); gap:18px; align-items:center; }
+        .led-device-edit-actions .led-auto-mode-row { grid-template-columns:28px minmax(0,1fr) auto; }
+        .led-device-edit-actions .led-device-power-row { grid-template-columns:28px max-content auto; justify-content:start; column-gap:10px; }
+        .led-device-power-row > span { white-space:nowrap; }
+        .led-power-toggle { display:flex; align-items:center; gap:8px; min-width:76px; padding:3px 7px; border:0; background:transparent; color:var(--primary-text-color); cursor:pointer; }
+        .led-power-toggle-track { position:relative; display:block; width:34px; height:18px; flex:0 0 34px; border-radius:9px; background:rgba(255,255,255,.20); border:1px solid rgba(255,255,255,.24); transition:background .16s ease,border-color .16s ease; }
+        .led-power-toggle-track > span { position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#d8e1e5; transition:transform .16s ease,background .16s ease; }
+        .led-power-toggle.active .led-power-toggle-track { background:rgba(57,211,83,.38); border-color:rgba(57,211,83,.72); }
+        .led-power-toggle.active .led-power-toggle-track > span { transform:translateX(16px); background:#73ef89; }
+        .led-power-toggle b { min-width:24px; color:#03c9ff; text-align:left; }
+        .led-auto-mode-row .mini { border:1px solid rgba(81,154,190,.35); border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0; background:rgba(0,0,0,.16); color:#03c9ff; cursor:pointer; }
+        .led-device-edit-box .led-preset-grid { margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08); }
+        .led-device-control-card .led-info-list { padding-left:18px; border-left:1px solid rgba(255,255,255,.08); }
+        .led-info-list { display:grid; gap:7px; margin:0; }
+        .led-info-list b.is-unknown { color:rgba(255,255,255,.48); font-weight:600; }
+        .led-device-presets-card .led-preset-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:0; }
+        .led-channels-card { grid-column:1 / -1; grid-row:1; min-height:220px; }
+        .led-channels-title-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; margin-bottom:12px; }
+        .led-channels-title-row h2 { margin:0; }
+        .led-total-watt, .led-channel-watt { display:inline-flex; align-items:center; justify-content:center; gap:3px; min-height:24px; box-sizing:border-box; border:1px solid rgba(245,166,35,.28); border-radius:6px; background:rgba(0,0,0,.24); color:rgba(255,255,255,.88); font-size:11px; font-weight:750; line-height:1; white-space:nowrap; }
+        .led-watt-bolt { color:#f6ad2f; filter:drop-shadow(0 0 3px rgba(246,173,47,.24)); }
+        .led-total-watt { padding:4px 8px; }
+        .led-channel-watt { min-width:68px; padding:3px 6px; color:rgba(255,255,255,.86); }
+        .led-manual-schedule-warning { display:flex; align-items:center; gap:10px; min-height:42px; margin:0 0 12px; padding:9px 12px; border:1px solid rgba(255,76,76,.72); border-left:4px solid #ff4c4c; border-radius:6px; background:rgba(132,20,20,.28); color:#ffb4b4; }
+        .led-manual-schedule-warning ha-icon { --mdc-icon-size:22px; flex:0 0 auto; color:#ff5c5c; }
+        .led-manual-schedule-warning strong { line-height:1.35; }
+        .led-channels { display:grid; grid-template-columns:repeat(var(--channel-columns, 4), minmax(0,1fr)); gap:12px; }
+        .empty-state { min-height:120px; display:flex; align-items:center; justify-content:center; border:1px dashed rgba(81,154,190,.32); border-radius:8px; color:rgba(255,255,255,.62); background:rgba(0,0,0,.12); }
+        .led-channel { min-height:154px; display:grid; gap:10px; }
+        .led-channel-head { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:8px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,.09); }
+        .led-channel-head h2 { min-width:0; margin:0; padding:0; border:0; font-size:16px; font-weight:700; white-space:nowrap; }
+        .led-channel-head > strong { font-size:16px; text-align:right; white-space:nowrap; }
+        .led-channel-head-actions { display:flex; align-items:center; gap:3px; }
+        .led-channel-toggle { display:flex; align-items:center; gap:7px; min-width:66px; padding:3px 5px 3px 0; border:0; background:transparent; color:var(--primary-text-color); cursor:pointer; }
+        .led-channel-toggle-track { position:relative; display:block; width:34px; height:18px; flex:0 0 34px; border:1px solid rgba(255,255,255,.24); border-radius:9px; background:rgba(255,255,255,.20); transition:background .16s ease,border-color .16s ease; }
+        .led-channel-toggle-track > span { position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:#d8e1e5; transition:transform .16s ease,background .16s ease; }
+        .led-channel-toggle.active .led-channel-toggle-track { border-color:color-mix(in srgb, var(--led-color) 72%, transparent); background:color-mix(in srgb, var(--led-color) 38%, transparent); }
+        .led-channel-toggle.active .led-channel-toggle-track > span { transform:translateX(16px); background:var(--led-color); }
+        .led-channel-toggle b { min-width:20px; color:rgba(255,255,255,.50); font-size:11px; text-align:left; }
+        .led-channel-toggle.active b { color:var(--led-color); }
+        .led-channel-body { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:34px; }
+        .led-channel-control { display:grid; grid-template-columns:minmax(0,1fr) 76px; gap:10px; align-items:center; }
+        .led-channel input[type="range"] { width:100%; min-height:18px; padding:0; accent-color:color-mix(in srgb, var(--led-color) 68%, #111 32%); filter:drop-shadow(0 0 3px color-mix(in srgb, var(--led-color) 48%, transparent)); background:transparent; }
+        .led-channel input[type="range"]::-webkit-slider-runnable-track { height:5px; border-radius:999px; background:color-mix(in srgb, var(--led-color) 68%, #111 32%); }
+        .led-channel input[type="range"]::-webkit-slider-thumb { margin-top:-6px; }
+        .led-channel input[type="range"]::-moz-range-track { height:5px; border-radius:999px; background:color-mix(in srgb, var(--led-color) 42%, #111 58%); }
+        .led-channel input[type="range"]::-moz-range-progress { height:5px; border-radius:999px; background:color-mix(in srgb, var(--led-color) 68%, #111 32%); }
+        .led-channel input[type="number"] { min-height:34px; border:1px solid color-mix(in srgb, var(--led-color) 42%, transparent); background:rgba(255,255,255,.06); color:var(--primary-text-color); border-radius:9px; padding:6px 8px; text-align:right; font-weight:800; }
+        .led-channel-value-input { display:block; width:76px; box-sizing:border-box; }
+        .led-channel-history-button { min-width:64px; height:30px; display:inline-flex; align-items:center; justify-content:center; gap:5px; padding:0 6px; border:1px solid rgba(81,154,190,.18); border-radius:7px; background:transparent; color:rgba(91,184,236,.72); font:inherit; font-size:10px; font-weight:700; cursor:pointer; }
+        .led-channel-history-button:hover { border-color:rgba(43,155,216,.52); background:rgba(43,155,216,.09); color:#70c9f6; }
+        .led-channel-history-button ha-icon { --mdc-icon-size:17px; }
+        .led-actions { display:grid; grid-template-columns:repeat(3, 32px); gap:8px; justify-content:end; }
+        .led-actions .mini { border:1px solid rgba(81,154,190,.35); border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0; }
+        .led-preset-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; margin-top:12px; }
+        .led-device-control-box .led-preset-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+        .led-preset-grid button { min-height:38px; border:1px solid rgba(81,154,190,.35); background:rgba(0,0,0,.16); color:var(--primary-text-color); border-radius:7px; display:flex; align-items:center; justify-content:center; gap:8px; }
+        .led-middle { grid-column:1 / -1; grid-row:2; }
+        .led-schedule-card { grid-column:1 / -1; }
+        .led-middle .led-schedule-card { grid-column:auto; }
+        .led-middle .led-history-card { grid-column:auto; }
+        .led-template-card { grid-column:1; grid-row:3; min-height:150px; }
+        .led-template-title-row { display:flex; align-items:center; gap:8px; }
+        .led-template-count { min-width:24px; min-height:20px; display:inline-flex; align-items:center; justify-content:center; padding:0 7px; border:1px solid rgba(3,201,255,.34); border-radius:999px; background:rgba(3,201,255,.10); color:#65dfff; font-size:11px; font-weight:800; white-space:nowrap; }
+        .led-schedule-title-row { display:flex; align-items:center; gap:8px; }
+        .led-schedule-count { min-width:24px; min-height:20px; display:inline-flex; align-items:center; justify-content:center; padding:0 7px; border:1px solid rgba(3,201,255,.28); border-radius:999px; background:rgba(3,201,255,.08); color:#65dfff; font-size:11px; font-weight:800; white-space:nowrap; }
+        .led-template-header-actions { display:flex; align-items:center; gap:8px; }
+        .led-template-header-actions select { min-width:128px; min-height:34px; border:1px solid rgba(125,211,252,.36); border-radius:7px; background:rgba(0,0,0,.18); color:var(--primary-text-color); padding:0 30px 0 10px; font:inherit; }
+        .led-template-front-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+        .led-template-front-actions button { min-height:34px; border:1px solid rgba(125,211,252,.36); border-radius:8px; background:rgba(125,211,252,.08); color:#7dd3fc; font:inherit; font-weight:800; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; cursor:pointer; }
+        .led-template-front-actions button:hover { border-color:rgba(125,211,252,.72); background:rgba(125,211,252,.16); }
+        .led-template-front-table { width:100%; margin-top:0; border-collapse:collapse; font-size:12px; }
+        .led-template-front-table-wrap.scroll-limit-5 { max-height:228px; overflow-y:auto; overflow-x:auto; margin-top:0; padding-right:4px; }
+        .led-template-front-table-wrap.scroll-limit-5 .led-template-front-table { margin-top:0; }
+        .led-template-front-table-wrap.scroll-limit-5 thead th { position:sticky; top:0; z-index:2; background:#132125; }
+        .led-template-front-table th, .led-template-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; white-space:nowrap; }
+        .led-template-front-table th { color:rgba(255,255,255,.74); font-weight:800; text-transform:uppercase; letter-spacing:.02em; }
+        .led-template-front-table th:first-child, .led-template-front-table td:first-child { min-width:170px; }
+        .led-template-front-table td:first-child { color:inherit; font-weight:inherit; }
+        .led-template-front-table th:last-child, .led-template-front-table td:last-child { width:76px; text-align:right; }
+        .led-template-chip { display:inline; color:var(--chip-color, #7dd3fc); font-size:inherit; font-weight:inherit; line-height:inherit; white-space:nowrap; }
+        .led-template-chip.red { --chip-color:#ff8a8a; --chip-border:rgba(255,77,90,.52); --chip-bg:rgba(255,77,90,.12); }
+        .led-template-chip.green { --chip-color:#70f08b; --chip-border:rgba(57,211,83,.52); --chip-bg:rgba(57,211,83,.12); }
+        .led-template-chip.blue { --chip-color:#75caff; --chip-border:rgba(46,168,255,.52); --chip-bg:rgba(46,168,255,.12); }
+        .led-template-chip.white { --chip-color:#f2fbff; --chip-border:rgba(238,247,255,.52); --chip-bg:rgba(238,247,255,.10); }
+        .led-schedule-card table input { width:100%; min-width:54px; min-height:30px; border:1px solid rgba(81,154,190,.38); background:rgba(255,255,255,.08); color:var(--primary-text-color); border-radius:6px; padding:5px 7px; }
+        .led-schedule-card td:nth-child(1) { width:40px; color:rgba(255,255,255,.65); font-weight:700; }
+        .led-schedule-card td:nth-child(n+4):nth-child(-n+8) { width:76px; }
+        .led-schedule-front-table { width:100%; border-collapse:collapse; font-size:12px; }
+        .led-schedule-front-table th,
+        .led-schedule-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; }
+        .led-schedule-front-table th { color:rgba(255,255,255,.74); font-weight:800; text-transform:uppercase; letter-spacing:.02em; }
+        .led-schedule-front-table td:nth-child(1) { width:38px; color:#03c9ff; font-weight:800; }
+        .led-schedule-front-table th:nth-child(2),
+        .led-schedule-front-table td:nth-child(2) { width:34px; min-width:34px; padding-left:4px; padding-right:4px; text-align:center; }
+        .led-schedule-front-table th:nth-child(3),
+        .led-schedule-front-table td:nth-child(3) { min-width:100px; white-space:nowrap; }
+        .led-schedule-front-actions { display:flex; justify-content:flex-end; gap:7px; }
+        .led-schedule-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+        .led-schedule-check-cell { text-align:center; }
+        .led-schedule-check-dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#7c898f; box-shadow:0 0 7px rgba(124,137,143,.45); }
+        .led-schedule-check-dot.ok { background:#209f49; box-shadow:0 0 6px rgba(32,159,73,.55); }
+        .led-schedule-check-dot.fail { background:#ff4d57; box-shadow:0 0 8px rgba(255,77,87,.72); }
+        .led-schedule-front-actions .mini { border:1px solid rgba(81,154,190,.35); border-radius:7px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0; background:rgba(0,0,0,.16); color:var(--primary-text-color); }
+        .led-schedule-front-actions .mini ha-icon { --mdc-icon-size:18px; color:#03c9ff; }
+        .led-schedule-front-actions .mini.danger ha-icon { color:#ffdd70; }
+        .led-schedule-front-actions .mini.send ha-icon { color:#39d353; }
+        .led-schedule-modal { width:min(680px, calc(100vw - 28px)); max-width:calc(100vw - 28px); max-height:calc(100vh - 28px); padding:0; overflow:hidden; display:grid; grid-template-rows:auto minmax(0, 1fr) auto; border:1px solid rgba(3,201,255,.22); background:linear-gradient(180deg, rgba(12,20,23,.98), rgba(8,14,17,.99)); box-shadow:0 28px 80px rgba(0,0,0,.52); }
+        .led-schedule-dialog-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; padding:18px 20px 14px; border-bottom:1px solid rgba(255,255,255,.08); background:linear-gradient(180deg, rgba(3,201,255,.10), rgba(0,0,0,0)); }
+        .led-schedule-dialog-head-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; }
+        .led-schedule-dialog-close { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; padding:0; border:1px solid rgba(81,154,190,.35); border-radius:7px; background:rgba(0,0,0,.18); color:var(--primary-text-color); }
+        .led-schedule-dialog-close span { font-size:20px; line-height:1; }
+        .led-schedule-dialog-head h2 { margin:0 0 6px; font-size:20px; }
+        .led-schedule-dialog-head p { margin:0; color:rgba(255,255,255,.66); font-size:12px; line-height:1.45; }
+        .led-schedule-dialog-meta { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+        .dialog-chip { display:inline-flex; align-items:center; min-height:30px; padding:0 10px; border-radius:999px; border:1px solid rgba(3,201,255,.24); background:rgba(0,122,166,.14); color:#88ddff; font-size:12px; font-weight:700; white-space:nowrap; }
+        .led-schedule-dialog-body { min-height:0; overflow:auto; display:grid; grid-template-columns:1fr; gap:12px; padding:16px 20px 14px; }
+        .led-schedule-dialog-message { width:100%; min-width:0; max-width:100%; overflow:visible; box-sizing:border-box; border:1px solid rgba(255,77,79,.72); border-radius:10px; background:rgba(80,8,14,.72); color:#ffe8e8; padding:10px 12px; }
+        .led-schedule-dialog-message.pending { max-height:none; overflow:visible; border-color:rgba(3,201,255,.58); background:rgba(3,42,58,.62); color:#d8f8ff; }
+        .led-schedule-dialog-message.ok { border-color:rgba(57,211,83,.62); background:rgba(10,58,32,.62); color:#e7ffed; }
+        .led-schedule-dialog-message strong { display:block; margin-bottom:6px; color:#ff9a9a; font-size:12px; letter-spacing:.06em; }
+        .led-schedule-dialog-message.pending strong { color:#8eefff; }
+        .led-schedule-dialog-message.ok strong { color:#8cffaa; }
+        .led-schedule-dialog-message pre { max-width:100%; margin:0; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; font:12px/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; }
+        .led-schedule-side-card { border:1px solid rgba(81,154,190,.18); border-radius:14px; background:rgba(0,0,0,.16); padding:14px; box-shadow:0 10px 24px rgba(0,0,0,.18); }
+        .led-schedule-side-card h3 { margin:0 0 8px; font-size:13px; letter-spacing:.03em; text-transform:uppercase; color:#88ddff; }
+        .led-schedule-side-card p { margin:0; color:rgba(255,255,255,.86); line-height:1.45; word-break:break-word; }
+        .led-schedule-side-card small { display:block; margin-top:6px; color:rgba(255,255,255,.58); line-height:1.35; }
+        .led-schedule-side-card.compact p { font-size:18px; font-weight:700; }
+        .led-schedule-dialog-editor { min-width:0; }
+        .led-schedule-editor { overflow:visible; }
+        .led-schedule-editor.scroll-limit-5 { overflow:visible; padding-right:4px; }
+        .led-schedule-card-list { display:grid; gap:12px; }
+        .led-schedule-row-card { border:1px solid rgba(81,154,190,.22); border-radius:16px; background:rgba(0,0,0,.18); padding:12px; box-shadow:0 10px 28px rgba(0,0,0,.18); display:grid; gap:12px; }
+        .led-schedule-row-head { display:grid; grid-template-columns:40px minmax(0,1fr) auto; gap:12px; align-items:center; padding:10px 12px; border:1px solid rgba(81,154,190,.22); border-left:4px solid #03c9ff; border-radius:12px; background:rgba(0,0,0,.14); }
+        .led-schedule-row-index { display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:10px; background:rgba(3,201,255,.12); color:#03c9ff; font-weight:800; }
+        .led-schedule-time-icon { justify-self:center; width:32px; height:32px; border-radius:10px; padding:6px; background:rgba(3,201,255,.12); color:#03c9ff; box-sizing:border-box; }
+        .led-schedule-row-title { display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap; color:rgba(255,255,255,.78); font-weight:700; min-width:0; }
+        .led-schedule-row-title strong { font-size:15px; }
+        .led-schedule-row-title span { color:rgba(255,255,255,.45); font-size:12px; }
+        .led-schedule-row-title input { min-height:34px; min-width:104px; border:1px solid rgba(81,154,190,.34); background:rgba(255,255,255,.06); color:var(--primary-text-color); border-radius:8px; padding:7px 9px; }
+        .led-schedule-time-action { color:rgba(255,255,255,.66) !important; font-size:11px !important; font-weight:800; text-transform:uppercase; white-space:nowrap; }
+        .led-schedule-color-control.color-toggle { border-left-color:#03c9ff; grid-template-columns:minmax(84px, 120px) minmax(0,1fr); }
+        .led-schedule-color-control.color-time { border-left-color:#03c9ff; grid-template-columns:minmax(84px, 120px) minmax(0,1fr); }
+        .led-schedule-toggle-control { min-height:58px; }
+        .led-schedule-debug-control { grid-template-columns:minmax(180px, 1fr) auto; }
+        .led-schedule-debug-control > label span { white-space:nowrap; }
+        .led-schedule-switch { justify-self:end; display:inline-grid; grid-auto-flow:column; grid-auto-columns:max-content; align-items:center; gap:8px; color:rgba(255,255,255,.84); font-size:12px; font-weight:700; text-transform:uppercase; white-space:nowrap; }
+        .led-schedule-switch input { width:18px; height:18px; accent-color:#03c9ff; }
+        .led-schedule-time-control .led-schedule-row-title { display:grid; grid-template-columns:auto minmax(0, 1fr) auto minmax(0, 1fr); align-items:center; justify-content:stretch; gap:8px; width:100%; min-width:0; }
+        .led-schedule-time-field { position:relative; display:grid; grid-template-columns:minmax(0, 1fr) 34px; gap:6px; align-items:center; min-width:0; width:100%; }
+        .led-schedule-time-field input { min-width:0; width:100%; }
+        .led-schedule-time-picker { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border:1px solid rgba(81,154,190,.34); border-radius:8px; background:rgba(3,201,255,.08); color:#03c9ff; cursor:pointer; }
+        .led-schedule-time-picker:hover { border-color:rgba(3,201,255,.6); background:rgba(3,201,255,.16); }
+        .led-schedule-time-picker ha-icon { --mdc-icon-size:18px; }
+        .led-time-picker-panel { position:absolute; z-index:12; top:calc(100% + 8px); right:0; width:244px; padding:12px; border:1px solid rgba(81,154,190,.42); border-radius:12px; background:#111b1e; box-shadow:0 18px 42px rgba(0,0,0,.46); display:none; gap:10px; }
+        .led-schedule-time-field.open .led-time-picker-panel { display:grid; }
+        .led-time-picker-title { color:#03c9ff; font-size:12px; font-weight:800; text-transform:uppercase; text-align:center; }
+        .led-time-clock-face { display:grid; grid-template-columns:repeat(6, 1fr); gap:5px; }
+        .led-time-minute-row { display:grid; grid-template-columns:repeat(6, 1fr); gap:5px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); }
+        .led-time-clock-face button,
+        .led-time-minute-row button { min-height:30px; border:1px solid rgba(81,154,190,.28); border-radius:999px; background:rgba(0,0,0,.18); color:rgba(255,255,255,.84); font-size:12px; font-weight:700; cursor:pointer; }
+        .led-time-clock-face button:hover,
+        .led-time-minute-row button:hover,
+        .led-time-clock-face button.active,
+        .led-time-minute-row button.active { border-color:rgba(3,201,255,.74); background:rgba(3,201,255,.2); color:#8ee6ff; }
+        .led-time-picker-actions { display:flex; justify-content:flex-end; gap:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); }
+        .led-time-picker-actions button { min-height:32px; border:1px solid rgba(81,154,190,.34); border-radius:8px; background:rgba(0,0,0,.18); color:rgba(255,255,255,.86); padding:0 10px; cursor:pointer; }
+        .led-time-picker-actions button.primary { border-color:rgba(3,201,255,.64); background:rgba(3,201,255,.18); color:#8ee6ff; }
+        .led-schedule-active-toggle { display:inline-flex; align-items:center; gap:7px; color:rgba(255,255,255,.82); font-size:12px; font-weight:700; text-transform:uppercase; white-space:nowrap; }
+        .led-schedule-active-toggle input { accent-color:#03c9ff; }
+        .led-schedule-row-inline-actions { display:flex; gap:8px; justify-content:flex-end; }
+        .led-schedule-row-grid { display:grid; grid-template-columns:1fr; gap:10px; }
+        .led-schedule-color-control { display:grid; grid-template-columns:minmax(84px, 120px) minmax(0,1fr) 94px; gap:10px; align-items:center; padding:10px 12px; border:1px solid rgba(81,154,190,.22); border-left-width:4px; border-left-style:solid; border-radius:12px; background:rgba(0,0,0,.14); }
+        .led-schedule-row-grid > .led-schedule-color-control { grid-template-columns:minmax(68px, 82px) minmax(0,1fr) 94px; }
+        .led-schedule-row-grid > .led-schedule-color-control.color-toggle,
+        .led-schedule-row-grid > .led-schedule-color-control.color-time,
+        .led-schedule-row-grid > .led-schedule-color-control.color-template { grid-template-columns:minmax(68px, 82px) minmax(0,1fr); }
+        .led-schedule-row-grid > .led-schedule-color-control.color-template { grid-template-columns:minmax(68px, 82px) minmax(0,1fr) auto; }
+        .led-schedule-color-control > label { color:rgba(255,255,255,.82); font-size:12px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; padding-left:6px; }
+        .led-schedule-color-control input[type="range"] { width:100%; min-height:18px; padding:0; }
+        .led-schedule-color-control input[type="number"] { min-height:36px; border:1px solid rgba(81,154,190,.34); background:rgba(255,255,255,.06); color:var(--primary-text-color); border-radius:10px; padding:7px 9px; text-align:right; }
+        .led-schedule-color-control.color-red { border-left-color:#ff4d4f; }
+        .led-schedule-color-control.color-red input[type="range"] { accent-color:#ff4d4f; }
+        .led-schedule-color-control.color-red input[type="number"] { border-color:rgba(255,77,79,.32); }
+        .led-schedule-color-control.color-green { border-left-color:#39d353; }
+        .led-schedule-color-control.color-green input[type="range"] { accent-color:#39d353; }
+        .led-schedule-color-control.color-green input[type="number"] { border-color:rgba(57,211,83,.32); }
+        .led-schedule-color-control.color-blue { border-left-color:#2ea8ff; }
+        .led-schedule-color-control.color-blue input[type="range"] { accent-color:#2ea8ff; }
+        .led-schedule-color-control.color-blue input[type="number"] { border-color:rgba(46,168,255,.32); }
+        .led-schedule-color-control.color-white { border-left-color:#f0f6fc; }
+        .led-schedule-color-control.color-white input[type="range"] { accent-color:#f0f6fc; }
+        .led-schedule-color-control.color-white input[type="number"] { border-color:rgba(240,246,252,.32); }
+        .led-schedule-color-control.color-template { border-left-color:#7dd3fc; grid-template-columns:minmax(84px, 120px) minmax(0,1fr); }
+        .led-schedule-template-control select {
+          min-height:36px;
+          border:1px solid rgba(125,211,252,.32);
+          background:rgba(125,211,252,.08);
+          color:var(--primary-text-color);
+          border-radius:10px;
+          padding:0 10px;
+          font:inherit;
+          width:100%;
+        }
+        .led-schedule-template-control small { color:#7dd3fc; font-size:12px; font-weight:700; white-space:nowrap; }
+        .led-template-actions { grid-column:2 / -1; display:flex; gap:6px; justify-content:flex-start; flex-wrap:wrap; }
+        .led-template-actions button { min-height:32px; border:1px solid rgba(125,211,252,.34); border-radius:8px; background:rgba(125,211,252,.08); color:#7dd3fc; font-size:12px; font-weight:800; cursor:pointer; padding:0 10px; }
+        .led-template-actions button:hover { border-color:rgba(125,211,252,.72); background:rgba(125,211,252,.16); }
+        .led-schedule-color-control.color-ramp { border-left-color:#ff8a3d; }
+        .led-schedule-row-grid > .led-schedule-color-control.color-ramp { grid-template-columns:1fr; }
+        .led-schedule-ramp-control {
+          display:grid;
+          grid-template-columns:1fr;
+          gap:8px;
+          min-height:78px;
+          padding-top:12px;
+          padding-bottom:12px;
+          background:linear-gradient(180deg, rgba(255,138,61,.055), rgba(255,138,61,.025));
+        }
+        .led-schedule-ramp-title {
+          display:flex;
+          align-items:center;
+          justify-content:flex-start;
+          color:rgba(255,235,222,.9);
+          white-space:normal;
+          width:100%;
+        }
+        .led-schedule-ramp-title span { overflow:visible; text-overflow:clip; white-space:normal; }
+        .led-schedule-ramp-presets {
+          display:flex;
+          flex-wrap:wrap;
+          gap:6px;
+          width:100%;
+          justify-content:flex-start;
+        }
+        .led-schedule-ramp-chip {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          min-height:30px;
+          padding:7px 10px;
+          border-radius:8px;
+          border:1px solid rgba(255,138,61,.28);
+          background:rgba(255,138,61,.08);
+          color:#ffb071;
+          font-weight:700;
+          font-size:11px;
+          line-height:1.1;
+          white-space:nowrap;
+          min-width:0;
+          flex:0 0 auto;
+          width:auto;
+          cursor:pointer;
+          transition:background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease;
+        }
+        .led-schedule-ramp-chip:hover { border-color:rgba(255,138,61,.56); background:rgba(255,138,61,.14); color:#ffd0ad; }
+        .led-schedule-ramp-chip.active {
+          background:linear-gradient(180deg, rgba(255,138,61,.28), rgba(255,138,61,.14));
+          border-color:rgba(255,138,61,.76);
+          box-shadow:0 0 0 1px rgba(255,138,61,.18) inset;
+        }
+        .led-schedule-row-weekdays { display:grid; gap:8px; }
+        .schedule-weekdays { display:grid; gap:8px; }
+        .weekday-all { display:inline-flex; align-items:center; gap:8px; font-weight:700; color:rgba(255,255,255,.78); }
+        .weekday-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:6px; }
+        .weekday-chip { display:inline-flex; align-items:center; justify-content:center; gap:6px; min-height:32px; border:1px solid rgba(81,154,190,.34); border-radius:8px; background:rgba(0,0,0,.16); padding:4px 8px; color:rgba(255,255,255,.88); font-size:12px; font-weight:700; }
+        .led-schedule-dialog-footer { display:grid; grid-template-columns:auto minmax(0, 1fr); align-items:center; gap:12px; padding:14px 20px 18px; border-top:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.18); }
+        .led-schedule-dialog-footer > button.secondary.danger { justify-self:start; }
+        .led-schedule-dialog-actions { display:flex; flex-wrap:nowrap; justify-content:flex-end; gap:8px; min-width:0; margin-left:auto; }
+        .led-schedule-dialog-actions button { flex:0 0 auto; }
+        .led-schedule-dialog-footer button { min-height:38px; border-radius:8px; padding:0 10px; white-space:nowrap; font-size:13px; }
+        .led-schedule-dialog-footer button:disabled { opacity:.55; cursor:wait; }
+        .led-schedule-dialog-footer .danger { border-color:rgba(255,196,0,.42); color:#ffdd70; background:rgba(255,196,0,.08); }
+        .led-schedule-dialog-footer .danger:hover { border-color:rgba(255,196,0,.8); background:rgba(255,196,0,.14); }
+        .led-schedule-summary-list { display:grid; gap:8px; }
+        .led-schedule-summary-list.scroll-limit-5 { max-height:292px; overflow-y:auto; overflow-x:hidden; padding-right:4px; }
+        .schedule-summary-row { display:grid; grid-template-columns:24px 130px minmax(0,1fr) 20px; align-items:center; gap:10px; min-height:40px; width:100%; padding:0 10px; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:rgba(0,0,0,.14); color:inherit; font:inherit; text-align:left; cursor:pointer; }
+        .schedule-summary-row:hover { border-color:rgba(3,201,255,.45); background:rgba(0,122,166,.12); }
+        .schedule-summary-index { color:#03c9ff; font-weight:700; }
+        .schedule-summary-time { font-weight:700; }
+        .schedule-summary-data { color:rgba(255,255,255,.75); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .schedule-summary-row ha-icon { --mdc-icon-size:18px; color:#03c9ff; justify-self:end; }
+        .schedule-weekdays { display:grid; gap:8px; min-width:260px; }
+        .weekday-all { display:inline-flex; align-items:center; gap:8px; font-weight:700; color:rgba(255,255,255,.74); }
+        .weekday-grid { display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:6px; }
+        .weekday-chip {
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          min-height:30px;
+          border:1px solid rgba(81,154,190,.34);
+          border-radius:6px;
+          background:rgba(0,0,0,.14);
+          padding:4px 8px;
+          color:rgba(255,255,255,.88);
+          font-size:12px;
+          font-weight:700;
+          cursor:pointer;
+          transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease;
+        }
+        .weekday-all-chip { min-width:56px; }
+        .weekday-chip:hover { border-color:rgba(3,201,255,.52); background:rgba(0,122,166,.16); }
+        .weekday-chip.active,
+        .weekday-chip[aria-pressed="true"] {
+          border-color:rgba(3,201,255,.72);
+          background:rgba(0,122,166,.24);
+          color:#88ddff;
+          box-shadow:0 0 0 1px rgba(3,201,255,.12) inset;
+        }
+        .weekday-chip span { white-space:nowrap; }
+        .led-schedule-weekdays-control {
+          display:grid;
+          grid-template-columns:1fr;
+          gap:8px;
+          padding:10px 12px 12px;
+          border:1px solid rgba(81,154,190,.22);
+          border-left-width:4px;
+          border-left-style:solid;
+          border-left-color:#03c9ff;
+          border-radius:12px;
+          background:rgba(0,0,0,.14);
+        }
+        .led-schedule-weekdays-control .weekday-all-center {
+          justify-content:flex-start;
+          text-align:left;
+          width:100%;
+        }
+        .led-schedule-weekdays-control .weekday-all-center span {
+          width:100%;
+          text-align:left;
+        }
+        .led-schedule-weekdays-control .weekday-grid {
+          justify-content:center;
+          grid-template-columns:repeat(8, minmax(0, 1fr));
+          width:100%;
+          max-width:100%;
+          justify-items:stretch;
+        }
+        .led-schedule-weekdays-control .weekday-chip {
+          min-width:0;
+          width:100%;
+        }
+        .led-history-card { min-height:220px; }
+        .led-schedule-table { display:grid; gap:8px; }
+        .led-schedule-row { display:grid; grid-template-columns:repeat(2, minmax(92px, 1.2fr)) repeat(4, minmax(72px, .8fr)) minmax(72px, .8fr); gap:8px; align-items:end; padding:0; border:0; background:transparent; }
+        .led-schedule-current { margin:0; color:rgba(255,255,255,.62); font-size:12px; line-height:1.4; }
+        .led-schedule-actions { display:flex; flex-wrap:nowrap; justify-content:flex-end; gap:8px; margin:12px 0 0; padding-top:12px; border-top:1px solid rgba(255,255,255,.08); }
+        .led-schedule-actions button { box-sizing:border-box; min-height:40px; min-width:78px; border:1px solid rgba(81,154,190,.42); background:rgba(0,0,0,.18); color:var(--primary-text-color); border-radius:8px; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0 8px; font:inherit; line-height:1; white-space:nowrap; }
+        .led-schedule-actions button ha-icon { --mdc-icon-size:18px; flex:0 0 18px; }
+        .led-schedule-actions button.danger { min-width:128px; }
+        .led-schedule-actions button.primary { min-width:136px; border-color:rgba(0,188,245,.7); background:rgba(0,128,168,.48); }
+        .config-page { display:grid; grid-template-columns:minmax(0, 1fr); gap:12px; align-items:start; }
+        .config-card { min-height:auto; }
+        .config-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
+        .config-card-head h2 { margin-bottom:2px; }
+        .config-card-head small { display:block; color:rgba(255,255,255,.58); line-height:1.35; }
+        .config-row { display:grid; grid-template-columns:120px minmax(0, 1fr); gap:12px; align-items:center; min-height:44px; margin:8px 0; font-weight:600; }
+        .config-row.wide { grid-template-columns:120px minmax(0, 1fr); }
+        .config-row select, .config-row input { min-height:36px; border:1px solid rgba(81,154,190,.35); border-radius:6px; background:rgba(255,255,255,.08); color:var(--primary-text-color); padding:0 10px; font:inherit; }
+        .config-check { display:flex; align-items:center; gap:10px; min-height:40px; margin:8px 0; font-weight:600; }
+        .config-check input { width:18px; height:18px; }
+        .database-card { min-height:auto; }
+        .db-pill { border:1px solid rgba(3,201,255,.55); border-radius:999px; color:#03c9ff; padding:3px 10px; font-size:12px; font-weight:700; white-space:nowrap; }
+        .db-mode { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:8px 0 12px; }
+        .db-mode label { min-height:38px; border:1px solid rgba(81,154,190,.3); border-radius:8px; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; background:rgba(10,18,21,.65); font-weight:700; }
+        .db-mode label.active { border-color:#03c9ff; background:rgba(0,122,166,.18); color:#03c9ff; }
+        .db-mode input { accent-color:#03c9ff; }
+        .db-current { margin-top:10px; border-top:1px solid rgba(255,255,255,.08); padding-top:10px; display:grid; gap:6px; }
+        .db-current p { display:grid; grid-template-columns:120px minmax(0,1fr); gap:10px; margin:0; font-size:12px; }
+        .db-current b { color:rgba(255,255,255,.68); }
+        .db-current span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:rgba(255,255,255,.86); }
+        .db-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+        .db-actions .primary { min-height:34px; border:1px solid rgba(3,201,255,.65); border-radius:6px; background:rgba(0,122,166,.18); color:var(--primary-text-color); font:inherit; font-weight:700; cursor:pointer; padding:0 14px; }
+        .plugin-loader-card { grid-column:1 / -1; }
+        .plugin-loader-list { display:grid; gap:8px; }
+        .plugin-loader-row { display:grid; grid-template-columns:minmax(0, 1fr) auto; align-items:center; gap:12px; border:1px solid rgba(81,154,190,.22); border-radius:8px; background:rgba(0,0,0,.14); padding:10px; }
+        .plugin-loader-row strong, .plugin-loader-row span { display:block; }
+        .plugin-loader-row strong { color:rgba(255,255,255,.9); }
+        .plugin-loader-row span { color:rgba(255,255,255,.62); font-size:12px; line-height:1.35; margin-top:2px; }
+        .plugin-loader-row code { display:block; margin-top:5px; color:rgba(255,255,255,.45); font:11px/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .plugin-loader-row button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-width:120px; }
+        .entity-row { display:grid; grid-template-columns:28px minmax(0,1fr) auto; align-items:center; gap:10px; min-height:34px; width:100%; padding:0; border:0; border-bottom:1px solid rgba(255,255,255,.07); background:transparent; color:inherit; font:inherit; text-align:left; cursor:pointer; }
+        .entity-row:last-child { border-bottom:0; }
+        .entity-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .entity-row b { color:rgba(255,255,255,.9); font-weight:700; }
+        .empty-note { min-height:120px; display:flex; align-items:center; color:rgba(255,255,255,.66); }
+        .top { display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom:12px; }
+        .top-four { grid-template-columns: 1fr 1fr 1fr 1fr; }
+        .top-front { grid-template-columns: 1.25fr 1fr 1fr 1fr; }
+        .top-split { grid-template-columns: 1fr 1fr; }
+        .channels { display:grid; grid-template-columns: repeat(var(--channel-columns, 4), minmax(0,1fr)); gap:12px; }
+        .channels-1 { grid-template-columns:1fr; }
+        .channels-2 { grid-template-columns:repeat(2, minmax(0,1fr)); }
+        .channels-3 { grid-template-columns:repeat(3, minmax(0,1fr)); }
+        .channels-4 { grid-template-columns:repeat(4, minmax(0,1fr)); }
+        .middle { display:grid; grid-template-columns: 1.05fr .95fr; gap:12px; margin-top:12px; }
+        .wide-middle { grid-template-columns: 1.25fr .75fr; }
+        .single-middle { grid-template-columns:1fr; }
+        .side-stack { display:grid; grid-template-columns:1fr; gap:10px; }
+        .quick { display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
+        .card, .tile { border:1px solid rgba(81,154,190,.30); border-radius:8px; background:linear-gradient(135deg, rgba(21,32,35,.98), rgba(8,15,18,.98)); box-shadow:0 10px 30px rgba(0,0,0,.18); }
+        .card { padding:12px 14px; }
+        h1, h2 { margin:0; font-weight:500; letter-spacing:0; }
+        h1 { font-size:20px; margin-bottom:18px; }
+        h2 { font-size:18px; margin-bottom:12px; }
+        .brand b { display:block; font-size:16px; margin-bottom:12px; }
+        .brand span { display:block; line-height:1.45; color:rgba(255,255,255,.82); }
+        .top-card { min-height: 132px; }
+        .tools-card { min-height: 190px; }
+        .sub-head { margin-top:12px; margin-bottom:6px; font-size:15px; font-weight:700; }
+        .row, .action-row { display:grid; grid-template-columns:28px 1fr auto; align-items:center; gap:8px; min-height:30px; border:0; color:inherit; background:transparent; width:100%; text-align:left; padding:0; font:inherit; }
+        ha-icon { color:#3d82b8; }
+        .row strong { font-weight:500; }
+        .action-row small { display:block; margin-top:2px; color:rgba(255,255,255,.58); font-size:11px; line-height:1.25; }
+        .action-row .timer-range { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .action-row b, .add, .link { color:#03c9ff; font-weight:600; }
+        .toggle { width:34px; height:18px; border-radius:999px; background:#586069; position:relative; border:1px solid rgba(255,255,255,.18); }
+        .toggle:after { content:''; position:absolute; width:14px; height:14px; top:1px; left:2px; border-radius:50%; background:#d0d7de; }
+        .toggle.on { background:#007aa6; border-color:#03c9ff; }
+        .toggle.on:after { left:17px; background:#2bd2ff; }
+        .section-title { margin:16px 0 8px 16px; }
+        .channels-panel { padding: 12px 12px; margin-top: 8px; }
+        .channels-panel > h2 { margin: 0 0 10px 4px; }
+        .channel-card { min-height: 188px; border-bottom-left-radius:8px; border-bottom-right-radius:8px; }
+        .channel-card.inactive { filter:grayscale(.85); opacity:.62; }
+        .channel-card.inactive h2 i { background:#77808a; box-shadow:none; }
+        .channel-card.inactive .bottle i { opacity:.35; }
+        .channel-card.auto-locked { filter:grayscale(.72); }
+        .channel-card.auto-locked .row:first-of-type { color:rgba(255,255,255,.62); }
+        .channel-card.auto-locked .row:first-of-type ha-icon { color:#9aa0a6; }
+        .channel-card h2 { font-weight:700; position:relative; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,.09); }
+        .channel-card h2 i { float:right; width:10px; height:10px; margin-top:7px; border-radius:50%; background:var(--dot); box-shadow:0 0 13px var(--dot); }
+        .sub { margin:8px 0 4px; font-weight:700; font-size:12px; color:rgba(255,255,255,.78); }
+        .bottle-wrap { display:grid; grid-template-columns:48px 1fr; gap:12px; align-items:center; margin:8px 0 8px; }
+        .bottle { width:30px; height:44px; border:2px solid rgba(255,255,255,.5); border-radius:6px 6px 8px 8px; position:relative; margin-left:4px; background:rgba(0,0,0,.24); overflow:hidden; }
+        .bottle:before { content:''; position:absolute; width:14px; height:7px; border:2px solid rgba(255,255,255,.5); border-bottom:0; border-radius:4px 4px 0 0; top:-8px; left:6px; }
+        .bottle i { position:absolute; left:3px; right:3px; bottom:3px; height:var(--level, 68%); border-radius:4px; background:linear-gradient(180deg, color-mix(in srgb, var(--fill) 38%, white), var(--fill)); opacity:var(--fill-opacity, .72); box-shadow:0 0 6px color-mix(in srgb, var(--fill) 28%, transparent); transition:height .2s ease, opacity .2s ease; }
+        .bottle-text { display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px; min-width:0; }
+        .bottle-text strong { font-size:16px; font-weight:600; justify-self:end; white-space:nowrap; }
+        .bottle-text span { color:rgba(255,255,255,.72); font-size:12px; min-width:0; }
+        .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:6px; }
+        .tiles.compact-actions { grid-template-columns:repeat(3,1fr); }
+        .tile { min-height:58px; color:inherit; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; font:inherit; }
+        .tile ha-icon { --mdc-icon-size:28px; }
+        .tile.accent ha-icon { color:#ffc400; }
+        .manual-control { margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.09); display:grid; grid-template-columns:auto minmax(104px, 1fr) 38px; gap:8px; align-items:center; }
+        .manual-control.blocked label { opacity:.58; filter:grayscale(.9); }
+        .manual-control label { display:flex; gap:10px; align-items:center; min-width:0; }
+        .manual-input { min-height:28px; display:flex; align-items:center; justify-content:flex-end; gap:7px; background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.12); border-bottom-color:rgba(255,255,255,.55); border-radius:6px 6px 2px 2px; padding:1px 8px; min-width:0; }
+        .manual-input input { width:58px; height:24px; color:var(--primary-text-color); background:transparent; border:0; text-align:right; font:inherit; outline:0; }
+        .manual-input input:disabled { color:rgba(255,255,255,.52); }
+        .manual-input span { color:rgba(255,255,255,.72); }
+        .dose-inline { width:32px; height:32px; border:1px solid rgba(81,154,190,.35); border-radius:999px; background:rgba(10,18,21,.88); color:inherit; display:flex; align-items:center; justify-content:center; padding:0; cursor:pointer; font:inherit; }
+        .dose-inline ha-icon { color:#ffc400; --mdc-icon-size:22px; }
+        .dose-inline.blocked { border-color:rgba(255,255,255,.16); background:rgba(90,90,90,.28); cursor:not-allowed; }
+        .dose-inline.blocked ha-icon { color:#858585; }
+        .schedule table { width:100%; border-collapse:collapse; font-size:12px; }
+        .schedule th, .schedule td { border:1px solid rgba(255,255,255,.12); padding:6px 8px; text-align:left; }
+        .schedule tr.inactive-row { color:rgba(255,255,255,.48); filter:grayscale(.85); }
+        .schedule tr.auto-locked-row { color:rgba(255,255,255,.56); background:rgba(130,130,130,.08); filter:grayscale(.75); }
+        .schedule-lock { display:inline-flex; align-items:center; gap:7px; color:rgba(255,255,255,.64); font-weight:600; }
+        .schedule-lock ha-icon { --mdc-icon-size:17px; color:#9aa0a6; }
+        .schedule td:nth-child(2) { white-space:nowrap; }
+        .schedule-toggle { display:inline-flex; align-items:center; gap:8px; border:0; background:transparent; color:inherit; font:inherit; cursor:pointer; padding:0; }
+        .schedule-toggle .toggle { flex:0 0 auto; }
+        .tabs { display:grid; grid-template-columns:repeat(4,1fr); background:rgba(0,0,0,.32); border-radius:7px; overflow:hidden; margin-bottom:12px; }
+        .tabs span, .tabs b { padding:7px; text-align:center; font-weight:500; }
+        .tabs b { color:#03c9ff; border-bottom:2px solid #03c9ff; }
+        .legend { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; }
+        .mini, .add, .link { border:0; background:transparent; cursor:pointer; font:inherit; }
+        .quick .tile { min-height:88px; }
+        .quick .tile ha-icon { --mdc-icon-size:48px; color:#4c84b4; }
+        .containers, .manual-panel, .auto-panel { min-height: 0; }
+        .container-row { display:grid; grid-template-columns:12px 28px 1fr auto 28px; align-items:center; gap:8px; min-height:30px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,.07); }
+        .container-row:last-child { border-bottom:0; }
+        .container-row strong { font-weight:600; }
+        .mini.edit { padding:0; width:24px; height:24px; display:inline-flex; align-items:center; justify-content:center; }
+        .mini.edit ha-icon, .mini.edit .ui-icon { --mdc-icon-size:20px; width:20px; height:20px; }
+        .value-row { display:grid; grid-template-columns:12px 28px 1fr auto; align-items:center; gap:8px; min-height:30px; border-bottom:1px solid rgba(255,255,255,.07); cursor:pointer; }
+        .value-row:last-child { border-bottom:0; }
+        .value-row strong, .container-row strong { justify-self:end; text-align:right; min-width:76px; padding-left:12px; }
+        .value-row strong { font-weight:700; }
+        .history-card { min-height: 130px; }
+        .card-title-action { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .eye-action { width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; color:#2b8fcd; }
+        .eye-action ha-icon, .eye-action .ui-icon { --mdc-icon-size:20px; width:20px; height:20px; }
+        .front-history { min-height: 142px; }
+        .front-history-list { max-height:270px; overflow-y:auto; padding-right:4px; }
+        .led-history-timeline { position:relative; display:grid; max-height:270px; overflow-y:auto; padding:2px 5px 2px 0; }
+        .led-history-timeline.expanded { max-height:min(72vh, 760px); padding-top:8px; }
+        .led-history-timeline-entry { position:relative; display:grid; grid-template-columns:30px minmax(0,1fr); gap:7px; min-height:46px; padding:5px 4px 5px 0; }
+        .led-history-timeline-entry[data-action] { cursor:pointer; }
+        .led-history-timeline-entry[data-action]:hover .led-history-timeline-copy { background:rgba(43,155,216,.05); }
+        .led-history-timeline-entry:not(:last-child)::after { content:""; position:absolute; left:14px; top:34px; bottom:-4px; width:1px; background:rgba(81,154,190,.22); }
+        .led-history-timeline-icon { z-index:1; width:28px; height:28px; display:grid; place-items:center; border:1px solid currentColor; border-radius:50%; background:#0d1a1e; font-size:14px; line-height:1; }
+        .led-history-timeline-copy { min-width:0; display:grid; gap:1px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,.06); }
+        .led-history-timeline-copy > div { display:flex; align-items:center; gap:7px; min-width:0; }
+        .led-history-timeline-copy strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
+        .led-history-timeline-copy p { margin:0; color:rgba(255,255,255,.68); font-size:10px; line-height:1.3; overflow-wrap:anywhere; }
+        .led-history-timeline-copy time { margin-left:auto; flex:0 0 auto; color:rgba(255,255,255,.48); font-size:10px; text-align:right; }
+        .led-history-status { flex:0 0 auto; padding:1px 5px; border:1px solid rgba(57,211,83,.45); border-radius:4px; color:#73ef89; font-size:9px; font-weight:800; }
+        .led-history-status.fail { border-color:rgba(255,91,99,.55); color:#ff7d84; }
+        .history-empty { min-height:88px; display:flex; align-items:center; gap:10px; color:rgba(255,255,255,.68); cursor:pointer; }
+        .channel-history { margin-top:7px; padding-top:7px; border-top:1px solid rgba(255,255,255,.09); cursor:pointer; }
+        .channel-history-title { display:grid; grid-template-columns:24px 1fr; align-items:center; gap:10px; min-height:26px; }
+        .channel-history-title ha-icon, .channel-history-title .ui-icon { color:#2b8fcd; --mdc-icon-size:20px; width:20px; height:20px; }
+        .channel-history-scroll { max-height:88px; overflow-y:auto; padding-right:4px; }
+        .channel-history-row { display:grid; gap:1px; min-height:28px; padding:4px 0 4px 34px; border-bottom:1px solid rgba(255,255,255,.06); }
+        .channel-history-row:last-child { border-bottom:0; }
+        .channel-history-row span { font-weight:600; font-size:12px; }
+        .channel-history-row small { color:rgba(255,255,255,.62); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .channel-history-empty { padding:5px 0 4px 34px; color:rgba(255,255,255,.55); font-size:12px; }
+        .settings { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+        .settings-stack { display:grid; grid-template-columns:1fr; gap:12px; }
+        .settings.doser-settings-layout { grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); align-items:start; }
+        .doser-settings-main { min-width:0; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; align-items:start; }
+        .doser-connection-card { display:flex; flex-direction:column; gap:3px; align-self:stretch; width:100%; height:100%; padding-top:11px; padding-bottom:11px; }
+        .doser-connection-card h2 { margin:0 0 3px; }
+        .card.doser-connection-card p { flex:0 0 auto; min-height:24px; align-items:center; margin:0; line-height:1.2; }
+        .doser-connection-card p span { text-align:right; overflow-wrap:anywhere; }
+        .small { min-height:96px; }
+        .small p { display:grid; grid-template-columns:1fr auto; margin:7px 0; }
+        .settings-note, .input-hint { color:rgba(255,255,255,.58); font-size:11px; line-height:1.35; }
+        .settings-note { display:block; margin:2px 0 8px; }
+        .ok { color:#39d353; }
+        .is-offline { color:#ff5b63; }
+        .modal-backdrop { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.58); display:flex; align-items:center; justify-content:center; padding:20px; }
+        .modal { width:min(520px, calc(100vw - 40px)); }
+        .modal.led-schedule-modal { width:min(680px, calc(100vw - 28px)); max-width:calc(100vw - 28px); min-width:0; }
+        .modal.doser-schedule-modal { width:min(680px, calc(100vw - 28px)); max-width:calc(100vw - 28px); max-height:calc(100vh - 28px); max-height:calc(100dvh - 28px); display:flex; flex-direction:column; overflow:hidden; padding:0; border:1px solid rgba(3,201,255,.22); background:linear-gradient(180deg, rgba(12,20,23,.98), rgba(8,14,17,.99)); box-shadow:0 28px 80px rgba(0,0,0,.52); }
+        .modal form { display:grid; gap:12px; }
+        .modal.doser-schedule-modal > h2 { flex:0 0 auto; margin:0; padding:18px 20px 14px; border-bottom:1px solid rgba(255,255,255,.08); background:linear-gradient(180deg, rgba(3,201,255,.10), rgba(0,0,0,0)); font-size:20px; }
+        .modal.doser-schedule-modal > form { min-height:0; display:flex; flex:1 1 auto; flex-direction:column; gap:0; overflow:hidden; }
+        .doser-schedule-unsent-warning { flex:0 0 auto; display:flex; align-items:center; gap:9px; margin:12px 20px 0; padding:10px 12px; border:1px solid #ff5b63; border-radius:7px; background:rgba(255,75,82,.16); color:#ff9da2; line-height:1.25; }
+        .doser-schedule-unsent-warning[hidden] { display:none; }
+        .doser-schedule-unsent-warning ha-icon { flex:0 0 auto; color:#ff5b63; }
+        .doser-schedule-request-status { flex:0 0 auto; display:flex; align-items:flex-start; gap:9px; margin:12px 20px 0; padding:10px 12px; border:1px solid #03c9ff; border-radius:7px; background:rgba(3,201,255,.12); color:#bfefff; line-height:1.25; }
+        .doser-schedule-request-status[hidden] { display:none; }
+        .doser-schedule-request-status > div { min-width:0; display:grid; gap:6px; }
+        .doser-schedule-request-status strong { color:var(--primary-text-color); }
+        .doser-schedule-request-status small { max-height:120px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; color:rgba(255,255,255,.72); font-family:monospace; }
+        .doser-schedule-request-status ha-icon { flex:0 0 auto; color:#03c9ff; animation:doser-schedule-spin 1s linear infinite; }
+        .doser-schedule-request-status.is-error { border-color:#ff5b63; background:rgba(255,75,82,.16); }
+        .doser-schedule-request-status.is-error ha-icon { color:#ff5b63; animation:none; }
+        .doser-schedule-request-status.is-ok { border-color:#2dd45b; background:rgba(45,212,91,.12); }
+        .doser-schedule-request-status.is-ok ha-icon { color:#2dd45b; animation:none; }
+        @keyframes doser-schedule-spin { to { transform:rotate(360deg); } }
+        .doser-schedule-overview { min-height:0; display:grid; flex:1 1 auto; align-content:start; gap:12px; overflow-y:auto; padding:16px 20px 14px; }
+        .doser-schedule-overview[hidden], .doser-schedule-scroll[hidden] { display:none; }
+        .doser-schedule-overview-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,.09); }
+        .doser-schedule-overview-head > div { display:grid; gap:3px; }
+        .doser-schedule-overview-head small { color:rgba(255,255,255,.60); }
+        .doser-schedule-overview-head button.icon { display:inline-flex; width:38px; min-width:38px; height:38px; align-items:center; justify-content:center; padding:0; }
+        .doser-schedule-overview-head button.icon ha-icon { --mdc-icon-size:20px; }
+        .doser-schedule-overview-meta { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+        .doser-schedule-overview-meta span { display:grid; gap:4px; padding:9px 10px; border:1px solid rgba(81,154,190,.22); border-radius:7px; background:rgba(0,0,0,.16); color:rgba(255,255,255,.60); font-size:11px; }
+        .doser-schedule-overview-meta strong { color:var(--primary-text-color); font-size:13px; overflow-wrap:anywhere; }
+        .doser-schedule-overview-list { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px 8px; }
+        .doser-schedule-overview-row { display:grid; grid-template-columns:24px minmax(0, 1fr) auto; align-items:center; gap:8px; min-height:34px; padding:6px 9px; border:1px solid rgba(255,255,255,.09); border-radius:7px; background:rgba(0,0,0,.14); }
+        .doser-schedule-overview-row b { color:#03c9ff; text-align:center; }
+        .doser-schedule-overview-row span { font-weight:700; }
+        .doser-schedule-overview-row strong { color:rgba(255,255,255,.76); font-size:12px; white-space:nowrap; }
+        .doser-schedule-debug-result { border:1px solid rgba(81,154,190,.26); border-radius:7px; background:rgba(0,0,0,.16); }
+        .doser-schedule-debug-result summary { padding:9px 10px; cursor:pointer; color:#03c9ff; font-weight:700; }
+        .doser-schedule-debug-result pre { max-height:180px; margin:0; padding:10px; overflow:auto; border-top:1px solid rgba(81,154,190,.20); white-space:pre-wrap; overflow-wrap:anywhere; color:rgba(255,255,255,.76); font-size:11px; }
+        .doser-schedule-scroll { min-height:0; display:grid; flex:1 1 auto; gap:12px; overflow-y:auto; padding:16px 20px 14px; }
+        .doser-schedule-dialog-footer { flex:0 0 auto; }
+        .modal.doser-schedule-modal label.doser-schedule-inline { display:grid; grid-template-columns:160px minmax(0, 1fr); align-items:center; }
+        .modal.doser-schedule-modal label.doser-schedule-inline input[type="checkbox"] { justify-self:start; }
+        .modal.doser-schedule-modal label.doser-schedule-inline .input-hint { grid-column:2; margin-left:0; }
+        .doser-weekday-picker { display:grid; gap:9px; padding:10px 12px; border:1px solid rgba(255,255,255,.10); border-radius:8px; background:rgba(255,255,255,.035); }
+        .doser-weekday-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .doser-weekday-head label.check { margin:0; }
+        .doser-weekday-buttons { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:7px; }
+        .doser-weekday-buttons button { min-width:0; min-height:34px; padding:0 5px; border:1px solid rgba(81,154,190,.34); border-radius:7px; background:rgba(255,255,255,.06); color:var(--primary-text-color); font:inherit; cursor:pointer; }
+        .doser-weekday-buttons button.active { border-color:#ef4b52; background:rgba(239,75,82,.42); color:#fff; }
+        .doser-weekday-buttons button:disabled { opacity:.42; cursor:not-allowed; }
+        .doser-timer-list { display:grid; gap:10px; padding:12px; border:1px solid rgba(3,201,255,.28); border-radius:9px; background:rgba(3,201,255,.05); }
+        .doser-timer-list[hidden] { display:none; }
+        .doser-window-list { display:grid; gap:10px; padding:12px; border:1px solid rgba(3,201,255,.28); border-radius:9px; background:rgba(3,201,255,.05); }
+        .doser-window-list[hidden] { display:none; }
+        .doser-window-total { color:rgba(255,255,255,.72); font-size:12px; text-align:right; }
+        .doser-window-rows { display:grid; gap:8px; max-height:min(28vh, 240px); overflow:auto; padding-right:3px; }
+        .doser-window-entry { display:grid; grid-template-columns:28px minmax(92px,1fr) minmax(92px,1fr) minmax(90px,.8fr) auto; align-items:end; gap:8px; padding:8px; border:1px solid rgba(255,255,255,.10); border-radius:8px; background:rgba(0,0,0,.16); }
+        .doser-window-entry > b { align-self:center; color:#03c9ff; text-align:center; }
+        .doser-window-entry label { margin:0; }
+        .doser-window-entry label span { display:block; margin-bottom:4px; color:rgba(255,255,255,.66); font-size:11px; }
+        .doser-timer-list-head { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px 12px; }
+        .doser-timer-list-head small { color:rgba(255,255,255,.62); }
+        .doser-timer-rows { display:grid; gap:8px; max-height:min(26vh, 220px); overflow:auto; padding-right:3px; }
+        .doser-timer-entry { display:grid; grid-template-columns:28px minmax(120px,1fr) minmax(120px,1fr) auto; align-items:end; gap:8px; padding:8px; border:1px solid rgba(255,255,255,.10); border-radius:8px; background:rgba(0,0,0,.16); }
+        .doser-timer-entry > b { align-self:center; color:#03c9ff; text-align:center; }
+        .doser-timer-entry label { margin:0; }
+        .doser-timer-entry label span { display:block; margin-bottom:4px; color:rgba(255,255,255,.66); font-size:11px; }
+        @media (max-width: 640px) { .modal.doser-schedule-modal label.doser-schedule-inline { grid-template-columns:128px minmax(0, 1fr); } .doser-schedule-overview-meta, .doser-schedule-overview-list { grid-template-columns:1fr; } .doser-weekday-buttons { grid-template-columns:repeat(4, minmax(0, 1fr)); } .doser-timer-entry { grid-template-columns:24px 1fr 1fr; } .doser-timer-entry > button { grid-column:2 / -1; } .doser-window-entry { grid-template-columns:24px 1fr 1fr; } .doser-window-entry label:nth-of-type(3), .doser-window-entry > button { grid-column:2 / -1; } }
+        .modal label { display:grid; gap:6px; font-weight:600; }
+        .modal [data-schedule-time-field][hidden], .modal [data-schedule-amount-field][hidden] { display:none; }
+        .modal [data-schedule-ml][readonly] { color:rgba(255,255,255,.72); background:rgba(255,255,255,.04); cursor:not-allowed; }
+        .modal [data-schedule-ml][readonly] { appearance:textfield; -moz-appearance:textfield; }
+        .modal [data-schedule-ml][readonly]::-webkit-inner-spin-button, .modal [data-schedule-ml][readonly]::-webkit-outer-spin-button { margin:0; appearance:none; -webkit-appearance:none; }
+        .input-hint-red { color:#ff4d4f; font-weight:700; line-height:1; }
+        .modal .check { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-weight:500; }
+        .modal .check .input-hint { flex:1 0 100%; margin-left:24px; }
+        .modal input, .modal select, .modal textarea { min-height:38px; border:1px solid rgba(81,154,190,.35); border-radius:6px; background:rgba(255,255,255,.08); color:var(--primary-text-color); padding:0 10px; font:inherit; }
+        .modal input[type="checkbox"] { width:16px; height:16px; min-height:0; padding:0; accent-color:#03c9ff; }
+        .modal textarea { min-height:76px; padding:8px 10px; resize:vertical; line-height:1.35; }
+        .modal-actions { display:flex; justify-content:flex-end; gap:10px; padding-top:6px; }
+        .dialog-history { display:grid; gap:2px; margin-top:6px; }
+        .dialog-history-list { margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.10); max-height:min(38vh, 360px); overflow-y:auto; padding-right:4px; }
+        .history-modal { width:min(680px, calc(100vw - 40px)); max-height:calc(100vh - 40px); max-height:calc(100dvh - 40px); display:flex; flex-direction:column; overflow:hidden; }
+        .history-modal > h2, .history-modal > .led-channel-history-head, .history-modal > .history-filter-bar, .history-modal > .modal-actions { flex:0 0 auto; }
+        .history-filter-bar { display:flex; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:8px 14px; margin:8px 0 2px; }
+        .history-status-filter { display:grid; grid-template-columns:auto minmax(140px, 210px); align-items:center; gap:8px; margin:0; font-size:13px; }
+        .history-status-filter span { color:rgba(255,255,255,.72); font-weight:700; }
+        .history-status-filter select { min-height:34px; margin:0; padding:5px 32px 5px 10px; }
+        .history-modal > .dialog-history { flex:0 1 auto; max-height:min(28vh, 230px); overflow-y:auto; padding-right:4px; }
+        .history-modal > .dialog-history-list { flex:1 1 auto; min-height:0; max-height:none; }
+        .dialog-history-list .led-history-timeline.expanded { max-height:none; overflow:visible; }
+        .led-history-all-modal > .led-history-timeline.expanded { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; }
+        .led-channel-history-list { display:grid; gap:8px; flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; padding-right:5px; }
+        .led-channel-history-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,.10); }
+        .led-channel-history-head h2 { margin:0; }
+        .history-dialog-head-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; min-width:0; }
+        .history-dialog-head-actions .history-filter-bar { flex-wrap:nowrap; margin:0; }
+        .led-channel-history-close { width:34px; height:34px; display:grid; place-items:center; padding:0; border:1px solid rgba(81,154,190,.35); border-radius:7px; background:rgba(0,0,0,.18); color:var(--primary-text-color); cursor:pointer; }
+        .led-channel-history-close span { font-size:20px; line-height:1; }
+        .led-notification-open { width:30px; height:30px; display:grid; place-items:center; padding:0; border:1px solid rgba(81,154,190,.35); border-radius:6px; background:rgba(0,0,0,.18); color:#03c9ff; cursor:pointer; }
+        .led-notification-open span { font-size:17px; line-height:1; }
+        .led-notification-dialog { width:min(780px, calc(100vw - 40px)); height:min(680px, calc(100vh - 40px)); max-height:calc(100vh - 40px); display:flex; flex-direction:column; overflow:hidden; }
+        .led-notification-dialog > .led-channel-history-head { flex:0 0 auto; }
+        .led-notification-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); align-content:start; gap:10px; margin-top:12px; padding-right:4px; min-height:0; overflow-y:auto; }
+        .led-notification-tabs { display:grid; grid-template-columns:repeat(var(--notification-tab-count, 1), minmax(0,1fr)); grid-template-rows:auto minmax(0,1fr); gap:10px 6px; flex:1 1 auto; min-height:0; margin-top:12px; }
+        .led-notification-tab-input { position:absolute; inline-size:1px; block-size:1px; opacity:0; pointer-events:none; }
+        .led-notification-tab-label { grid-row:1; min-width:0; padding:9px 8px; border:1px solid rgba(81,154,190,.30); border-radius:7px; background:rgba(0,0,0,.18); color:rgba(255,255,255,.68); font-size:12px; font-weight:800; text-align:center; cursor:pointer; }
+        .led-notification-tab-input:checked + .led-notification-tab-label { border-color:#03c9ff; background:rgba(3,201,255,.12); color:#7be6ff; box-shadow:inset 0 -2px 0 #03c9ff; }
+        .led-notification-tab-panel { display:none; grid-column:1 / -1; grid-row:2; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:10px; min-height:0; overflow:auto; padding-right:4px; }
+        .led-notification-tab-input:checked + .led-notification-tab-label + .led-notification-tab-panel { display:grid; }
+        .led-notification-block { min-width:0; padding:11px; border:1px solid rgba(81,154,190,.22); border-radius:7px; background:rgba(0,0,0,.18); }
+        .led-notification-block.wide { grid-column:1 / -1; }
+        .led-notification-block h3 { margin:0 0 8px; color:#69dcff; font-size:12px; text-transform:uppercase; }
+        .led-notification-block pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--primary-text-color); font:12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+        @media (max-width:700px) {
+          .led-notification-tabs { grid-template-columns:repeat(2, minmax(0,1fr)); }
+          .led-notification-tab-panel { grid-template-columns:1fr; }
+        }
+        .led-database-status-dialog { width:min(1040px, calc(100vw - 32px)); max-height:calc(100vh - 32px); overflow:hidden; }
+        .database-request-list { display:grid; gap:12px; margin-top:12px; max-height:calc(100vh - 150px); overflow:auto; padding-right:3px; }
+        .database-request-card { min-width:0; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:rgba(0,0,0,.18); padding:12px; }
+        .database-request-card > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:9px; border-bottom:1px solid rgba(255,255,255,.08); }
+        .database-request-card small { display:block; color:rgba(255,255,255,.48); font-size:10px; font-weight:800; text-transform:uppercase; }
+        .database-request-card h3 { margin:2px 0 0; color:#75dfff; font-size:15px; }
+        .database-request-card h4 { margin:10px 0 7px; color:rgba(255,255,255,.68); font-size:11px; text-transform:uppercase; }
+        .database-request-status { padding:3px 7px; border:1px solid rgba(255,77,87,.52); border-radius:5px; background:rgba(255,77,87,.10); color:#ff8a92; font-size:10px; font-weight:900; }
+        .database-request-status.ok { border-color:rgba(57,211,83,.46); background:rgba(57,211,83,.10); color:#70ed89; }
+        .database-result-table-wrap { max-width:100%; overflow:auto; }
+        .database-result-table { width:100%; min-width:720px; border-collapse:collapse; font-size:11px; }
+        .database-result-table th, .database-result-table td { border:1px solid rgba(255,255,255,.11); padding:7px 8px; text-align:left; vertical-align:top; }
+        .database-result-table th { position:sticky; top:0; background:#132125; color:rgba(255,255,255,.70); font-weight:800; text-transform:uppercase; white-space:nowrap; }
+        .database-result-table td { max-width:280px; overflow-wrap:anywhere; }
+        .database-empty-result, .database-status-loading, .database-status-error { margin:0; padding:16px; border:1px dashed rgba(81,154,190,.28); border-radius:7px; color:rgba(255,255,255,.62); text-align:center; }
+        .database-status-error { border-color:rgba(255,77,87,.42); color:#ff9ca2; }
+        .led-channel-history-entry { display:grid; grid-template-columns:10px minmax(0,1fr) auto; gap:10px; align-items:center; min-height:54px; padding:9px 11px; border:1px solid rgba(81,154,190,.18); border-radius:7px; background:rgba(255,255,255,.025); }
+        .led-channel-history-dot { width:9px; height:9px; border-radius:50%; box-shadow:0 0 10px currentColor; }
+        .led-channel-history-copy { min-width:0; display:grid; gap:3px; }
+        .led-channel-history-copy strong { font-size:13px; font-weight:700; }
+        .led-channel-history-copy time { color:rgba(255,255,255,.58); font-size:11px; }
+        .led-channel-history-value { min-width:66px; padding:5px 8px; border:1px solid currentColor; border-radius:6px; background:rgba(0,0,0,.24); font-size:12px; font-weight:800; text-align:center; }
+        .dialog-history-list .channel-history-row small { white-space:normal; overflow:visible; text-overflow:clip; line-height:1.35; }
+        .primary { min-height:36px; border:1px solid #03c9ff; border-radius:7px; background:#007aa6; color:#fff; font:inherit; padding:0 14px; cursor:pointer; }
+        .secondary { min-height:34px; border:1px solid rgba(81,154,190,.45); border-radius:7px; background:rgba(10,18,21,.88); color:var(--primary-text-color); font:inherit; padding:0 12px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; justify-content:center; }
+        .secondary ha-icon, .secondary .ui-icon { color:#ffc400; }
+        .calibration-modal { width:min(620px, calc(100vw - 40px)); max-height:calc(100vh - 40px); overflow:auto; }
+        .debug-modal { width:min(760px, calc(100vw - 40px)); }
+        .debug-output { max-height:min(62vh, 620px); overflow:auto; white-space:pre-wrap; word-break:break-word; border:1px solid rgba(255,255,255,.12); border-radius:7px; background:rgba(0,0,0,.42); color:var(--primary-text-color); padding:12px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .calibration-debug-output { min-height:80px; max-height:min(32vh, 300px); }
+        .wireshark-compare-modal { width:min(1100px, calc(100vw - 80px)); max-height:calc(100vh - 52px); display:grid; grid-template-rows:auto minmax(0, 1fr) auto; gap:8px; background:#eef3f8; color:#111827; border-color:#c7d0db; box-shadow:0 16px 55px rgba(0,0,0,.36); }
+        .wireshark-compare-head { display:grid; gap:8px; }
+        .wireshark-compare-head h2 { margin:0; font-size:13px; font-weight:500; color:#6b7280; }
+        .wireshark-compare-head small { color:#064e9b; font-size:12px; }
+        .wireshark-compare-form { min-height:0; display:grid; grid-auto-rows:auto; gap:5px; overflow:auto; padding-right:4px; }
+        .wireshark-compare-form span { font-size:12px; color:#111827; }
+        .wireshark-compare-form textarea { width:100%; min-width:0; min-height:118px; height:min(18vh, 170px); resize:none; border:1px solid #c7d0db; border-radius:0; background:#fff; color:#000; padding:7px; white-space:pre; overflow:auto; font:12px/1.45 Consolas, "Courier New", monospace; }
+        .wireshark-compare-actions { display:flex; align-items:center; gap:8px; padding-top:4px; }
+        .wireshark-compare-actions .spacer { flex:1; }
+        .wireshark-compare-actions button { min-height:31px; border:1px solid #c7d0db; border-radius:2px; background:#f8fafc; color:#111827; font:12px Arial, sans-serif; padding:0 16px; cursor:pointer; }
+        .wireshark-compare-actions button.primary { background:#1d5eff; border-color:#1d5eff; color:#fff; }
+        .wireshark-compare-actions button:disabled { opacity:.55; cursor:not-allowed; }
+        .debug-modal.error { border-color:rgba(255,77,79,.75); box-shadow:0 0 0 1px rgba(255,77,79,.32), 0 18px 60px rgba(0,0,0,.45); }
+        .debug-modal.error h2 { color:#ff8a8a; }
+        .debug-output.error { border-color:rgba(255,77,79,.78); background:rgba(75,0,0,.46); color:#ffd8d8; }
+        .led-auto-mode-modal { width:min(420px, calc(100vw - 40px)); }
+        .led-auto-mode-choice { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0; }
+        .led-auto-mode-choice button { min-height:42px; border:1px solid rgba(81,154,190,.35); border-radius:8px; background:rgba(0,0,0,.16); color:var(--primary-text-color); font:inherit; font-weight:800; cursor:pointer; }
+        .led-auto-mode-choice button.active { border-color:#03c9ff; background:rgba(0,122,166,.28); color:#88ddff; }
+        .calibration-steps { display:grid; gap:10px; }
+        .step { border:1px solid rgba(255,255,255,.10); border-radius:7px; padding:10px; background:rgba(0,0,0,.14); display:grid; gap:8px; }
+        .active-step { border-color:rgba(3,201,255,.35); background:rgba(3,201,255,.06); }
+        .step b { font-size:13px; }
+        .step span { color:rgba(255,255,255,.72); line-height:1.35; }
+        .calibration-illustration { display:grid; place-items:center; min-height:138px; margin:2px 0; border-radius:8px; background:radial-gradient(circle, rgba(3,201,255,.10), transparent 66%); color:rgba(190,220,230,.68); }
+        .calibration-illustration svg { width:min(230px, 72vw); height:138px; overflow:visible; }
+        .calibration-illustration .accent { color:#03c9ff; }
+        .calibration-summary { display:grid; gap:8px; margin:4px 0; }
+        .calibration-summary div { display:flex; justify-content:space-between; gap:16px; padding:9px 10px; border:1px solid rgba(255,255,255,.10); border-radius:7px; background:rgba(0,0,0,.18); }
+        .calibration-summary strong { color:#8eeaff; text-align:right; }
+        .sticky-actions { position:sticky; bottom:0; z-index:2; margin-top:12px; border-top:1px solid rgba(255,255,255,.10); background:linear-gradient(180deg, rgba(15,25,28,.96), rgba(8,15,18,.99)); padding:12px 0 2px; }
+        @media (max-width: 1300px) { .top-four { grid-template-columns:1fr 1fr; } .led-channels { grid-template-columns:repeat(2, minmax(0,1fr)); } }
+        @media (max-width: 1100px) { .top, .channels, .settings, .config-page { grid-template-columns:1fr 1fr; } .settings.doser-settings-layout, .led-page { grid-template-columns:1fr; } .led-connection-card, .led-device-control-card, .led-device-presets-card, .led-template-card { grid-column:1; grid-row:auto; width:100%; } .channels-1 { grid-template-columns:1fr; } .middle { grid-template-columns:1fr; } }
+        @media (max-width: 1100px) { .led-schedule-side-card.compact p { font-size:16px; } .led-schedule-color-control { grid-template-columns:minmax(84px, 120px) minmax(0,1fr) 94px; } }
+        @media (max-width: 1100px) { .led-schedule-ramp-presets { justify-content:flex-start; } }
+        @media (max-width: 1100px) { .led-device-control-card .led-device-edit-box { grid-template-columns:1fr; } .led-device-control-card .led-device-edit-box h2 { grid-column:1; } .led-device-control-card .led-info-list { padding:10px 0 0; border-left:0; border-top:1px solid rgba(255,255,255,.08); } }
+        @media (max-width: 900px) { .led-schedule-modal { width:calc(100vw - 18px); } .led-schedule-dialog-head, .led-schedule-dialog-body, .led-schedule-dialog-footer { padding-left:14px; padding-right:14px; } .led-schedule-dialog-footer { grid-template-columns:1fr; } .led-schedule-dialog-actions { width:100%; flex-wrap:wrap; justify-content:stretch; margin-left:0; } .led-schedule-dialog-actions button, .led-schedule-dialog-footer .danger { flex:1 1 auto; } }
+        @media (max-width: 700px) { .wrap { padding:0 8px 8px; } .device-tabs { margin:0 -8px 12px; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); } .device-tabs button { min-width:0; } .device-tabs .addon-update-button { margin-left:0; } .page-hero { grid-template-columns:42px minmax(0,1fr); min-height:66px; padding:10px; } .page-hero-icon { width:36px; height:36px; } .page-hero h1 { font-size:18px; } .top, .channels, .settings, .doser-settings-main, .config-page, .led-page, .led-channels { grid-template-columns:1fr; } .led-connection-card, .led-device-control-card, .led-device-presets-card, .led-template-card { grid-column:1; grid-row:auto; width:100%; } .led-device-control-card .led-device-edit-actions { grid-template-columns:1fr; gap:8px; } .config-row, .config-row.wide, .db-current p, .plugin-loader-row { grid-template-columns:1fr; gap:5px; } .plugin-loader-row button { width:100%; } .plugin-actions { display:grid; grid-template-columns:1fr; } .led-channel-history-head { flex-wrap:wrap; } .history-dialog-head-actions { width:100%; } .history-dialog-head-actions .history-filter-bar { flex:1 1 auto; } .history-dialog-head-actions .history-status-filter { grid-template-columns:auto minmax(0,1fr); width:100%; } .led-schedule-row-head { grid-template-columns:1fr; justify-items:stretch; } .led-schedule-time-icon { justify-self:start; } .led-schedule-active-toggle { justify-self:start; } .led-schedule-color-control, .led-schedule-color-control.color-template, .led-schedule-color-control.color-toggle, .led-schedule-color-control.color-time { grid-template-columns:1fr; } .led-schedule-time-control .led-schedule-row-title { justify-content:flex-start; } .led-time-picker-panel { right:auto; left:0; width:min(244px, calc(100vw - 80px)); } .led-schedule-ramp-presets { grid-template-columns:1fr; } }
+      </style>
+      <div class="wrap">
+        ${this.deviceTabs()}
+        ${this.tabContent()}
+      </div>
+      ${this.wiresharkCompareDialog()}
+      ${this.dialog()}`;
+    this.replaceHaIcons();
+    this.querySelectorAll("[data-history-status-filter]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const scope = String(el.getAttribute("data-history-status-filter") || "history");
+        this._historyStatusFilters = this._historyStatusFilters || {};
+        this._historyStatusFilters[scope] = String(el.value || "all");
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-history-type-filter]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const scope = String(el.getAttribute("data-history-type-filter") || "history");
+        this._historyTypeFilters = this._historyTypeFilters || {};
+        this._historyTypeFilters[scope] = String(el.value || "all");
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-history-filter]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const scope = String(el.getAttribute("data-history-filter") || "history");
+        this._historyFilters = this._historyFilters || {};
+        this._historyFilters[scope] = String(el.value || "all");
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-tab]").forEach((el) => {
+      el.addEventListener("click", () => this.setTab(el.getAttribute("data-tab")));
+    });
+    this.querySelectorAll("[data-wireshark-compare-close]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.wiresharkCompareDialogData = null;
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-wireshark-compare-reload]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const input = this.querySelector("[data-wireshark-compare-paste]");
+        if (input && this.wiresharkCompareDialogData) {
+          this.wiresharkCompareDialogData = {
+            ...this.wiresharkCompareDialogData,
+            pasted: String(input.value || ""),
+          };
+        }
+        await this.runWiresharkCompareFromCore();
+      });
+    });
+    this.querySelectorAll("[data-wireshark-compare-run]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const input = this.querySelector("[data-wireshark-compare-paste]");
+        const pasted = input ? String(input.value || "") : "";
+        const data = this.wiresharkCompareDialogData || {};
+        this.wiresharkCompareDialogData = {
+          ...data,
+          pasted,
+          result: this.buildWiresharkCompareResult(this.wiresharkCompareSourceText(data), pasted),
+        };
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-wireshark-compare-copy]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const data = this.wiresharkCompareDialogData || {};
+        const input = this.querySelector("[data-wireshark-compare-paste]");
+        const pasted = input ? String(input.value || "") : String(data.pasted || "");
+        const result = data.result || this.buildWiresharkCompareResult(this.wiresharkCompareSourceText(data), pasted);
+        const type = el.getAttribute("data-wireshark-compare-copy");
+        const value = type === "result" ? result : this.wiresharkCompareSourceText(data);
+        if (navigator.clipboard && value) await navigator.clipboard.writeText(value);
+      });
+    });
+    if (this.activeTab === "wireshark") this.patchWiresharkActions();
+    this.querySelectorAll("[data-doser-device]").forEach((el) => {
+      el.addEventListener("click", () => this.setDoserDevice(el.getAttribute("data-doser-device")));
+    });
+    this.querySelectorAll("[data-led-device]").forEach((el) => {
+      el.addEventListener("click", () => this.setLedDevice(el.getAttribute("data-led-device")));
+    });
+    this.querySelectorAll("[data-led-schedule-edit]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const rowIndex = Number(el.getAttribute("data-led-schedule-edit"));
+        this.openLedScheduleDialog(Number.isInteger(rowIndex) ? rowIndex : null);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-new]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.openNewLedScheduleDialog();
+      });
+    });
+    this.querySelectorAll("[data-led-number]").forEach((el) => {
+      const syncLedChannelControls = () => {
+        const rawValue = String(el.value ?? "").trim();
+        if (!rawValue || !Number.isFinite(Number(rawValue))) return null;
+        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
+        const value = Math.max(0, Math.min(max, Math.round(Number(rawValue))));
+        el.value = String(value);
+        const channel = Number(el.getAttribute("data-led-device-channel"));
+        this.querySelectorAll(`[data-led-device-channel="${channel}"][data-led-number]`).forEach((peer) => {
+          if (peer !== el) peer.value = String(value);
+          if (el.type === "range" && peer.type === "number") delete peer.dataset.ledDirty;
+        });
+        return value;
+      };
+      const save = () => {
+        if (el.type === "number" && el.dataset.ledDirty !== "1") return;
+        const inputValue = syncLedChannelControls();
+        if (inputValue === null) return;
+        const entity = el.getAttribute("data-led-number");
+        const channel = Number(el.getAttribute("data-led-device-channel"));
+        let value = inputValue;
+        const pendingKey = `${entity || "local"}:${channel}`;
+        const pending = this._ledChannelInputValues && this._ledChannelInputValues[pendingKey];
+        if (pending && Number.isFinite(Number(pending.value)) && Date.now() - Number(pending.at || 0) < 2500) {
+          value = Number(pending.value);
+        }
+        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
+        value = Math.max(0, Math.min(max, Math.round(value)));
+        delete el.dataset.ledDirty;
+        if (entity) {
+          this._ledChannelSaveTimers = this._ledChannelSaveTimers || {};
+          const key = `${entity}:${channel}`;
+          if (this._ledChannelSaveTimers[key]) window.clearTimeout(this._ledChannelSaveTimers[key]);
+          this._ledChannelSaveTimers[key] = window.setTimeout(() => {
+            delete this._ledChannelSaveTimers[key];
+            if (entity.startsWith("light.")) this.setLedBrightness(entity, value);
+            else this.setNumber(entity, value);
+          }, 120);
+          return;
+        }
+        const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
+        if (ledChannel) ledChannel.value = value;
+        this.render();
+      };
+      el.addEventListener("change", save);
+      el.addEventListener("keydown", (ev) => {
+        if (el.type === "number" && ev.key === "Enter") {
+          el.dataset.ledDirty = "1";
+          save();
+        }
+      });
+      el.addEventListener("input", () => {
+        if (el.type === "number") el.dataset.ledDirty = "1";
+        const value = syncLedChannelControls();
+        if (value === null) return;
+        const channel = Number(el.getAttribute("data-led-device-channel"));
+        const entity = el.getAttribute("data-led-number");
+        this._ledChannelInputValues = this._ledChannelInputValues || {};
+        this._ledChannelInputValues[`${entity || "local"}:${channel}`] = { value, at: Date.now() };
+        const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
+        if (ledChannel) ledChannel.value = value;
+        if (typeof this.updateLedWattDisplays === "function") this.updateLedWattDisplays();
+      });
+    });
+    this.querySelectorAll("[data-led-channel-action]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const channelId = Number(el.getAttribute("data-led-device-channel"));
+        const mode = String(el.getAttribute("data-led-channel-action") || "").trim().toLowerCase();
+        const channel = (this.ledChannels || []).find((item) => Number(item.id) === channelId);
+        if (!channel || (mode !== "on" && mode !== "off")) return;
+        const saveTimerKey = `${channel.entity || "local"}:${channelId}`;
+        if (this._ledChannelSaveTimers && this._ledChannelSaveTimers[saveTimerKey]) {
+          window.clearTimeout(this._ledChannelSaveTimers[saveTimerKey]);
+          delete this._ledChannelSaveTimers[saveTimerKey];
+        }
+        if (this._ledChannelInputValues) delete this._ledChannelInputValues[saveTimerKey];
+        const max = typeof this.ledMaxBrightness === "function" ? this.ledMaxBrightness() : 100;
+        const current = typeof this.ledChannelValue === "function" ? this.ledChannelValue(channel) : Number(channel.value || 0);
+        this._ledChannelLastOnValues = this._ledChannelLastOnValues || {};
+        if (mode === "on") {
+          const restore = Number(this._ledChannelLastOnValues[channelId] || channel.value || max);
+          const value = Number.isFinite(restore) && restore > 0 ? restore : max;
+          if (channel.entity) {
+            const ok = await this.setLedBrightness(channel.entity, value, false, {
+              action: "LED Kanal AN",
+              sourceId: `channel-switch-on-ch${channelId}`,
+              params: { source_id: `channel-switch-on-ch${channelId}`, source_type: "channel_switch", mode: "on", channel_id: channelId },
+            });
+            if (ok) {
+              this.setLedManualScheduleWarning(true);
+              this.render();
+            }
+          }
+          else {
+            channel.value = value;
+            this.render();
+          }
+          return;
+        }
+        if (current > 0) this._ledChannelLastOnValues[channelId] = current;
+        if (channel.entity) {
+          const ok = await this.setLedBrightness(channel.entity, 0, false, {
+            action: "LED Kanal AUS",
+            sourceId: `channel-switch-off-ch${channelId}`,
+            params: { source_id: `channel-switch-off-ch${channelId}`, source_type: "channel_switch", mode: "off", channel_id: channelId },
+          });
+          if (ok) {
+            this.setLedManualScheduleWarning(true);
+            this.render();
+          }
+        }
+        else {
+          channel.value = 0;
+          this.render();
+        }
+      });
+    });
+    this.querySelectorAll("[data-number]").forEach((el) => {
+      el.addEventListener("change", () => this.setNumber(el.getAttribute("data-number"), el.value));
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") this.setNumber(el.getAttribute("data-number"), el.value);
+      });
+    });
+    this.querySelectorAll("[data-led-channel-history]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const channel = Number(el.getAttribute("data-led-channel-history") || 1);
+        this.openDialogState("led-history", channel, { activeTab: "led" });
+      });
+    });
+    this.querySelectorAll("[data-action]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        const action = el.getAttribute("data-action") || "";
+        const [kind, entity, extra] = action.split(":");
+        const doserActionKinds = new Set(["manual-blocked", "dose-inline", "dialog", "confirm-dialog-yes", "confirm-dialog-no", "calibration-start", "calibration-open-measure", "calibration-start-next", "calibration-prime", "calibration-test", "calibration-test-yes", "calibration-test-retry", "close-dialog"]);
+        if (this.activeTab === "doser" && this.visibleTabs().includes("doser") && doserActionKinds.has(kind)) return;
+        if (kind === "press") this.press(entity);
+        if (kind === "manual-blocked") {
+          const channel = Number(entity);
+          this.dialogState = {
+            type: "debug",
+            channel,
+            output: `FAIL\nUeberdosierungsschutz\nCH${channel}: ${this.tr("manual_blocked")}`,
+            running: false,
+            level: "error",
+          };
+          this.render();
+        }
+        if (kind === "more") this.moreInfo(entity);
+        if (kind === "debug-test-led-schedule") {
+          this.dialogState = {
+            type: "debug",
+            channel: 1,
+            output: "OK\nTest Dialog\nWenn du das hier siehst, funktioniert der Klick- und Debug-Dialogpfad.",
+            running: false,
+            noChannel: true,
+            level: "ok",
+          };
+          this.render();
+        }
+        if (kind === "led-schedule-edit") this.openLedScheduleDialog();
+        if (kind === "led-schedule-new") this.openNewLedScheduleDialog();
+        if (kind === "led-preset") await this.setLedPreset(entity);
+        if (kind === "led-schedule-add" || kind === "led-schedule-save") await this.addLedSchedule(true);
+        if (kind === "led-schedule-save-local") await this.addLedSchedule(false);
+        if (kind === "led-schedule-delete-row" && typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(entity), true);
+        if (kind === "led-schedule-reset" && typeof this.openLedScheduleResetConfirm === "function") this.openLedScheduleResetConfirm();
+        if (kind === "led-enable-auto-mode" && typeof this.enableLedAutoModeFromFront === "function") await this.enableLedAutoModeFromFront();
+        if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") this.saveLedTemplateFromDialog();
+        if (kind === "led-template-share-save" && typeof this.saveSharedLedTemplate === "function") this.saveSharedLedTemplate();
+        if (kind === "led-schedule-share-save" && typeof this.saveSharedLedSchedule === "function") await this.saveSharedLedSchedule();
+        if (kind === "led-auto-mode-edit" && typeof this.openLedAutoModeDialog === "function") this.openLedAutoModeDialog();
+        if (kind === "led-auto-mode-send" && typeof this.saveLedAutoModeDialog === "function") await this.saveLedAutoModeDialog();
+        if (kind === "led-device-power-edit" && typeof this.openLedDevicePowerDialog === "function") this.openLedDevicePowerDialog();
+        if (kind === "led-device-power-send" && typeof this.saveLedDevicePowerDialog === "function") await this.saveLedDevicePowerDialog();
+        if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
+        if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
+        if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
+        if (kind === "dialog") {
+          if (String(entity || "").startsWith("led-")) {
+            this.openDialogState(entity, Number(extra), { activeTab: "led" });
+          } else {
+            this.openDialog(entity, Number(extra));
+          }
+        }
+        if (kind === "confirm-dialog-yes" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(true);
+        if (kind === "confirm-dialog-no" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(false);
+        if (kind === "calibration-start") {
+          await this.runDeviceService({
+            service: "start_doser_calibration",
+            data: { pump: Number(entity) },
+            title: this.tr("calibration"),
+            dialog: true,
+            channel: Number(entity),
+            noChannel: false,
+          });
+        }
+        if (kind === "calibration-start-next") {
+          const channel = Number(entity);
+          await this.callChihiros("start_doser_calibration", { pump: channel }, false);
+          this.dialogState = { type: "calibration", channel, step: 2 };
+          this.render();
+        }
+        if (kind === "close-dialog") this.closeDialog();
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-weekday-all]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const active = !(el.classList.contains("active") || el.getAttribute("aria-pressed") === "true");
+        el.classList.toggle("active", active);
+        el.setAttribute("aria-pressed", active ? "true" : "false");
+        row.querySelectorAll("[data-led-schedule-weekday]").forEach((day) => {
+          day.classList.toggle("active", active);
+          day.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-weekday]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const active = !(el.classList.contains("active") || el.getAttribute("aria-pressed") === "true");
+        el.classList.toggle("active", active);
+        el.setAttribute("aria-pressed", active ? "true" : "false");
+        const days = Array.from(row.querySelectorAll("[data-led-schedule-weekday]"));
+        const all = row.querySelector("[data-led-schedule-weekday-all]");
+        const allActive = days.length > 0 && days.every((day) => day.classList.contains("active") || day.getAttribute("aria-pressed") === "true");
+        if (all) {
+          all.classList.toggle("active", allActive);
+          all.setAttribute("aria-pressed", allActive ? "true" : "false");
+        }
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-control]").forEach((el) => {
+      const sync = () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const name = el.getAttribute("data-led-schedule-control");
+        const kind = el.getAttribute("data-led-schedule-kind") || "";
+        const value = el.value;
+        if (typeof this.syncLedScheduleControl === "function") {
+          this.syncLedScheduleControl(row, name, value, kind);
+        }
+        if (name !== "template" && typeof this.syncLedScheduleTemplate === "function") this.syncLedScheduleTemplate(row);
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      };
+      el.addEventListener("input", sync);
+      el.addEventListener("change", sync);
+    });
+    this.querySelectorAll("[data-led-schedule-template]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        if (typeof this.applyLedScheduleTemplate === "function") {
+          this.applyLedScheduleTemplate(row, el.value);
+        }
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-template-action]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const row = el.closest("[data-led-schedule-row]");
+        const action = el.getAttribute("data-led-template-action");
+        if (action === "add" && typeof this.addLedScheduleTemplate === "function") this.addLedScheduleTemplate(row);
+        if (action === "show" && typeof this.showLedScheduleTemplates === "function") this.showLedScheduleTemplates();
+        if (action === "delete" && typeof this.deleteLedScheduleTemplate === "function") this.deleteLedScheduleTemplate(row);
+      });
+    });
+    this.querySelectorAll("[data-led-template-edit]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.openLedTemplateDialog === "function") this.openLedTemplateDialog(el.getAttribute("data-led-template-edit"));
+      });
+    });
+    this.querySelectorAll("[data-led-template-source]").forEach((el) => {
+      el.addEventListener("change", () => {
+        this._ledTemplateSourceFilter = String(el.value || "standard") === "local" ? "local" : "standard";
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-led-template-delete]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.deleteLedTemplateFromFront === "function") this.deleteLedTemplateFromFront(el.getAttribute("data-led-template-delete"));
+      });
+    });
+    this.querySelectorAll("[data-led-template-share]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.openLedTemplateShareDialog === "function") this.openLedTemplateShareDialog(el.getAttribute("data-led-template-share"));
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-delete]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(el.getAttribute("data-led-schedule-delete")), true);
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-send]").forEach((el) => {
+      el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.sendLedScheduleRowFromFront === "function") await this.sendLedScheduleRowFromFront(Number(el.getAttribute("data-led-schedule-send")));
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-share]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof this.openLedScheduleShareDialog === "function") this.openLedScheduleShareDialog(Number(el.getAttribute("data-led-schedule-share")));
+      });
+    });
+    this.querySelectorAll("[data-led-template-control]").forEach((el) => {
+      const sync = () => {
+        const name = el.getAttribute("data-led-template-control");
+        if (name && typeof this.syncLedTemplateControl === "function") {
+          this.syncLedTemplateControl(name, el.value);
+        }
+      };
+      el.addEventListener("input", sync);
+      el.addEventListener("change", sync);
+    });
+    this.querySelectorAll("[data-led-auto-mode-value]").forEach((el) => {
+      el.addEventListener("click", () => {
+        this.querySelectorAll("[data-led-auto-mode-value]").forEach((item) => item.classList.remove("active"));
+        el.classList.add("active");
+      });
+    });
+    this.querySelectorAll("[data-led-device-power-value]").forEach((el) => {
+      el.addEventListener("click", () => {
+        this.querySelectorAll("[data-led-device-power-value]").forEach((item) => item.classList.remove("active"));
+        el.classList.add("active");
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-ramp]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const row = el.closest("[data-led-schedule-row]");
+        if (!row) return;
+        const value = Number(el.getAttribute("data-led-schedule-ramp"));
+        const hidden = row.querySelector('[data-led-schedule-control="ramp"][data-led-schedule-kind="hidden"]');
+        if (hidden) hidden.value = String(value);
+        if (typeof this.syncLedScheduleControl === "function") {
+          this.syncLedScheduleControl(row, "ramp", value, "");
+        }
+        if (typeof this.updateScheduleTimeWarning === "function") this.updateScheduleTimeWarning(row);
+      });
+    });
+    this.querySelectorAll("[data-led-time-picker]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        if (!field) return;
+        const input = field.querySelector("input[type='time']");
+        const [hour = "08", minute = "00"] = String(input && input.value ? input.value : "08:00").split(":");
+        const open = field.classList.contains("open");
+        this.querySelectorAll(".led-schedule-time-field.open").forEach((item) => item.classList.remove("open"));
+        field.dataset.pendingHour = hour;
+        field.dataset.pendingMinute = minute;
+        field.querySelectorAll('[data-led-time-part="hour"]').forEach((button) => {
+          button.classList.toggle("active", button.getAttribute("data-led-time-value") === hour);
+        });
+        field.querySelectorAll('[data-led-time-part="minute"]').forEach((button) => {
+          button.classList.toggle("active", button.getAttribute("data-led-time-value") === minute);
+        });
+        field.classList.toggle("open", !open);
+      });
+    });
+    this.querySelectorAll("[data-led-time-part]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        const input = field && field.querySelector("input[type='time']");
+        if (!input) return;
+        const part = el.getAttribute("data-led-time-part");
+        const value = String(el.getAttribute("data-led-time-value") || "00").padStart(2, "0");
+        if (part === "hour") field.dataset.pendingHour = value;
+        if (part === "minute") field.dataset.pendingMinute = value;
+        field.querySelectorAll(`[data-led-time-part="${part}"]`).forEach((button) => {
+          button.classList.toggle("active", button === el);
+        });
+      });
+    });
+    this.querySelectorAll("[data-led-time-cancel]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        if (field) field.classList.remove("open");
+      });
+    });
+    this.querySelectorAll("[data-led-time-apply]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const field = el.closest(".led-schedule-time-field");
+        const input = field && field.querySelector("input[type='time']");
+        if (!field || !input) return;
+        const [currentHour = "08", currentMinute = "00"] = String(input.value || "08:00").split(":");
+        const hour = String(field.dataset.pendingHour || currentHour).padStart(2, "0");
+        const minute = String(field.dataset.pendingMinute || currentMinute).padStart(2, "0");
+        input.value = `${hour}:${minute}`;
+        field.classList.remove("open");
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    });
+    this.querySelectorAll("[data-led-schedule-active], [data-led-schedule-debug]").forEach((el) => {
+      el.addEventListener("change", () => {
+        if (el.hasAttribute("data-led-schedule-debug") && this.dialogState && this.dialogState.type === "led-schedule") {
+          this.dialogState.ledScheduleDebug = Boolean(el.checked);
+        }
+        const label = el.closest(".led-schedule-switch");
+        const text = label && label.querySelector("span");
+        if (text) text.textContent = el.checked ? "An" : "Aus";
+      });
+    });
+    this.querySelectorAll("[data-dialog-form]").forEach((form) => {
+      const type = form.getAttribute("data-dialog-form");
+      const doserFormTypes = new Set(["schedule", "container", "manual", "safety", "auto-fill", "calibration"]);
+      if (this.activeTab === "doser" && this.visibleTabs().includes("doser") && doserFormTypes.has(type)) return;
+      const kind = form.querySelector("[data-schedule-kind]");
+      if (kind) {
+        kind.addEventListener("change", () => this.updateScheduleTimeInput(form));
+        const time = form.querySelector("[data-schedule-time]");
+        const weekdays = form.querySelector("[data-schedule-weekdays]");
+        if (time) time.addEventListener("input", () => this.updateScheduleTimeWarning(form));
+        if (time) time.addEventListener("change", () => this.updateScheduleTimeWarning(form));
+        if (weekdays) weekdays.addEventListener("change", () => this.updateScheduleTimeWarning(form));
+        this.updateScheduleTimeInput(form);
+      }
+      const channel = form.querySelector("[data-dialog-channel-select]");
+      if (channel) {
+        channel.addEventListener("change", () => {
+          this.openDialog(channel.getAttribute("data-dialog-channel-select"), Number(channel.value));
+        });
+      }
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        if (type === "schedule") await this.saveScheduleDialog(form);
+        if (type === "container") await this.saveContainerDialog(form);
+        if (type === "manual") await this.saveManualDialog(form);
+        if (type === "safety") await this.saveSafetyDialog(form);
+        if (type === "auto-fill") await this.saveAutoFillDialog(form);
+        if (type === "calibration") await this.saveCalibrationDialog(form);
+      });
+    });
+    this.querySelectorAll("[data-press]").forEach((el) => {
+      el.addEventListener("click", () => this.press(el.getAttribute("data-press")));
+    });
+    this.querySelectorAll("[data-ui-setting]").forEach((el) => {
+      el.addEventListener("change", () => {
+        const key = el.getAttribute("data-ui-setting");
+        this.uiSettings = this.uiSettings || {};
+        if (key === "language") this.uiSettings.language = el.value === "en" ? "en" : "de";
+        if (key === "showMac") this.uiSettings.showMac = Boolean(el.checked);
+        if (key === "dashboardDebug") this.uiSettings.dashboardDebug = Boolean(el.checked);
+        this.saveUiSettings();
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-channel-name]").forEach((el) => {
+      const save = () => {
+        const channel = Number(el.getAttribute("data-channel-name"));
+        if (!Number.isFinite(channel)) return;
+        this.uiSettings = this.uiSettings || {};
+        this.uiSettings.channelNames = this.uiSettings.channelNames || {};
+        this.uiSettings.channelNames[channel] = String(el.value || "").trim();
+        this.saveUiSettings();
+        this.applyChannelNames();
+        this.render();
+      };
+      el.addEventListener("change", save);
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") save();
+      });
+    });
+    this.querySelectorAll("[data-addon-db-form]").forEach((form) => {
+      form.addEventListener("submit", async (ev) => {
+        ev.preventDefault();
+        const api = window.ChihirosAddonApi;
+        if (!api || !api.saveDatabaseConfig) return;
+        const data = new FormData(form);
+        this.dialogState = {
+          type: "debug",
+          channel: 1,
+          output: "Datenbank-Konfiguration wird gespeichert...",
+          running: true,
+        };
+        this.render();
+        try {
+          await api.saveDatabaseConfig({
+            mode: data.get("mode") || "hass",
+            state_db_path: data.get("state_db_path") || "",
+            database_diagnostics_enabled: data.get("database_diagnostics_enabled") === "on",
+          });
+          this.dialogState = {
+            type: "debug",
+            channel: 1,
+            output: "OK\nDatenbank-Konfiguration gespeichert.",
+            running: false,
+          };
+        } catch (err) {
+          this.dialogState = {
+            type: "debug",
+            channel: 1,
+            output: `FAIL\n${err && err.message ? err.message : err}`,
+            running: false,
+            level: "error",
+          };
+        }
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-addon-db-refresh]").forEach((el) => {
+      el.addEventListener("click", async () => {
+        const api = window.ChihirosAddonApi;
+        if (api && api.refreshDashboard) await api.refreshDashboard();
+      });
+    });
+    this.querySelectorAll("[data-addon-update]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.runAddonUpdate(el.getAttribute("data-addon-update") || "chihiros_beta");
+      });
+    });
+    this.querySelectorAll("[data-plugin-load]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const plugin = el.getAttribute("data-plugin-load");
+        const addon = el.getAttribute("data-plugin-addon-open");
+        if (addon) {
+          window.open(`/hassio/addon/${addon}/info`, "_top");
+          return;
+        }
+        this.uiSettings = this.uiSettings || {};
+        this.uiSettings.plugins = this.uiSettings.plugins || {};
+        if (plugin && this.isTabEnabled(plugin)) this.setTab(plugin);
+      });
+    });
+    this.bindPluginEvents();
+  }
+
+  parseWiresharkCompareLines(text) {
+    const rows = [];
+    String(text || "").split(/\r?\n/).forEach((line) => {
+      const match = line.match(/\[INFO\]\s+(\{.*\})/);
+      if (!match) return;
+      try {
+        const item = JSON.parse(match[1]);
+        rows.push(`${item.cmd}|${item.mode}|${JSON.stringify(item.parm || [])}`);
+      } catch (err) {
+        // Manuell eingefuegte Zeilen ohne JSON werden ignoriert.
+      }
+    });
+    return rows;
+  }
+
+  normalizeWiresharkCompareValue(value) {
+    const text = String(value ?? "").trim();
+    if (/^-?\d+$/.test(text)) return Number(text);
+    return value;
+  }
+
+  normalizeWiresharkCompareParams(value) {
+    if (Array.isArray(value)) return value.map((item) => this.normalizeWiresharkCompareValue(item));
+    if (typeof value === "string") {
+      const text = value.trim();
+      if (!text) return [];
+      if (text.startsWith("[") && text.endsWith("]")) {
+        try {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) return parsed.map((item) => this.normalizeWiresharkCompareValue(item));
+        } catch (err) {
+          return text.slice(1, -1).split(",").map((item) => this.normalizeWiresharkCompareValue(item.trim())).filter((item) => String(item).trim() !== "");
+        }
+      }
+      return text.split(/[,\s]+/).map((item) => this.normalizeWiresharkCompareValue(item)).filter((item) => String(item).trim() !== "");
+    }
+    return [];
+  }
+
+  wiresharkFrameCompareLine(frame) {
+    if (!frame || typeof frame !== "object") return "";
+    const raw = frame.raw_json && typeof frame.raw_json === "object" ? frame.raw_json : {};
+    const cmd = raw.cmd ?? frame.command ?? frame.cmd;
+    const mode = raw.mode ?? frame.mode;
+    if (cmd === undefined || cmd === "" || mode === undefined || mode === "") {
+      const att = String(raw.att || frame.parsed_type || "").trim().toLowerCase();
+      const rawHex = String(raw.value_hex || raw.att_hex || raw.hex || frame.hex || "").trim();
+      if (!rawHex || (att !== "notify" && att !== "indicate")) return "";
+      const notification = {
+        time: String(raw.time || frame.timestamp || frame.time || ""),
+        dir: String(raw.dir || frame.direction || "rx"),
+        att,
+        handle: raw.handle || "",
+        hex: rawHex,
+      };
+      return `[INFO NOTIFY]  ${JSON.stringify(notification)}`;
+    }
+    const parm = raw.parm !== undefined ? raw.parm : (frame.params !== undefined ? frame.params : frame.parm);
+    const row = {
+      time: String(raw.time || frame.timestamp || frame.time || ""),
+      dir: String(raw.dir || frame.direction || ""),
+      cmd: this.normalizeWiresharkCompareValue(cmd),
+      mode: this.normalizeWiresharkCompareValue(mode),
+      parm: this.normalizeWiresharkCompareParams(parm),
+    };
+    return `[INFO APP]  ${JSON.stringify(row)}`;
+  }
+
+  wiresharkSelectedCompareText() {
+    const state = this.wiresharkPlugin || {};
+    const frames = state.result && Array.isArray(state.result.frames) ? state.result.frames : [];
+    const indexes = (Array.isArray(state.compareFrameIndexes) ? state.compareFrameIndexes : [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 0 && value < frames.length)
+      .sort((left, right) => left - right);
+    const lines = indexes.map((index) => this.wiresharkFrameCompareLine(frames[index])).filter(Boolean);
+    return {
+      count: lines.length,
+      selectedCount: indexes.length,
+      text: lines.join("\n------------------------------------------------------------------------\n"),
+    };
+  }
+
+  wiresharkCompareSourceText(data) {
+    return String((data && (data.compareText || data.selectedText || data.txText)) || "");
+  }
+
+  buildWiresharkCompareResult(currentText, pastedText) {
+    const current = this.parseWiresharkCompareLines(currentText);
+    const pasted = this.parseWiresharkCompareLines(pastedText);
+    const lines = [
+      "VERGLEICH",
+      "------------------------------------------------------------------------",
+      `Aktueller Mitschnitt: ${current.length} Frames`,
+      `App-Log: ${pasted.length} Frames`,
+      "------------------------------------------------------------------------",
+    ];
+    const max = Math.max(current.length, pasted.length);
+    if (!max) {
+      lines.push("Keine vergleichbaren cmd/mode/parm Zeilen gefunden.");
+      return lines.join("\n");
+    }
+    let diff = 0;
+    for (let index = 0; index < max; index += 1) {
+      const left = current[index] || "<fehlt>";
+      const right = pasted[index] || "<fehlt>";
+      if (left === right) continue;
+      diff += 1;
+      lines.push(`#${index + 1}`);
+      lines.push(`  Mitschnitt: ${left}`);
+      lines.push(`  App-Log   : ${right}`);
+    }
+    if (!diff) lines.push("OK: Keine Unterschiede gefunden.");
+    lines.push("------------------------------------------------------------------------");
+    return lines.join("\n");
+  }
+
+  wiresharkCompareDialog() {
+    const data = this.wiresharkCompareDialogData || null;
+    if (!data) return "";
+    const title = String(data.title || "Vergleich App-Log");
+    const fileName = String(data.fileName || "");
+    const rxText = String(data.rxText || "");
+    const txText = String(data.txText || "");
+    const selectedText = String(data.selectedText || "");
+    const selectedCount = Number(data.selectedCount || 0);
+    const selectedLabel = selectedText ? `Markierte Frames (${selectedCount}) - für Vergleich benutzt` : "Markierte Frames";
+    const pasted = String(data.pasted || "");
+    const result = String(data.result || "");
+    const busy = Boolean(data.busy);
+    return `
+      <div class="modal-backdrop">
+        <section class="modal card wireshark-compare-modal">
+          <div class="wireshark-compare-head">
+            <h2>${this.escapeHtml(title)}</h2>
+            ${fileName ? `<small>${this.escapeHtml(fileName)}</small>` : ""}
+          </div>
+          <div class="wireshark-compare-form">
+            <span>Aktueller Mitschnitt - Notify/RX</span>
+            <textarea readonly>${this.escapeHtml(rxText)}</textarea>
+            <span>Aktueller Mitschnitt - TX/Schreibframes</span>
+            <textarea readonly>${this.escapeHtml(txText)}</textarea>
+            ${selectedText ? `
+            <span>${this.escapeHtml(selectedLabel)}</span>
+            <textarea readonly>${this.escapeHtml(selectedText)}</textarea>` : ""}
+            <span>App-Log hier einfuegen</span>
+            <textarea data-wireshark-compare-paste>${this.escapeHtml(pasted)}</textarea>
+            <span>Vergleich</span>
+            <textarea readonly>${this.escapeHtml(result)}</textarea>
+          </div>
+          <div class="wireshark-compare-actions">
+            <button type="button" class="primary" data-wireshark-compare-run ${busy ? "disabled" : ""}>Vergleichen</button>
+            <button type="button" data-wireshark-compare-reload ${busy ? "disabled" : ""}>Aktuellen Log neu laden</button>
+            <button type="button" data-wireshark-compare-copy="result">Ergebnis kopieren</button>
+            <span class="spacer"></span>
+            <button type="button" data-wireshark-compare-close>Schließen</button>
+            <button type="button" data-wireshark-compare-copy="log">Aktuellen Log kopieren</button>
+          </div>
+        </section>
+      </div>`;
+  }
+
+  patchWiresharkActions() {
+    const actions = this.querySelector(".wireshark-gui-actions");
+    if (!actions) return;
+    const compareTest = actions.querySelector("[data-wireshark-compare-test]");
+    if (compareTest && !compareTest.__chihirosCorePatched) {
+      compareTest.__chihirosCorePatched = true;
+      compareTest.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        this.wiresharkCompareDialogData = {
+          title: "Vergleich App-Log - Frontend Test",
+          fileName: "frontend-test",
+          rxText: "OK\nFrontend-Testbutton hat den Core-Dialog geöffnet.",
+          txText: "Wenn dieses Fenster sichtbar ist, laedt HA den richtigen Frontend-Code.",
+          selectedText: "",
+          selectedCount: 0,
+          compareText: "Wenn dieses Fenster sichtbar ist, laedt HA den richtigen Frontend-Code.",
+          pasted: "",
+          result: "",
+          busy: false,
+        };
+        this.render();
+      }, true);
+    }
+    const compare = actions.querySelector("[data-wireshark-compare-open]");
+    if (compare && !compare.__chihirosCorePatched) {
+      compare.__chihirosCorePatched = true;
+      const openCompare = async (ev) => {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        const now = Date.now();
+        if (this.__wiresharkCompareOpenAt && now - this.__wiresharkCompareOpenAt < 750) return;
+        this.__wiresharkCompareOpenAt = now;
+        try {
+          await this.runWiresharkCompareFromCore();
+        } catch (err) {
+          this.wiresharkCompareDialogData = {
+            title: "Vergleich App-Log",
+            fileName: "Fehler",
+            rxText: "",
+            txText: `FAIL\n${err && err.message ? err.message : err}`,
+            pasted: "",
+            result: "",
+          };
+          this.render();
+        }
+      };
+      compare.addEventListener("pointerdown", openCompare, true);
+      compare.addEventListener("click", openCompare, true);
+    }
+  }
+
+  readWiresharkFieldsFromDom() {
+    const adb = {};
+    this.querySelectorAll("[data-wireshark-adb-field]").forEach((field) => {
+      const key = field.getAttribute("data-wireshark-adb-field");
+      if (!key) return;
+      adb[key] = field.type === "checkbox" ? Boolean(field.checked) : String(field.value || "");
+    });
+    return adb;
+  }
+
+  async runWiresharkCompareFromCore() {
+    const api = window.ChihirosAddonApi;
+    if (!api || typeof api.callPluginBackend !== "function") {
+      throw new Error("Plugin-Backend-API nicht verfügbar");
+    }
+    this.wiresharkPlugin = this.wiresharkPlugin || {};
+    const settings = (this.uiSettings && this.uiSettings.wireshark) || {};
+    const previousAdb = this.wiresharkPlugin.adb || {};
+    const adb = {
+      ...settings,
+      ...previousAdb,
+      ...this.readWiresharkFieldsFromDom(),
+      language: this.language(),
+      action: "compare-app-log",
+    };
+    this.wiresharkPlugin.adb = adb;
+    this.wiresharkPlugin.adbOutput = "ADB-Aktion läuft: compare-app-log...";
+    this.wiresharkPlugin.loading = true;
+    this.wiresharkPlugin.error = "";
+    this.wiresharkCompareDialogData = {
+      ...(this.wiresharkCompareDialogData || {}),
+      title: "Vergleich App-Log",
+      fileName: "wird geladen...",
+      rxText: "Laeuft\nVergleich App-Log wird geladen...",
+      txText: "",
+      result: "",
+      busy: true,
+    };
+    this.render();
+
+    const result = await api.callPluginBackend("wireshark", "run_wireshark_adb_action", [adb]);
+    const output = String(result.output || "").trim() || "Compare app log: Backend hat keine Ausgabe geliefert.";
+    const previous = this.wiresharkCompareDialogData || {};
+    const fileName = String(result.title || (result.frames_file ? String(result.frames_file).split(/[\\/]/).pop() : "keine Datei"));
+    const txText = String(result.tx_output || output || "");
+    const rxText = String(result.rx_output || "");
+    const selectedCompare = this.wiresharkSelectedCompareText();
+    const selectedText = selectedCompare.text || "";
+    const compareText = selectedText || txText;
+    this.wiresharkPlugin = {
+      ...(this.wiresharkPlugin || {}),
+      adb: {
+        ...(this.wiresharkPlugin && this.wiresharkPlugin.adb ? this.wiresharkPlugin.adb : {}),
+        ...(result.frames_file ? { frames_file: String(result.frames_file) } : {}),
+      },
+      adbOutput: [`Returncode: ${result.returncode}`, output].join("\n"),
+      updateOutput: output,
+      loading: false,
+      progressText: "App log comparison loaded",
+    };
+    this.wiresharkCompareDialogData = {
+      ...previous,
+      title: `Vergleich App-Log - ${fileName}`,
+      fileName,
+      rxText,
+      txText,
+      selectedText,
+      selectedCount: selectedCompare.count,
+      compareText,
+      pasted: previous.pasted || "",
+      result: previous.pasted ? this.buildWiresharkCompareResult(compareText, previous.pasted) : (previous.result || ""),
+      busy: false,
+    };
+    this.render();
+    const detail = this.querySelector("[data-wireshark-input]");
+    if (detail) detail.value = output;
+  }
+
+  bindPluginEvents() {
+    const plugins = window.ChihirosPlugins || {};
+    Object.values(plugins).forEach((plugin) => {
+      if (plugin && typeof plugin.bindEvents === "function") plugin.bindEvents(this);
+    });
+  }
+}
+
+customElements.define("chihiros-doser-card-v3", ChihirosDoserCard);
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "chihiros-doser-card-v3",
+  name: "Chihiros Doser Card V3",
+  description: "Compact Chihiros Doser dashboard card",
+});

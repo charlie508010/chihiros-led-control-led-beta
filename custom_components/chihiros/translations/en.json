@@ -1,0 +1,40 @@
+{
+    "config": {
+        "abort": {
+            "already_configured": "Device is already configured",
+            "already_in_progress": "Configuration flow is already in progress",
+            "no_devices_found": "No devices found on the network",
+            "not_supported": "Device not supported"
+        },
+        "error": {
+            "cannot_connect": "Failed to connect",
+            "invalid_auth": "Invalid authentication",
+            "unknown": "Unexpected error"
+        },
+        "flow_title": "{name}",
+        "step": {
+            "bluetooth_confirm": {
+                "description": "Do you want to set up {name}?"
+            },
+            "fallback_config": {
+                "data": {
+                    "device_type": "Device type",
+                    "name": "Name"
+                },
+                "description": "Choose how this Chihiros-compatible device should be controlled"
+            },
+            "dosing_config": {
+                "data": {
+                    "pump_count": "Pump channels"
+                },
+                "description": "Choose how many pump channels this dosing pump has"
+            },
+            "user": {
+                "data": {
+                    "device": "Device"
+                },
+                "description": "Choose Chihiros device to connect to"
+            }
+        }
+    }
+}

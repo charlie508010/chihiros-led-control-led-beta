@@ -1,0 +1,222 @@
+[TX #1] Encode Message
+  Command Print    : [90, 1, 6, 0, 2, 4, 1, 0]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 2
+  Mode             : 4
+  Parameters       : [1]
+  Checksum         : 0
+  Bedeutung        : App-Bestätigung Befehl=1
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['5a01060002040100']                                            doser_device.py:382
+[TX #2] Encode Message
+  Command Print    : [90, 1, 11, 0, 3, 9, 26, 7, 3, 12, 32, 40, 26]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 11
+  Message ID High  : 0
+  Message ID Low   : 3
+  Mode             : 9
+  Parameters       : [26, 7, 3, 12, 32, 40]
+  Checksum         : 26
+  Bedeutung        : Gerätezeit setzen 2026-07 Wochentag=3 12:32:40
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['5a010b0003091a07030c20281a']                                  doser_device.py:382
+[TX #3] Encode Message
+  Command Print    : [90, 1, 11, 0, 4, 9, 26, 7, 3, 12, 32, 40, 29]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 11
+  Message ID High  : 0
+  Message ID Low   : 4
+  Mode             : 9
+  Parameters       : [26, 7, 3, 12, 32, 40]
+  Checksum         : 29
+  Bedeutung        : Gerätezeit setzen 2026-07 Wochentag=3 12:32:40
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['5a010b0004091a07030c20281d']                                  doser_device.py:382
+[TX #4] Encode Message
+  Command Print    : [165, 1, 6, 0, 5, 4, 4, 2]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 5
+  Mode             : 4
+  Parameters       : [4]
+  Checksum         : 2
+  Bedeutung        : Doser-Dialog-Bestätigung Befehl=4
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['a501060005040402']                                            doser_device.py:382
+[TX #5] Encode Message
+  Command Print    : [165, 1, 6, 0, 6, 4, 5, 0]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 6
+  Mode             : 4
+  Parameters       : [5]
+  Checksum         : 0
+  Bedeutung        : Doser-Dialog-Bestätigung Befehl=5
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['a501060006040500']                                            doser_device.py:382
+[TX #6] Encode Message
+  Command Print    : [165, 1, 10, 0, 7, 27, 0, 0, 0, 0, 50, 37]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 10
+  Message ID High  : 0
+  Message ID Low   : 7
+  Mode             : 27
+  Parameters       : [0, 0, 0, 0, 50]
+  Checksum         : 37
+  Bedeutung        : manuelle Dosierung CH1: 5.0 ml
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['a5010a00071b000000003225']                                    doser_device.py:382
+OK: manuell dosiert CH1 5.0 ml
+
+------------------------------------------------------------------------
+VERGLEICH APP-LOG
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 12:32:46", "dir": "tx", "cmd": 165, "mode": 4, "parm": [4]}
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 12:32:47", "dir": "tx", "cmd": 165, "mode": 4, "parm": [5]}
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 12:32:48", "dir": "rx", "cmd": 91, "mode": 34, "parm": [0, 0, 0, 0, 0, 0, 0, 0]}
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 12:32:48", "dir": "tx", "cmd": 165, "mode": 27, "parm": [0, 0, 0, 0, 50]}
+------------------------------------------------------------------------
+------------------------------------------------------------------------
+GERÄTEANTWORT
+------------------------------------------------------------------------
+RX: 5B 08 0A 00 01 0A 01 FF FF FF C8 13 88 A4
+RX: 5B 08 30 00 01 FE 03 0C 20 00 0D 0F 0D 2F 0B 0A 00 00 04 00 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00 00 05 0A 05 06 00
+RX: 5B 01 0A 00 01 1E 07 E8 00 F4 01 94 02 FB 0E
+RX: 5B 01 0A 00 01 22 00 00 00 00 00 00 00 00 28
+
+------------------------------------------------------------------------
+ZUSAMMENFASSUNG
+------------------------------------------------------------------------
+Aktion: manuelle Dosierung | Kanal: CH1 | Menge: 5.0 ml
+Geräteantwort:
+  0x22: CH1=0.00 ml, CH2=0.00 ml, CH3=0.00 ml, CH4=0.00 ml
+Lokal: CH1=20.00 ml, CH2=0.00 ml, CH3=0.00 ml, CH4=0.00 ml
+Lokal: Behaelter CH1 um 5.00 ml reduziert; Rest=422.40 ml
+
+
+
+jetzt
+ chihirosctl doser dose-ml DF:2A:88:E7:8A:90 --pump 1 --ml 5 --debug
+[TX #1] Encode Message
+  Command Print    : [90, 1, 6, 0, 2, 4, 1, 0]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 2
+  Mode             : 4
+  Parameters       : [1]
+  Checksum         : 0
+  Bedeutung        : App-Bestätigung Befehl=1
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['5a01060002040100']
+[TX #2] Encode Message
+  Command Print    : [90, 1, 11, 0, 3, 9, 26, 7, 3, 13, 52, 21, 50]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 11
+  Message ID High  : 0
+  Message ID Low   : 3
+  Mode             : 9
+  Parameters       : [26, 7, 3, 13, 52, 21]
+  Checksum         : 50
+  Bedeutung        : Gerätezeit setzen 2026-07 Wochentag=3 13:52:21
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['5a010b0003091a07030d341532']
+[TX #3] Encode Message
+  Command Print    : [90, 1, 11, 0, 4, 9, 26, 7, 3, 13, 52, 21, 53]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 11
+  Message ID High  : 0
+  Message ID Low   : 4
+  Mode             : 9
+  Parameters       : [26, 7, 3, 13, 52, 21]
+  Checksum         : 53
+  Bedeutung        : Gerätezeit setzen 2026-07 Wochentag=3 13:52:21
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['5a010b0004091a07030d341535']
+[TX #4] Encode Message
+  Command Print    : [165, 1, 6, 0, 5, 4, 4, 2]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 5
+  Mode             : 4
+  Parameters       : [4]
+  Checksum         : 2
+  Bedeutung        : Doser-Dialog-Bestätigung Befehl=4
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['a501060005040402']
+[TX #5] Encode Message
+  Command Print    : [165, 1, 6, 0, 6, 4, 5, 0]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 6
+  Mode             : 4
+  Parameters       : [5]
+  Checksum         : 0
+  Bedeutung        : Doser-Dialog-Bestätigung Befehl=5
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['a501060006040500']
+[TX #6] Encode Message
+  Command Print    : [165, 1, 10, 0, 7, 27, 0, 0, 0, 0, 50, 37]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 10
+  Message ID High  : 0
+  Message ID Low   : 7
+  Mode             : 27
+  Parameters       : [0, 0, 0, 0, 50]
+  Checksum         : 37
+  Bedeutung        : manuelle Dosierung CH1: 5.0 ml
+------------------------------------------------------------------------
+DEBUG    DF:2A:88:E7:8A:90: Sending commands ['a5010a00071b000000003225']
+OK: manuell dosiert CH1 5.0 ml
+
+------------------------------------------------------------------------
+VERGLEICH APP-LOG
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 13:52:24", "dir": "tx", "cmd": 165, "mode": 4, "parm": [4]}
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 13:52:25", "dir": "tx", "cmd": 165, "mode": 4, "parm": [5]}
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 13:52:25", "dir": "rx", "cmd": 91, "mode": 34, "parm": [0, 50, 0, 0, 0, 0, 0, 0]}
+------------------------------------------------------------------------
+[INFO]  {"time": "08.07.2026 13:52:25", "dir": "tx", "cmd": 165, "mode": 27, "parm": [0, 0, 0, 0, 50]}
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+GERÄTEANTWORT
+------------------------------------------------------------------------
+RX: 5B 08 0A 00 01 0A 01 FF FF FF C8 13 88 A4
+RX: 5B 08 30 00 01 FE 03 0D 34 00 0D 0F 0D 2F 0B 0A 00 32 04 00 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00 00 04 00 00 00 00 00 00 00 00
+05 0A 05 06 00
+RX: 5B 01 0A 00 01 1E 0A 72 00 F4 01 94 02 FB 99
+RX: 5B 01 0A 00 01 22 00 32 00 00 00 00 00 00 1A
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+ZUSAMMENFASSUNG
+------------------------------------------------------------------------
+Aktion: manuelle Dosierung | Kanal: CH1 | Menge: 5.0 ml
+Geräteantwort:
+  0x22: CH1=5.00 ml, CH2=0.00 ml, CH3=0.00 ml, CH4=0.00 ml
+Lokal: CH1=80.00 ml, CH2=0.00 ml, CH3=0.00 ml, CH4=0.00 ml
+Lokal: Behaelter CH1 um 5.00 ml reduziert; Rest=362.40 ml
