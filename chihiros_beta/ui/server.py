@@ -10,6 +10,7 @@ import shlex
 import sqlite3
 import subprocess
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from datetime import time as datetime_time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -170,6 +171,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if parsed.path == "/api/addon-refresh":
             self.refresh_addon_update_source(self.read_json())
+            return
+        if parsed.path == "/api/addon-update":
+            self.restart_addon_for_source_update(self.read_json())
             return
         self.send_json(404, {"message": "Not found"})
 
@@ -496,6 +500,44 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as err:
                 results.append(f"{path}: nicht erlaubt ({err})")
         self.send_json(200, {"output": "\n".join(results)})
+
+    def restart_addon_for_source_update(self, body: bytes) -> None:
+        """Restart this add-on so run.sh clones the latest private source."""
+        try:
+            json.loads(body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            self.send_json(400, {"message": "Invalid JSON"})
+            return
+        token = os.environ.get("SUPERVISOR_TOKEN", "")
+        if not token:
+            self.send_json(503, {"message": "SUPERVISOR_TOKEN fehlt"})
+            return
+        try:
+            response = supervisor_request("GET", "/addons/self/info", token)
+            info = response.get("data") if isinstance(response.get("data"), dict) else response
+            slug = str(info.get("slug") or "").strip() if isinstance(info, dict) else ""
+            if not slug or not re.fullmatch(r"[a-z0-9_]+", slug):
+                raise ValueError("Supervisor hat keinen gueltigen Add-on-Slug geliefert")
+        except ValueError as err:
+            self.send_json(502, {"message": str(err)})
+            return
+
+        self.send_json(
+            202,
+            {
+                "status": "restarting",
+                "message": "LED Core wird neu gestartet und aus dem privaten Repository aktualisiert.",
+            },
+        )
+
+        def restart() -> None:
+            time.sleep(1)
+            try:
+                supervisor_request("POST", f"/addons/{slug}/restart", token)
+            except ValueError as err:
+                print(f"LED Core update restart failed: {err}")
+
+        threading.Thread(target=restart, name="led-core-source-update", daemon=True).start()
 
     def update_debug_output(self, state: object, label: str) -> str:
         lines = [label]

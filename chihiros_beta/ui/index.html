@@ -310,7 +310,16 @@
           return data;
         },
         runAddonUpdate: async () => {
-          throw new Error("Add-on Update API ist deaktiviert; Dashboard nutzt nur Store reload und Update-Entity refresh.");
+          const response = await fetch("./api/addon-update", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: "{}",
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || `Update fehlgeschlagen (${response.status})`);
+          setStatus("Update läuft", true);
+          window.setTimeout(() => window.location.reload(), 5000);
+          return data;
         },
         refreshDashboard,
         refreshHassStates: refreshDashboard,

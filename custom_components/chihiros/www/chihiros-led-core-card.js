@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1013";
+import "./panels/chihiros-led-panel.js?v=0.2.1014";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -90,6 +90,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             ${this.coreTabIcon(tab)}
             <span>${this.tr(tab)}</span>
           </button>`).join("")}
+        ${this.config?.addon_mode ? `
+          <button type="button" class="addon-update-button" data-addon-update>
+            <svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+            <span data-addon-update-label>${this.tr("update")}</span>
+          </button>` : ""}
       </nav>`;
   }
 
@@ -213,6 +218,28 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       button.addEventListener("click", async () => {
         const api = window.ChihirosAddonApi;
         if (api && typeof api.refreshDashboard === "function") await api.refreshDashboard();
+      });
+    });
+    this.querySelectorAll("[data-addon-update]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const api = window.ChihirosAddonApi;
+        if (!api || typeof api.runAddonUpdate !== "function") return;
+        const label = button.querySelector("[data-addon-update-label]");
+        button.disabled = true;
+        if (label) label.textContent = this.tr("updating");
+        try {
+          await api.runAddonUpdate();
+        } catch (error) {
+          button.disabled = false;
+          if (label) label.textContent = this.tr("update");
+          this.dialogState = {
+            type: "debug",
+            output: `FAIL\n${error && error.message ? error.message : error}`,
+            running: false,
+            level: "error",
+          };
+          this.render();
+        }
       });
     });
   }
@@ -1339,6 +1366,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         database_parameters: "Parameter",
         error: "Fehler",
         reload: "Neu laden",
+        update: "Update",
+        updating: "Update läuft …",
         command_copied: "Befehl kopiert",
         no_entities: "Keine passenden Home-Assistant-Entities gefunden.",
         fetch_data: "Daten holen",
@@ -1687,6 +1716,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         database_parameters: "Parameters",
         error: "Error",
         reload: "Reload",
+        update: "Update",
+        updating: "Updating …",
         command_copied: "Command copied",
         no_entities: "No matching Home Assistant entities found.",
         fetch_data: "Fetch data",

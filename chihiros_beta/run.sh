@@ -42,6 +42,7 @@ export CHIHIROS_STATE_DB="/config/.chihiros/chihiros_state.sqlite3"
 export CHIHIROS_PLUGIN_KIND="core"
 export CHIHIROS_UI_PORT="${CHIHIROS_UI_PORT:-8099}"
 
+cp -a /opt/chihiros-src/chihiros_beta/ui/. /opt/chihiros-addon-ui/
 rm -rf /opt/chihiros-addon-ui/dashboard
 mkdir -p /opt/chihiros-addon-ui/dashboard
 cp -a /opt/chihiros-src/custom_components/chihiros/www/. /opt/chihiros-addon-ui/dashboard/

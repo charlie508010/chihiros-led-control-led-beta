@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.0";
-import "./chihiros-led-core-card.js?v=0.2.1013";
+import "./chihiros-led-core-card.js?v=0.2.1014";
 
 class ChihirosPanel extends HTMLElement {
   set hass(hass) {

@@ -6,11 +6,29 @@ ROOT = Path(__file__).resolve().parents[1]
 LED_PANEL = ROOT / "custom_components/chihiros/www/panels/chihiros-led-panel.js"
 DASHBOARD = ROOT / "custom_components/chihiros/www/chihiros-led-core-card.js"
 ADDON_SERVER = ROOT / "chihiros_beta/ui/server.py"
+ADDON_INDEX = ROOT / "chihiros_beta/ui/index.html"
+ADDON_RUN = ROOT / "chihiros_beta/run.sh"
 
 
 def source(path: Path) -> str:
     """Read one dashboard source file."""
     return path.read_text(encoding="utf-8")
+
+
+def test_private_addon_update_restarts_into_latest_cloned_led_core() -> None:
+    """The dashboard update action must work with the token-backed private source clone."""
+    dashboard = source(DASHBOARD)
+    index = source(ADDON_INDEX)
+    server = source(ADDON_SERVER)
+    run = source(ADDON_RUN)
+
+    assert 'data-addon-update' in dashboard
+    assert 'typeof api.runAddonUpdate !== "function"' in dashboard
+    assert 'fetch("./api/addon-update"' in index
+    assert 'if parsed.path == "/api/addon-update":' in server
+    assert 'supervisor_request("GET", "/addons/self/info", token)' in server
+    assert 'supervisor_request("POST", f"/addons/{slug}/restart", token)' in server
+    assert "cp -a /opt/chihiros-src/chihiros_beta/ui/. /opt/chihiros-addon-ui/" in run
 
 
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:
