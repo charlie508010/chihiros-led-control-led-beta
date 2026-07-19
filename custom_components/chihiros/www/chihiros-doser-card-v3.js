@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.0";
-import "./panels/chihiros-led-panel.js?v=0.2.1007";
+import "./panels/chihiros-led-panel.js?v=0.2.1008";
 
 class ChihirosDoserCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {

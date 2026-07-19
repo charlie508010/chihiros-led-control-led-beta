@@ -10,8 +10,8 @@ Dieses Repository ist die getrennte Arbeitskopie für die LED-Steuerung.
 - Home-Assistant-Integration und LED-Dashboard
 - `chihirosctl led` und `chihirosctl template`
 
-Die eigenständigen Add-ons für Doser, Rührer, Heizer, Wireshark und das allgemeine CTL-Dashboard sind nicht Bestandteil
-dieses Repository-Exports.
+Die eigenständigen Bereiche für Doser, Rührer, Heizer, Wireshark und das allgemeine CTL-Dashboard sind nicht Bestandteil
+dieses Repositories. Das gilt für Backend, Protokoll, Home-Assistant-Services, Dashboard, CLI und Tests.
 
 ## Erweiterungen
 
@@ -32,7 +32,18 @@ LED Core
     └── Wireshark/Diagnose (später)
 ```
 
-Bis die historischen gemeinsam genutzten Module vollständig in Plugins überführt sind, bleiben interne
-Kompatibilitätsfunktionen im Quellbaum. Sie werden über den LED-only-CLI-Einstiegspunkt nicht angeboten. Dadurch bleibt
-der aktuell funktionierende LED-Stand unverändert und kann schrittweise ohne Eingriff in das ursprüngliche Projekt
-bereinigt werden.
+## Getrennte Entwicklung
+
+- Dieses Repository enthält ausschließlich den stabilen LED Core und seine klar definierten Erweiterungsschnittstellen.
+- Die LED-Entwicklung erfolgt direkt in diesem Repository. Änderungen aus einem Geräteprojekt dürfen nicht den
+  LED-Protokoll-, Scheduler-, Dashboard- oder Home-Assistant-Code überschreiben.
+- Doser und weitere Gerätearten werden in eigenen Repositories entwickelt und getestet.
+- Gemeinsame Funktionen werden erst nach Prüfung als kleine, geräteunabhängige Core-Schnittstelle übernommen.
+- Gerätefunktionen werden später einzeln als versionierte Plugins oder Pakete angebunden. Es werden keine vollständigen
+  Entwicklungsstände eines anderen Geräterepositories ungeprüft in den LED Core kopiert.
+- Während einer direkten gemeinsamen Arbeit an demselben Stand wird vorher vereinbart, wer den Stand bearbeitet. Der
+  andere Entwickler beginnt erst nach Commit und Aktualisierung des gemeinsamen Branches.
+
+Historische Doser-, Rührer-, Heizer-, Wireshark- und allgemeine CTL-Kompatibilitätsdateien im aktuellen Export sind
+Migrationsreste und gehören nicht zum Zielstand. Sie werden abhängigkeitsweise entfernt; bis dahin darf dieser Export
+nicht als vollständig getrennt bezeichnet werden.
