@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1053";
+import "./panels/chihiros-led-panel.js?v=0.2.1054";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2878,6 +2878,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           .led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0,1fr); gap:8px; }
           .led-device-edit-actions .action-row { grid-template-columns:28px minmax(0,1fr) auto; justify-content:stretch; }
           .led-device-power-row > span { white-space:normal; overflow-wrap:anywhere; }
+          .led-schedule-row-grid > .led-schedule-color-control.led-schedule-time-control { grid-template-columns:minmax(0,1fr); }
+          .led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }
+          .led-schedule-row-grid > .led-schedule-color-control.led-schedule-debug-control { grid-template-columns:minmax(0,1fr) auto; }
+          .led-schedule-debug-control > label span { white-space:normal; overflow-wrap:anywhere; }
           .led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }
           .led-schedule-weekdays-control .weekday-chip { box-sizing:border-box; padding:4px; }
           .config-card-head { flex-direction:column; align-items:stretch; }

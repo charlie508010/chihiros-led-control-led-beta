@@ -700,6 +700,10 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     assert ".led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0,1fr); gap:8px; }" in dashboard
     assert ".led-device-edit-actions .action-row { grid-template-columns:28px minmax(0,1fr) auto;" in dashboard
     assert ".led-device-power-row > span { white-space:normal; overflow-wrap:anywhere; }" in dashboard
+    assert ".led-schedule-row-grid > .led-schedule-color-control.led-schedule-time-control" in dashboard
+    assert ".led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }" in dashboard
+    assert ".led-schedule-row-grid > .led-schedule-color-control.led-schedule-debug-control" in dashboard
+    assert ".led-schedule-debug-control > label span { white-space:normal; overflow-wrap:anywhere; }" in dashboard
     assert ".led-schedule-color-control.led-schedule-weekdays-control {" in dashboard
     assert "grid-template-columns:repeat(auto-fit, minmax(56px, 1fr));" in dashboard
     assert ".led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }" in dashboard
