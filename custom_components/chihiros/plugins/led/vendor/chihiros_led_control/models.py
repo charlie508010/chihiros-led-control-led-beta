@@ -137,7 +137,7 @@ SUPPORTED_MODELS: tuple[DeviceModel, ...] = (
     DeviceModel(
         "Universal WRGB",
         ("DYU1000",),
-        TINY_TERRARIUM_EGG_CHANNELS,
+        WRGB_CHANNELS,
         max_brightness=100,
         schedule_reset_parameter=40,
         schedule_reset_from_snapshot=True,
