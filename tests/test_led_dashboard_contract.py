@@ -686,7 +686,9 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     """Mobile LED cards stay within the viewport while wide tables scroll locally."""
     dashboard = source(DASHBOARD)
 
-    assert ".led-template-front-table-wrap { max-width:100%; overflow-x:auto; }" in dashboard
+    assert ".led-template-front-table-wrap { max-width:100%; overflow-x:scroll;" in dashboard
+    assert ".led-template-front-table-wrap::-webkit-scrollbar { height:10px; }" in dashboard
+    assert ".led-template-front-table-wrap::-webkit-scrollbar-thumb" in dashboard
     assert ".led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:scroll;" in dashboard
     assert "scrollbar-gutter:stable; scrollbar-width:auto; scrollbar-color:#03c9ff" in dashboard
     assert ".led-schedule-summary-list::-webkit-scrollbar { height:10px; }" in dashboard
