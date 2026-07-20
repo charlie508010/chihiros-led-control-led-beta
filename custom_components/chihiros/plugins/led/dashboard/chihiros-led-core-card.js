@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1049";
+import "./panels/chihiros-led-panel.js?v=0.2.1050";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2638,7 +2638,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         }
         .led-schedule-weekdays-control .weekday-grid {
           justify-content:center;
-          grid-template-columns:repeat(8, minmax(0, 1fr));
+          grid-template-columns:repeat(auto-fit, minmax(56px, 1fr));
           width:100%;
           max-width:100%;
           justify-items:stretch;
