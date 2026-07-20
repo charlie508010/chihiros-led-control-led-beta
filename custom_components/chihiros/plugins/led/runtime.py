@@ -97,6 +97,7 @@ class ChihirosClient(Protocol):
         self,
         sunrise: datetime,
         sunset: datetime,
+        max_brightness: int | Sequence[int] | Mapping[str | int, int] | None = None,
         ramp_up_in_minutes: int = 1,
         weekdays: list[WeekdaySelect] | None = None,
     ) -> None:

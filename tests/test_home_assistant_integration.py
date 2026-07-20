@@ -214,6 +214,7 @@ class TrackingChihirosClient:
         self,
         sunrise: datetime,
         sunset: datetime,
+        max_brightness: object | None = None,
         ramp_up_in_minutes: int = 0,
         weekdays: list[object] | None = None,
     ) -> None:
@@ -222,6 +223,7 @@ class TrackingChihirosClient:
             {
                 "sunrise": sunrise,
                 "sunset": sunset,
+                "max_brightness": max_brightness,
                 "ramp_up_in_minutes": ramp_up_in_minutes,
                 "weekdays": weekdays,
             }

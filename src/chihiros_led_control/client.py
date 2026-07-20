@@ -405,6 +405,7 @@ class ChihirosDevice:
         self,
         sunrise: datetime,
         sunset: datetime,
+        max_brightness: int | Sequence[int] | Mapping[str | int, int] | None = None,
         ramp_up_in_minutes: int = 1,
         weekdays: list[WeekdaySelect] | None = None,
     ) -> None:
@@ -438,6 +439,17 @@ class ChihirosDevice:
                 self.model.schedule_reset_parameter,
             )
             commands_to_send = [delete_command, first_finalize, second_delete_command, second_finalize]
+            if max_brightness is not None:
+                commands_to_send.append(
+                    commands.create_add_auto_setting_command(
+                        self.get_next_msg_id(),
+                        sunrise.time(),
+                        sunset.time(),
+                        self._brightness_parameter_values(max_brightness),
+                        ramp_up_in_minutes,
+                        encode_selected_weekdays(weekdays),
+                    )
+                )
         await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
 
     async def replace_setting(

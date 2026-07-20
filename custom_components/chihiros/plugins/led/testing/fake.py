@@ -227,11 +227,12 @@ class FakeChihirosDevice:
         self,
         sunrise: datetime,
         sunset: datetime,
+        max_brightness: int | Sequence[int] | Mapping[str | int, int] | None = None,
         ramp_up_in_minutes: int = 1,
         weekdays: list[object] | None = None,
     ) -> None:
         """Accept fake schedule deletes."""
-        del sunrise, sunset, ramp_up_in_minutes, weekdays
+        del sunrise, sunset, max_brightness, ramp_up_in_minutes, weekdays
         await self.query_status()
 
     async def replace_setting(

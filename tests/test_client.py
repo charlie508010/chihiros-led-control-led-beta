@@ -168,7 +168,7 @@ def test_remove_setting_sends_delete_immediately_after_connection_prelude() -> N
 
 
 def test_dyu1000_remove_setting_sends_delete_finalize_sequence() -> None:
-    """DYU1000 inactive schedule send repeats delete/finalize like the app."""
+    """DYU1000 inactive schedule send repeats delete/finalize by default."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
@@ -206,6 +206,49 @@ def test_dyu1000_remove_setting_sends_delete_finalize_sequence() -> None:
     assert sent_commands[1][6:-1] == bytes([40, 255, 255])
     assert sent_commands[2][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
     assert sent_commands[3][6:-1] == bytes([40, 255, 255])
+
+
+def test_dyu1000_inactive_schedule_can_append_app_matching_final_values() -> None:
+    """DYU1000 inactive schedule can append the app-observed final value frame."""
+    sent_commands: list[bytes] = []
+
+    async def run() -> None:
+        model = DeviceModel(
+            "Universal WRGB",
+            ("DYU1000",),
+            WRGB_CHANNELS,
+            max_brightness=100,
+            schedule_reset_parameter=40,
+        )
+        device = ChihirosDevice(FakeBLEDevice(), model)  # type: ignore[arg-type]
+
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray,
+            retry: int | None = None,
+            **kwargs: object,
+        ) -> None:
+            del retry, kwargs
+            if isinstance(command, list):
+                sent_commands.extend(bytes(item) for item in command)
+            else:
+                sent_commands.append(bytes(command))
+
+        device._send_command = capture_command  # type: ignore[method-assign]
+        await device.remove_setting(
+            datetime(2026, 7, 16, 12, 0),
+            datetime(2026, 7, 16, 18, 0),
+            max_brightness=(100, 100, 100, 100),
+            ramp_up_in_minutes=1,
+        )
+
+    asyncio.run(run())
+
+    assert [command[5] for command in sent_commands] == [25, 5, 25, 5, 25]
+    assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
+    assert sent_commands[1][6:-1] == bytes([40, 255, 255])
+    assert sent_commands[2][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
+    assert sent_commands[3][6:-1] == bytes([40, 255, 255])
+    assert sent_commands[4][6:-1] == bytes([12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255])
 
 
 def test_connection_prelude_appends_ordered_schedule_delete(monkeypatch: pytest.MonkeyPatch) -> None:
