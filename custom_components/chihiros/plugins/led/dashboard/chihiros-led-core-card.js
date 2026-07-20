@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1065";
+import "./panels/chihiros-led-panel.js?v=0.2.1066";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1239,7 +1239,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   debugOutputSections(output = "") {
     const text = String(output || "").trim();
     if (!text) return [];
-    const markers = ["Raw Debug", "VERGLEICH APP-LOG", "GERÄTEANTWORT", "Details JSON"];
+    const markers = ["Status", "Debug", "Doku / Kopieren", "Raw Debug", "VERGLEICH APP-LOG", "GERÄTEANTWORT", "Details JSON"];
     const lines = text.split(/\r?\n/);
     const sections = [];
     let current = { title: "", lines: [] };
@@ -1249,6 +1249,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     };
     lines.forEach((line) => {
       const trimmed = line.trim().replace(/:$/, "");
+      if (/^box neu$/i.test(trimmed)) {
+        push();
+        current = { title: "", lines: [] };
+        return;
+      }
+      if (/^bottom zum kop/i.test(trimmed)) return;
       if (markers.some((marker) => marker.toLowerCase() === trimmed.toLowerCase())) {
         push();
         current = { title: trimmed, lines: [] };
