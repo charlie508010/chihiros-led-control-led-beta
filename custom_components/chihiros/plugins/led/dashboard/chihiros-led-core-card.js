@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1035";
+import "./panels/chihiros-led-panel.js?v=0.2.1036";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -219,9 +219,43 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           await new Promise((resolve) => window.setTimeout(resolve, 1000));
         }
         if (String(updateState && updateState.state || "").toLowerCase() === "on") {
-          const installResult = await this._hass.callService("update", "install", { entity_id: updateEntity });
-          const installError = serviceFailure(installResult);
-          if (installError) throw new Error(`update.install fehlgeschlagen: ${installError}`);
+          let startError = "";
+          try {
+            const installResult = await this._hass.callService("update", "install", { backup: false }, { entity_id: updateEntity });
+            const installError = serviceFailure(installResult);
+            if (installError) throw new Error(installError);
+          } catch (error) {
+            startError = error && error.message ? error.message : String(error);
+          }
+          for (let poll = 0; poll < 30; poll += 1) {
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            try {
+              updateState = await this._hass.callApi("GET", `states/${updateEntity}`);
+            } catch (error) {
+              const message = error && error.message ? error.message : String(error);
+              if (message.includes("502") || message.toLowerCase().includes("bad gateway")) continue;
+              throw error;
+            }
+            const attrs = updateState && updateState.attributes ? updateState.attributes : {};
+            if (String(updateState && updateState.state || "").toLowerCase() !== "on" && !attrs.in_progress) break;
+          }
+          const attrs = updateState && updateState.attributes ? updateState.attributes : {};
+          const installed = String(attrs.installed_version || "");
+          const latest = String(attrs.latest_version || "");
+          if (installed && latest && installed === latest
+            && String(updateState && updateState.state || "").toLowerCase() !== "on") {
+            this.dialogState = {
+              type: "debug",
+              channel: 1,
+              output: `OK\nUpdate abgeschlossen.\n${updateEntity}\nInstalliert: ${installed}\nLatest: ${latest}`,
+              running: false,
+              noChannel: true,
+              level: "ok",
+            };
+            this.render();
+            return;
+          }
+          if (startError) throw new Error(`update.install fehlgeschlagen: ${startError}`);
           this.dialogState = {
             type: "debug",
             channel: 1,

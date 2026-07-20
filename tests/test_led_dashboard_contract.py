@@ -63,6 +63,8 @@ def test_led_core_update_prefers_the_home_assistant_update_entity() -> None:
     assert 'this._hass.callService("update", "install"' in dashboard
     assert "if (refreshError) throw new Error" in dashboard
     assert "if (installError) throw new Error" in dashboard
+    assert 'message.includes("502")' in dashboard
+    assert "installed === latest" in dashboard
 
 
 def test_led_discovery_prefers_the_exact_color_entity_alias() -> None:
