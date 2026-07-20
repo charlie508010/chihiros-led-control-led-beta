@@ -214,6 +214,16 @@ def test_led_device_tabs_deduplicate_parallel_entities_by_mac_address() -> None:
     assert 'group.channels.findIndex((existing) => existing.key === channel.key)' in panel
 
 
+def test_led_device_tabs_use_the_shared_styled_navigation() -> None:
+    """LED device selectors must not fall back to unstyled browser buttons."""
+    panel = source(LED_PANEL)
+    dashboard = source(DASHBOARD)
+
+    assert '<nav class="doser-device-tabs"' in panel
+    assert ".doser-device-tabs button" in dashboard
+    assert ".doser-device-tabs button.active" in dashboard
+
+
 def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
     """Only LED configuration and diagnostics use the integration-owned SQLite database."""
     server = source(ADDON_SERVER)
