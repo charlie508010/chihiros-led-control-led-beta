@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1060";
+import "./panels/chihiros-led-panel.js?v=0.2.1061";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -155,6 +155,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const showMac = this.uiSettings?.showMac !== false;
     const dashboardDebug = Boolean(this.uiSettings?.dashboardDebug);
     const powerOverrides = this.uiSettings?.deviceMaxPowerWatts || {};
+    const pluginRows = Object.values(this.config?.plugin_assets || {})
+      .filter((plugin) => plugin && plugin.id && plugin.id !== "led")
+      .map((plugin) => `<div class="config-row wide">
+        <span><strong>${this.escapeHtml(plugin.name || plugin.id)}</strong> · ${this.tr("version")} ${this.escapeHtml(plugin.version || "-")}</span>
+        <button type="button" class="danger" data-plugin-uninstall="${this.escapeHtml(plugin.id)}">${this.tr("remove")}</button>
+      </div>`).join("");
     const powerRows = (this.ledDevices || []).map((device) => {
       const id = String(device.id || "");
       const label = String(device.label || device.name || id);
@@ -187,6 +193,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           ${powerRows || `<small class="settings-note">${this.tr("no_device")}</small>`}
         </section>
         ${this.config?.addon_mode ? `<section class="card config-card">
+          <h2>${this.tr("installed_plugins")}</h2>
+          ${pluginRows || `<small class="settings-note">${this.tr("no_external_plugins")}</small>`}
+          <small class="settings-note" data-plugin-uninstall-status></small>
+        </section>
+        <section class="card config-card">
           <h2>${this.tr("plugin_install")}</h2>
           <p class="settings-note">${this.tr("plugin_install_hint")}</p>
           <label class="config-row wide">
@@ -429,6 +440,25 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           if (status) status.textContent = `${this.tr("plugin_installed")}: ${result.plugin} ${result.version}. ${this.tr("restart_addon")}`;
         } catch (error) {
           if (status) status.textContent = `${this.tr("plugin_install_failed")}: ${error && error.message ? error.message : error}`;
+        } finally {
+          button.disabled = false;
+        }
+      });
+    });
+    this.querySelectorAll("[data-plugin-uninstall]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const plugin = String(button.getAttribute("data-plugin-uninstall") || "");
+        const status = this.querySelector("[data-plugin-uninstall-status]");
+        if (!plugin || !window.confirm(this.tr("plugin_uninstall_confirm").replace("{plugin}", plugin))) return;
+        button.disabled = true;
+        if (status) status.textContent = this.tr("plugin_uninstalling");
+        try {
+          const api = window.ChihirosAddonApi;
+          if (!api || typeof api.uninstallPlugin !== "function") throw new Error(this.tr("service_unavailable"));
+          const result = await api.uninstallPlugin(plugin);
+          if (status) status.textContent = `${this.tr("plugin_uninstalled")}: ${result.plugin}. ${this.tr("restart_addon")}`;
+        } catch (error) {
+          if (status) status.textContent = `${this.tr("plugin_uninstall_failed")}: ${error && error.message ? error.message : error}`;
         } finally {
           button.disabled = false;
         }
@@ -1524,12 +1554,20 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         database_subtitle: "Scheduler, Vorlagen, Übertragungsstatus und Diagnosen",
         integration_database: "LED-Core-Speicher",
         plugin_install: "Plugin installieren",
+        installed_plugins: "Installierte Plugins",
+        no_external_plugins: "Keine externen Plugins installiert.",
+        version: "Version",
+        remove: "Entfernen",
         plugin_install_hint: "Vertrauenswürdiges TGZ hochladen. Das Plugin wird erst nach einem Neustart des LED-Core-Add-ons geladen.",
         plugin_archive: "TGZ-Datei",
         plugin_select_first: "Bitte zuerst eine TGZ-Datei auswählen.",
         plugin_installing: "Plugin wird geprüft und installiert …",
         plugin_installed: "Plugin installiert",
         plugin_install_failed: "Plugin-Installation fehlgeschlagen",
+        plugin_uninstall_confirm: "Plugin {plugin} entfernen? Es wird in ein datiertes Backup verschoben.",
+        plugin_uninstalling: "Plugin wird sicher entfernt …",
+        plugin_uninstalled: "Plugin entfernt",
+        plugin_uninstall_failed: "Plugin konnte nicht entfernt werden",
         restart_addon: "LED-Core-Add-on neu starten.",
         install: "Installieren",
         rated_power: "Nennleistung",
@@ -1791,12 +1829,20 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         database_subtitle: "Schedules, templates, transfer status and diagnostics",
         integration_database: "LED Core storage",
         plugin_install: "Install plugin",
+        installed_plugins: "Installed plugins",
+        no_external_plugins: "No external plugins installed.",
+        version: "Version",
+        remove: "Remove",
         plugin_install_hint: "Upload a trusted TGZ. The plugin is loaded only after restarting the LED Core add-on.",
         plugin_archive: "TGZ file",
         plugin_select_first: "Select a TGZ file first.",
         plugin_installing: "Validating and installing plugin …",
         plugin_installed: "Plugin installed",
         plugin_install_failed: "Plugin installation failed",
+        plugin_uninstall_confirm: "Remove plugin {plugin}? It will be moved to a dated backup.",
+        plugin_uninstalling: "Safely removing plugin …",
+        plugin_uninstalled: "Plugin removed",
+        plugin_uninstall_failed: "Plugin could not be removed",
         restart_addon: "Restart the LED Core add-on.",
         install: "Install",
         rated_power: "Rated power",

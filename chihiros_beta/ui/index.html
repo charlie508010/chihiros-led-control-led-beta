@@ -246,6 +246,7 @@
           plugin_kind: addonKind,
           plugin_title: addonTitle,
           installed_plugins: installedPlugins,
+          plugin_assets: pluginAssets,
           language: "de",
           addon_mode: true,
           addon_database: addonDatabase,
@@ -333,6 +334,16 @@
           });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(data.message || `Plugin installation failed (${response.status})`);
+          return data;
+        },
+        uninstallPlugin: async (plugin) => {
+          const response = await fetch("./api/plugins/uninstall", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ plugin }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || `Plugin uninstall failed (${response.status})`);
           return data;
         },
         callPluginBackend: async (plugin, action, args = []) => {

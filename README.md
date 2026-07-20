@@ -168,16 +168,16 @@ uv --cache-dir .uv-cache run chihirosctl led reset-settings <device-address>
 | Command | Purpose |
 | --- | --- |
 | `led list-devices` | Discover supported BLE LEDs |
-| `led turn-on`, `led turn-off` | Switch all LED channels |
+| `led turn-on` | Switch all LED channels on |
+| `led turn-off` | Switch all LED channels off |
 | `led set-brightness` | Set one, three, or four channel levels |
 | `led set-fan-speed` | Set the VIVID III fan percentage |
-| `led add-setting`, `led remove-setting`, `led reset-settings` | Manage device schedules |
+| `led add-setting` | Add or update a device schedule |
+| `led remove-setting` | Remove a matching device schedule |
+| `led reset-settings` | Reset all device schedules |
 | `led enable-auto-mode` | Activate the stored automatic schedule |
 | `led watch-runtime` | Query and observe runtime/fan notifications |
 | `led read-notifications` | Print raw LED notifications for diagnostics |
-
-Template commands use the separate `chihirosctl template ...` group. The obsolete commands
-`delete-setting-exact`, `reset-settings-7`, `test-auto-parameter`, and `hard-reset` are intentionally not exposed.
 
 ## Rated power and estimates
 

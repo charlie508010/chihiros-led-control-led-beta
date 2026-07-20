@@ -114,3 +114,15 @@ def test_backend_uses_manifest_allowlist(plugin_roots: Path) -> None:
     assert server.call_plugin_backend("sample", "ping", []) == {"ok": True}
     with pytest.raises(ValueError, match="not allowed"):
         server.call_plugin_backend("sample", "hidden", [])
+
+
+def test_uninstall_moves_plugin_to_recoverable_backup(plugin_roots: Path) -> None:
+    """Uninstall never deletes plugin files and requires a restart."""
+    files = {"plugin.json": manifest(), "www/plugin.js": b"export {};", "backend.py": b"def ping(): return 'ok'\n"}
+    server.install_plugin_tgz(archive(files))
+    result = server.uninstall_plugin("sample")
+    backup = Path(str(result["backup"]))
+    assert result["restart_required"] is True
+    assert not (plugin_roots / "sample").exists()
+    assert (backup / "plugin.json").is_file()
+    assert backup.name.endswith("-uninstalled")

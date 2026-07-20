@@ -11,12 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_readme_uses_grouped_cli_and_obsolete_commands_are_absent() -> None:
-    """Examples use the supported command groups and removed commands never return to Typer registrations."""
+def test_readme_uses_led_cli_group_and_obsolete_commands_are_absent() -> None:
+    """Examples use the LED group and removed commands never return to Typer registrations."""
     readme = (ROOT / "README.md").read_text(encoding="utf-8-sig")
     cli = (ROOT / "src/chihiros_led_control/cli.py").read_text(encoding="utf-8")
     assert "chihirosctl led set-brightness" in readme
-    assert "chihirosctl template" in readme
     for obsolete in ("delete-setting-exact", "reset-settings-7", "test-auto-parameter", "hard-reset"):
         assert obsolete not in cli
 

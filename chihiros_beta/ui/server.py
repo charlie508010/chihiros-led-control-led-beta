@@ -315,6 +315,27 @@ def install_plugin_tgz(payload: bytes) -> dict[str, object]:
     }
 
 
+def uninstall_plugin(plugin_id: str) -> dict[str, object]:
+    """Deactivate an external plugin by moving it to a dated, recoverable backup."""
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", plugin_id) or plugin_id in {"led", "config"}:
+        raise ValueError(f"Invalid or reserved plugin id: {plugin_id!r}")
+    target = (EXTERNAL_PLUGIN_ROOT / plugin_id).resolve()
+    external_root = EXTERNAL_PLUGIN_ROOT.resolve()
+    if external_root not in target.parents or not target.is_dir():
+        raise ValueError(f"External plugin not installed: {plugin_id}")
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+    PLUGIN_BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+    backup_path = PLUGIN_BACKUP_ROOT / f"{plugin_id}-{timestamp}-uninstalled"
+    target.replace(backup_path)
+    _PLUGIN_BACKEND_CACHE.pop(plugin_id, None)
+    return {
+        "ok": True,
+        "plugin": plugin_id,
+        "backup": str(backup_path),
+        "restart_required": True,
+    }
+
+
 def addon_info_is_installed(data: dict[str, object]) -> bool:
     """Return true only for add-ons installed on this Home Assistant host."""
     if data.get("installed") is True:
@@ -405,6 +426,9 @@ class Handler(BaseHTTPRequestHandler):
         if request_path == "/api/plugins/install":
             self.install_plugin_archive(parsed)
             return
+        if request_path == "/api/plugins/uninstall":
+            self.uninstall_plugin_archive(self.read_json())
+            return
         if request_path == "/api/plugin-backend":
             self.run_plugin_backend(self.read_json())
             return
@@ -455,6 +479,17 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(400, {"message": str(err)})
             return
         self.send_json(200, result if isinstance(result, dict) else {"result": result})
+
+    def uninstall_plugin_archive(self, body: bytes) -> None:
+        """Move one installed external plugin to the retained backup directory."""
+        try:
+            data = json.loads(body.decode("utf-8") or "{}")
+            plugin_id = str(data.get("plugin") or "").strip()
+            result = uninstall_plugin(plugin_id)
+        except (json.JSONDecodeError, OSError, ValueError) as err:
+            self.send_json(400, {"message": str(err)})
+            return
+        self.send_json(200, result)
 
     def save_dashboard_settings(self, body: bytes) -> None:
         try:
