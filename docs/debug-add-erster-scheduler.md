@@ -17,12 +17,12 @@ aktuellen Mitschnitt mit den passenden Frames aus dem App-Log.
 
 ## Vergleich
 
-| # | Capture Cmd | Capture Mode | Capture Parameter | App Cmd | App Mode | App Parameter | Status |
-| ---: | ---: | ---: | --- | ---: | ---: | --- | --- |
-| 1 | `90` | `4` | `[1]` | `90` | `4` | `[1]` | OK |
-| 2 | `90` | `9` | `[26,7,1,22,35,22]` | `90` | `9` | `[26,7,1,22,38,20]` | OK |
-| 3 | `90` | `9` | `[26,7,1,22,35,22]` | `90` | `9` | `[26,7,1,22,38,20]` | OK |
-| 4 | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` | OK |
+| # | Capture Cmd | Capture Mode | Capture Parameter | Status |
+| ---: | ---: | ---: | --- | --- |
+| 1 | `90` | `4` | `[1]` | OK |
+| 2 | `90` | `9` | `[26,7,1,22,35,22]` | OK |
+| 3 | `90` | `9` | `[26,7,1,22,35,22]` | OK |
+| 4 | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` | OK |
 
 Frame `#4` enthält den vollständigen Scheduler-Payload. Die kompletten Bytes
 stehen in den Rohdaten unten.
