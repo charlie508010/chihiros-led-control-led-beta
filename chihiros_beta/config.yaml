@@ -1,5 +1,5 @@
 name: LED Core
-version: "0.2.1032"
+version: "0.2.1033"
 slug: chihiros_led_core
 description: Chihiros LED integration, CLI, scheduler, and dashboard for Home Assistant
 url: https://github.com/charlie508010/chihiros-led-control-led-beta/tree/main/chihiros_beta
