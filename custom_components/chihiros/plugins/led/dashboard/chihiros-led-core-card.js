@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1068";
+import "./panels/chihiros-led-panel.js?v=0.2.1069";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1228,7 +1228,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     return this.sharedModalDialog({
       title,
       sectionClass: `modal card debug-modal${levelClass}`,
-      bodyHtml: this.debugOutputMarkup(output, levelClass),
+      bodyHtml: options.debug
+        ? this.debugOutputMarkup(output, levelClass)
+        : `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`,
       actions: [
         { action: "copy-debug:all", label: this.tr("copy_all"), className: "secondary", type: "button" },
         { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
