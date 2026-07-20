@@ -217,19 +217,13 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     });
     return Array.from(groups.values())
       .filter((device) => device.channels.length)
-      .map((device, index) => {
-        const testChannelLimit = device.address === "D5:41:68:57:77:7E" ? 1 : device.channels.length;
-        const channels = device.channels
-          .slice(0, testChannelLimit)
-          .map(({ available: _available, ...channel }) => channel);
-        return {
-          ...device,
-          label: `${this.tr("device")} ${index + 1}`,
-          model: device.model && device.model !== "LED" ? device.model : (channels.length >= 4 ? "WRGB" : "LED"),
-          power_entity: device.power_entity || (channels[0] ? channels[0].entity : ""),
-          channels,
-        };
-      });
+      .map((device, index) => ({
+        ...device,
+        label: `${this.tr("device")} ${index + 1}`,
+        model: device.model && device.model !== "LED" ? device.model : (device.channels.length >= 4 ? "WRGB" : "LED"),
+        power_entity: device.power_entity || (device.channels[0] ? device.channels[0].entity : ""),
+        channels: device.channels.map(({ available: _available, ...channel }) => channel),
+      }));
   }
 
   isLedDeviceConfig(device = {}) {

@@ -33,6 +33,7 @@ def test_detect_model_sets_dyu1000_max_brightness() -> None:
 
     assert model.max_brightness == 100
     assert model.max_power_watts == 59
+    assert dict(model.color_channels) == {"white": 0}
     assert model.schedule_reset_parameter == 40
     assert model.schedule_reset_from_snapshot is True
 
