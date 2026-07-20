@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1055";
+import "./panels/chihiros-led-panel.js?v=0.2.1056";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2397,7 +2397,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-schedule-card td:nth-child(n+4):nth-child(-n+8) { width:76px; }
         .led-schedule-front-table { width:100%; border-collapse:collapse; font-size:12px; }
         .led-schedule-front-table th,
-        .led-schedule-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; }
+        .led-schedule-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; white-space:nowrap; }
         .led-schedule-front-table th { color:rgba(255,255,255,.74); font-weight:800; text-transform:uppercase; letter-spacing:.02em; }
         .led-schedule-front-table td:nth-child(1) { width:38px; color:#03c9ff; font-weight:800; }
         .led-schedule-front-table th:nth-child(2),

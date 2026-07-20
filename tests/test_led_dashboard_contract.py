@@ -659,6 +659,7 @@ def test_connection_panel_shows_runtime_sensor() -> None:
     assert 'class="led-schedule-check-dot ${verification.level}"' in panel
     assert '<th>${this.tr("check_short")}</th>' in panel
     assert ".led-schedule-front-table td:nth-child(3) { min-width:100px; white-space:nowrap; }" in dashboard
+    assert ".led-schedule-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; white-space:nowrap; }" in dashboard
     assert (
         '<th>#</th>\n              <th>${this.tr("check_short")}</th>\n              <th>${this.tr("time")}</th>'
     ) in panel
