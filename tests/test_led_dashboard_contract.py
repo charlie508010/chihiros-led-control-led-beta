@@ -687,7 +687,10 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     dashboard = source(DASHBOARD)
 
     assert ".led-template-front-table-wrap { max-width:100%; overflow-x:auto; }" in dashboard
-    assert ".led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:auto; }" in dashboard
+    assert ".led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:scroll;" in dashboard
+    assert "scrollbar-gutter:stable; scrollbar-width:auto; scrollbar-color:#03c9ff" in dashboard
+    assert ".led-schedule-summary-list::-webkit-scrollbar { height:10px; }" in dashboard
+    assert ".led-schedule-summary-list::-webkit-scrollbar-thumb" in dashboard
     assert "@media (max-width:700px)" in dashboard
     assert ".led-page { grid-template-columns:minmax(0,1fr); }" in dashboard
     assert ".led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }" in dashboard

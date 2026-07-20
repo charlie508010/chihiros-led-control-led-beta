@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1050";
+import "./panels/chihiros-led-panel.js?v=0.2.1051";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2579,7 +2579,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-schedule-dialog-footer button:disabled { opacity:.55; cursor:wait; }
         .led-schedule-dialog-footer .danger { border-color:rgba(255,196,0,.42); color:#ffdd70; background:rgba(255,196,0,.08); }
         .led-schedule-dialog-footer .danger:hover { border-color:rgba(255,196,0,.8); background:rgba(255,196,0,.14); }
-        .led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:auto; }
+        .led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:scroll; scrollbar-gutter:stable; scrollbar-width:auto; scrollbar-color:#03c9ff rgba(255,255,255,.12); padding-bottom:5px; }
+        .led-schedule-summary-list::-webkit-scrollbar { height:10px; }
+        .led-schedule-summary-list::-webkit-scrollbar-track { border:1px solid rgba(81,154,190,.24); border-radius:999px; background:rgba(255,255,255,.08); }
+        .led-schedule-summary-list::-webkit-scrollbar-thumb { border:2px solid rgba(9,18,21,.9); border-radius:999px; background:#03c9ff; }
         .led-schedule-summary-list.scroll-limit-5 { max-height:292px; overflow-y:auto; padding-right:4px; }
         .schedule-summary-row { display:grid; grid-template-columns:24px 130px minmax(0,1fr) 20px; align-items:center; gap:10px; min-height:40px; width:100%; padding:0 10px; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:rgba(0,0,0,.14); color:inherit; font:inherit; text-align:left; cursor:pointer; }
         .schedule-summary-row:hover { border-color:rgba(3,201,255,.45); background:rgba(0,122,166,.12); }
