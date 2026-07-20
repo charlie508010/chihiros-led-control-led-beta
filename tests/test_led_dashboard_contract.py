@@ -226,6 +226,19 @@ def test_led_device_tabs_use_the_shared_styled_navigation() -> None:
     assert ".doser-device-tabs button.active" in dashboard
 
 
+def test_led_device_name_is_editable_and_used_by_the_device_tab() -> None:
+    """A locally persisted device name must be rendered in the device selector."""
+    panel = source(LED_PANEL)
+    dashboard = source(DASHBOARD)
+
+    assert "ledDeviceDisplayName(device)" in panel
+    assert 'data-led-device-name-form' in panel
+    assert 'data-led-device-name' in panel
+    assert "deviceNames: {}" in dashboard
+    assert "[deviceId]: name" in dashboard
+    assert "this.saveUiSettings();" in dashboard
+
+
 def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
     """Only LED configuration and diagnostics use the integration-owned SQLite database."""
     server = source(ADDON_SERVER)

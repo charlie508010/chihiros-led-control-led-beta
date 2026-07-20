@@ -399,11 +399,17 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     this.render();
   }
 
+  ledDeviceDisplayName(device = {}) {
+    const names = this.uiSettings && this.uiSettings.deviceNames ? this.uiSettings.deviceNames : {};
+    const customName = String(names[String(device.id || "")] || "").trim();
+    return customName || String(device.label || device.name || device.id || "LED");
+  }
+
   ledDeviceTabs() {
     if (!this.ledDevices || this.ledDevices.length < 2) return "";
     const tabs = this.ledDevices.map((device) => `
         <button type="button" data-led-device="${this.escapeHtml(device.id)}" class="${device.id === this.activeLedDeviceId ? "active" : ""}">
-          ${this.escapeHtml(device.label || device.name)}
+          ${this.escapeHtml(this.ledDeviceDisplayName(device))}
         </button>`).join("");
     return `<nav class="doser-device-tabs" aria-label="LED ${this.escapeHtml(this.tr("device"))}">${tabs}</nav>`;
   }
@@ -3363,6 +3369,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         <section class="card led-device-control-card">
           <section class="led-device-edit-box led-device-control-box">
             <h2>${this.tr("control")}</h2>
+            <form class="led-device-name-row" data-led-device-name-form>
+              <label for="led-device-name">${this.tr("device_name")}</label>
+              <input id="led-device-name" type="text" maxlength="48" value="${this.escapeHtml(this.ledDeviceDisplayName(device))}" data-led-device-name>
+              <button type="submit" class="primary">${this.tr("save")}</button>
+            </form>
             <div class="led-device-edit-actions">
               <div class="action-row led-device-power-row">
                 <ha-icon icon="mdi:power"></ha-icon>
