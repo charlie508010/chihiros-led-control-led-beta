@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1045";
+import "./panels/chihiros-led-panel.js?v=0.2.1046";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2810,7 +2810,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .ok { color:#39d353; }
         .is-offline { color:#ff5b63; }
         .modal-backdrop { position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.58); display:flex; align-items:center; justify-content:center; padding:20px; }
-        .modal { width:min(520px, calc(100vw - 40px)); }
+        .modal { box-sizing:border-box; width:min(520px, calc(100vw - 40px)); max-width:100%; }
         .modal.led-schedule-modal { width:min(680px, calc(100vw - 28px)); max-width:calc(100vw - 28px); min-width:0; }
         .modal form { display:grid; gap:12px; }
         .modal label { display:grid; gap:6px; font-weight:600; }
