@@ -39,10 +39,10 @@ stehen in den Rohdaten unten.
 ## App-Log Frames
 
 ```text
-[INFO] {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"20.07.2026 22:38:20"}
-[INFO] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
-[INFO] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
-[INFO] {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255],"time":"20.07.2026 22:38:24"}
+[INFO SYSTEM] {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"20.07.2026 22:38:20"}
+[INFO SYSTEM] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
+[INFO SYSTEM] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
+[INFO SYSTEM] {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255],"time":"20.07.2026 22:38:24"}
 ```
 
 ## Rohes Vergleichsergebnis
@@ -69,20 +69,23 @@ OK: Keine Unterschiede gefunden.
 ------------------------------------------------------------------------
 ```
 
-# Wireshark Debug: Edit erster scheduler auf MO MI FR
-Dieses Beispiel dokumentiert einen Wireshark-Vergleich für das Hinzufügen des
-ersten LED-Zeitplan-Eintrags. Verglichen werden markierte TX-Frames aus dem
-aktuellen Mitschnitt mit den passenden Frames aus dem App-Log.
+---
+
+# Wireshark Debug: Edit erster Scheduler auf MO MI FR
+
 ## Übersicht
+
 | Feld | Wert |
 | --- | --- |
-| Bezeichnung | Edit erster scheduler auf MO MI FR |
+| Bezeichnung | Edit erster Scheduler auf MO MI FR |
 | Quelle | Wireshark Vergleich App-Log |
 | Datei | `btsnoop_hci_2026-07-20-23-49-25.frames.jsonl` |
 | Aktueller Mitschnitt | 8 Frames |
 | App-Log | 8 Frames |
 | Ergebnis | FEHLER - Abweichung gefunden |
+
 ## Vergleich
+
 | # | Capture Cmd | Capture Mode | Capture Parameter | Status |
 | ---: | ---: | ---: | --- | --- |
 | 1 | `90` | `4` | `[1]` | OK |
@@ -93,9 +96,12 @@ aktuellen Mitschnitt mit den passenden Frames aus dem App-Log.
 | 6 | `165` | `25` | `[12,0,18,0,1,84,255,255,255,255,255,255,255,255]` | OK |
 | 7 | `90` | `5` | `[40,255,255]` | OK |
 | 8 | `165` | `25` | `[12,0,18,0,1,84,100,100,100,100,255,255,255,255]` | OK |
-Frame `#4` enthält den vollständigen Scheduler-Payload. Die kompletten Bytes
+
+Die Frames `#4`, `#6` und `#8` enthalten vollständige Scheduler-Payloads. Die kompletten Bytes
 stehen in den Rohdaten unten.
+
 ## Markierte Frames aus aktuellem Mitschnitt
+
 ```text
 Aktueller Mitschnitt: btsnoop_hci_2026-07-20-23-49-25.frames.jsonl
 [INFO APP]  {"time": "21.07.2026 01:49:07.457", "dir": "tx", "cmd": 90, "mode": 4, "parm": [1]}
@@ -106,36 +112,27 @@ Aktueller Mitschnitt: btsnoop_hci_2026-07-20-23-49-25.frames.jsonl
 [INFO APP]  {"time": "21.07.2026 01:49:21.465", "dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255]}
 [INFO APP]  {"time": "21.07.2026 01:49:21.635", "dir": "tx", "cmd": 90, "mode": 5, "parm": [40, 255, 255]}
 [INFO APP]  {"time": "21.07.2026 01:49:22.298", "dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 100, 100, 100, 100, 255, 255, 255, 255]}
-------------------------------------------------------------------------
 ```
+
 ## App-Log Frames
+
 ```text
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 00:06:02"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 0, 6, 2], "time": "21.07.2026 00:06:02"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 0, 6, 2], "time": "21.07.2026 00:06:02"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 00:06:05"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [40, 255, 255], "time": "21.07.2026 00:06:05"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 00:06:05"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [40, 255, 255], "time": "21.07.2026 00:06:05"}
-------------------------------------------------------------------------
 [INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 100, 100, 100, 100, 255, 255, 255, 255], "time": "21.07.2026 00:06:05"}
-------------------------------------------------------------------------
-------------------------------------------------------------------------
 ```
+
 ## Rohes Vergleichsergebnis
+
 ```text
 VERGLEICH
-------------------------------------------------------------------------
 Aktueller Mitschnitt: 8 Frames
 App-Log: 8 Frames
-------------------------------------------------------------------------
 #1
   Aktueller Mitschnitt  90|4|[1]
   Vergleich App-Log   : 90|4|[1] ok
@@ -160,5 +157,4 @@ App-Log: 8 Frames
 #8
   Aktueller Mitschnitt  165|25|[12,0,18,0,1,84,100,100,100,100,255,255,255,255]
   Vergleich App-Log   : 165|25|[12,0,18,0,1,84,100,100,100,100,255,255,255,255] ok
-------------------------------------------------------------------------
 ```

@@ -22,6 +22,7 @@ This repository contains a Python library/CLI and a Home Assistant custom integr
 - `uv --cache-dir .uv-cache run python scripts/sync_vendor.py`: refresh `custom_components/chihiros/vendor/` after library changes.
 - `uv --cache-dir .uv-cache run python scripts/sync_vendor.py --check`: verify the vendored copy is current.
 - `docker compose up`: start the local Home Assistant environment; see `docs/home-assistant-docker.md`.
+- When checking JavaScript syntax from WSL, use the installed Windows Node binary: `"/mnt/c/Program Files/nodejs/node.exe" --check <file>`.
 
 ## Coding Style & Naming Conventions
 
