@@ -242,6 +242,14 @@ def test_led_device_name_is_editable_and_used_by_the_device_tab() -> None:
     assert "this.saveUiSettings();" in dashboard
 
 
+def test_led_database_status_action_aligns_with_the_power_toggle() -> None:
+    """The database eye must use the same compact left-side control alignment as the power row."""
+    dashboard = source(DASHBOARD)
+
+    assert ".led-device-edit-actions .led-database-status-row" in dashboard
+    assert "grid-template-columns:28px 266px auto" in dashboard
+
+
 def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
     """Only LED configuration and diagnostics use the integration-owned SQLite database."""
     server = source(ADDON_SERVER)

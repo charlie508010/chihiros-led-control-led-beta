@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1038";
+import "./panels/chihiros-led-panel.js?v=0.2.1039";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2305,6 +2305,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0, 1.35fr) minmax(170px, .65fr); gap:18px; align-items:center; }
         .led-device-edit-actions .led-auto-mode-row { grid-template-columns:28px minmax(0,1fr) auto; }
         .led-device-edit-actions .led-device-power-row { grid-template-columns:28px max-content auto; justify-content:start; column-gap:10px; }
+        .led-device-edit-actions .led-database-status-row { grid-template-columns:28px 266px auto; justify-content:start; column-gap:10px; }
         .led-device-power-row > span { white-space:nowrap; }
         .led-power-toggle { display:flex; align-items:center; gap:8px; min-width:76px; padding:3px 7px; border:0; background:transparent; color:var(--primary-text-color); cursor:pointer; }
         .led-power-toggle-track { position:relative; display:block; width:34px; height:18px; flex:0 0 34px; border-radius:9px; background:rgba(255,255,255,.20); border:1px solid rgba(255,255,255,.24); transition:background .16s ease,border-color .16s ease; }
