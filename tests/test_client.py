@@ -168,7 +168,7 @@ def test_remove_setting_sends_delete_immediately_after_connection_prelude() -> N
 
 
 def test_dyu1000_remove_setting_sends_delete_finalize_sequence() -> None:
-    """DYU1000 inactive schedule send finalizes deletion with the observed parameter 40 frame."""
+    """DYU1000 inactive schedule send repeats delete/finalize like the app."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
@@ -201,9 +201,11 @@ def test_dyu1000_remove_setting_sends_delete_finalize_sequence() -> None:
 
     asyncio.run(run())
 
-    assert [command[5] for command in sent_commands] == [25, 5]
+    assert [command[5] for command in sent_commands] == [25, 5, 25, 5]
     assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
     assert sent_commands[1][6:-1] == bytes([40, 255, 255])
+    assert sent_commands[2][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
+    assert sent_commands[3][6:-1] == bytes([40, 255, 255])
 
 
 def test_connection_prelude_appends_ordered_schedule_delete(monkeypatch: pytest.MonkeyPatch) -> None:

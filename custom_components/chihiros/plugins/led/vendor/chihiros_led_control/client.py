@@ -421,12 +421,23 @@ class ChihirosDevice:
         )
         commands_to_send = [delete_command]
         if self.model.schedule_reset_parameter != 5:
-            commands_to_send.append(
-                commands.create_auto_parameter_command(
-                    self.get_next_msg_id(),
-                    self.model.schedule_reset_parameter,
-                )
+            first_finalize = commands.create_auto_parameter_command(
+                self.get_next_msg_id(),
+                self.model.schedule_reset_parameter,
             )
+            second_delete_command = commands.create_delete_auto_setting_command(
+                self.get_next_msg_id(),
+                sunrise.time(),
+                sunset.time(),
+                ramp_up_in_minutes,
+                encode_selected_weekdays(weekdays),
+                brightness_channels=self._channel_count(),
+            )
+            second_finalize = commands.create_auto_parameter_command(
+                self.get_next_msg_id(),
+                self.model.schedule_reset_parameter,
+            )
+            commands_to_send = [delete_command, first_finalize, second_delete_command, second_finalize]
         await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
 
     async def replace_setting(
