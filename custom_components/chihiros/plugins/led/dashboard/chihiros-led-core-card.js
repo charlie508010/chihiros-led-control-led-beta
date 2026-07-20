@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1089";
+import "./panels/chihiros-led-panel.js?v=0.2.1090";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2256,64 +2256,95 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     });
     this.querySelectorAll("[data-action]").forEach((el) => {
       el.addEventListener("click", async (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
         const action = el.getAttribute("data-action") || "";
         const [kind, entity, extra] = action.split(":");
-        if (kind === "press") this.press(entity);
-        if (kind === "more") this.moreInfo(entity);
-        if (kind === "debug-test-led-schedule") {
+        const asyncAction = [
+          "led-preset",
+          "led-schedule-add",
+          "led-schedule-save",
+          "led-schedule-save-local",
+          "led-schedule-delete-row",
+          "led-enable-auto-mode",
+          "led-schedule-share-save",
+          "led-auto-mode-send",
+          "led-device-power-send",
+          "led-device-power-toggle",
+          "led-database-status-open",
+          "confirm-dialog-yes",
+          "confirm-dialog-no",
+          "copy-debug",
+        ].includes(kind);
+        if (asyncAction) el.disabled = true;
+        try {
+          if (kind === "press") this.press(entity);
+          if (kind === "more") this.moreInfo(entity);
+          if (kind === "debug-test-led-schedule") {
+            this.dialogState = {
+              type: "debug",
+              channel: 1,
+              output: "OK\nTest Dialog\nWenn du das hier siehst, funktioniert der Klick- und Debug-Dialogpfad.",
+              running: false,
+              noChannel: true,
+              level: "ok",
+            };
+            this.render();
+          }
+          if (kind === "led-schedule-edit") this.openLedScheduleDialog();
+          if (kind === "led-schedule-new") this.openNewLedScheduleDialog();
+          if (kind === "led-preset") await this.setLedPreset(entity);
+          if (kind === "led-schedule-add" || kind === "led-schedule-save") await this.addLedSchedule(true);
+          if (kind === "led-schedule-save-local") await this.addLedSchedule(false);
+          if (kind === "led-schedule-delete-row" && typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(entity), true);
+          if (kind === "led-schedule-reset" && typeof this.openLedScheduleResetConfirm === "function") this.openLedScheduleResetConfirm();
+          if (kind === "led-enable-auto-mode" && typeof this.enableLedAutoModeFromFront === "function") await this.enableLedAutoModeFromFront();
+          if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") this.saveLedTemplateFromDialog();
+          if (kind === "led-template-share-save" && typeof this.saveSharedLedTemplate === "function") this.saveSharedLedTemplate();
+          if (kind === "led-schedule-share-save" && typeof this.saveSharedLedSchedule === "function") await this.saveSharedLedSchedule();
+          if (kind === "led-auto-mode-edit" && typeof this.openLedAutoModeDialog === "function") this.openLedAutoModeDialog();
+          if (kind === "led-auto-mode-send" && typeof this.saveLedAutoModeDialog === "function") await this.saveLedAutoModeDialog();
+          if (kind === "led-device-power-edit" && typeof this.openLedDevicePowerDialog === "function") this.openLedDevicePowerDialog();
+          if (kind === "led-device-power-send" && typeof this.saveLedDevicePowerDialog === "function") await this.saveLedDevicePowerDialog();
+          if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
+          if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
+          if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
+          if (kind === "led-device-name-edit" && typeof this.openLedDeviceNameDialog === "function") this.openLedDeviceNameDialog();
+          if (kind === "led-device-name-save" && typeof this.saveLedDeviceNameDialog === "function") this.saveLedDeviceNameDialog();
+          if (kind === "dialog") {
+            if (String(entity || "").startsWith("led-")) {
+              this.openDialogState(entity, Number(extra), { activeTab: "led" });
+            } else {
+              this.openDialog(entity, Number(extra));
+            }
+          }
+          if (kind === "confirm-dialog-yes" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(true);
+          if (kind === "confirm-dialog-no" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(false);
+          if (kind === "copy-debug") {
+            const output = String(
+              (this.dialogState && (this.dialogState.output || this.dialogState.ledScheduleMessage)) || "",
+            );
+            if (entity === "all") {
+              await this.copyWithFeedback(el, output);
+            } else {
+              const index = Number(entity);
+              const sections = this.debugOutputSections(output);
+              const section = Number.isInteger(index) ? sections[index] : null;
+              await this.copyWithFeedback(el, section ? section.value : output);
+            }
+          }
+          if (kind === "close-dialog") this.closeDialog();
+        } catch (err) {
           this.dialogState = {
             type: "debug",
-            channel: 1,
-            output: "OK\nTest Dialog\nWenn du das hier siehst, funktioniert der Klick- und Debug-Dialogpfad.",
-            running: false,
+            output: `FAIL\n${err && err.message ? err.message : err}`,
+            level: "error",
             noChannel: true,
-            level: "ok",
           };
           this.render();
+        } finally {
+          if (asyncAction && el.isConnected) el.disabled = false;
         }
-        if (kind === "led-schedule-edit") this.openLedScheduleDialog();
-        if (kind === "led-schedule-new") this.openNewLedScheduleDialog();
-        if (kind === "led-preset") await this.setLedPreset(entity);
-        if (kind === "led-schedule-add" || kind === "led-schedule-save") await this.addLedSchedule(true);
-        if (kind === "led-schedule-save-local") await this.addLedSchedule(false);
-        if (kind === "led-schedule-delete-row" && typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(entity), true);
-        if (kind === "led-schedule-reset" && typeof this.openLedScheduleResetConfirm === "function") this.openLedScheduleResetConfirm();
-        if (kind === "led-enable-auto-mode" && typeof this.enableLedAutoModeFromFront === "function") await this.enableLedAutoModeFromFront();
-        if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") this.saveLedTemplateFromDialog();
-        if (kind === "led-template-share-save" && typeof this.saveSharedLedTemplate === "function") this.saveSharedLedTemplate();
-        if (kind === "led-schedule-share-save" && typeof this.saveSharedLedSchedule === "function") await this.saveSharedLedSchedule();
-        if (kind === "led-auto-mode-edit" && typeof this.openLedAutoModeDialog === "function") this.openLedAutoModeDialog();
-        if (kind === "led-auto-mode-send" && typeof this.saveLedAutoModeDialog === "function") await this.saveLedAutoModeDialog();
-        if (kind === "led-device-power-edit" && typeof this.openLedDevicePowerDialog === "function") this.openLedDevicePowerDialog();
-        if (kind === "led-device-power-send" && typeof this.saveLedDevicePowerDialog === "function") await this.saveLedDevicePowerDialog();
-        if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
-        if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
-        if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
-        if (kind === "led-device-name-edit" && typeof this.openLedDeviceNameDialog === "function") this.openLedDeviceNameDialog();
-        if (kind === "led-device-name-save" && typeof this.saveLedDeviceNameDialog === "function") this.saveLedDeviceNameDialog();
-        if (kind === "dialog") {
-          if (String(entity || "").startsWith("led-")) {
-            this.openDialogState(entity, Number(extra), { activeTab: "led" });
-          } else {
-            this.openDialog(entity, Number(extra));
-          }
-        }
-        if (kind === "confirm-dialog-yes" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(true);
-        if (kind === "confirm-dialog-no" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(false);
-        if (kind === "copy-debug") {
-          const output = String(
-            (this.dialogState && (this.dialogState.output || this.dialogState.ledScheduleMessage)) || "",
-          );
-          if (entity === "all") {
-            await this.copyWithFeedback(el, output);
-          } else {
-            const index = Number(entity);
-            const sections = this.debugOutputSections(output);
-            const section = Number.isInteger(index) ? sections[index] : null;
-            await this.copyWithFeedback(el, section ? section.value : output);
-          }
-        }
-        if (kind === "close-dialog") this.closeDialog();
       });
     });
     this.querySelectorAll("[data-close-dialog]").forEach((el) => {
