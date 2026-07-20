@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1047";
+import "./panels/chihiros-led-panel.js?v=0.2.1048";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2866,9 +2866,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           .led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }
           .led-template-card { grid-column:1; grid-row:3; }
           .led-connection-card { grid-column:1; grid-row:4; }
-          .led-device-control-card { grid-column:1; grid-row:5; }
+          .led-device-control-card { grid-column:1; grid-row:5; min-width:0; }
           .led-device-presets-card { grid-column:1; grid-row:6; }
           .led-page .led-channels { grid-template-columns:minmax(0,1fr); }
+          .led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0,1fr); gap:8px; }
+          .led-device-edit-actions .action-row { grid-template-columns:28px minmax(0,1fr) auto; justify-content:stretch; }
+          .led-device-power-row > span { white-space:normal; overflow-wrap:anywhere; }
           .config-card-head { flex-direction:column; align-items:stretch; }
           .led-template-header-actions, .led-schedule-header-actions { width:100%; justify-content:flex-start; }
           .led-template-header-actions select { flex:1 1 auto; min-width:0; }
