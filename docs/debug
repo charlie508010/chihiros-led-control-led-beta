@@ -1,0 +1,146 @@
+Status
+
+OK
+LED Zeitplan speichern und senden
+1 Zeitplan-Zeilen
+Status: ok
+Antwort: an Geraet gesendet
+
+Debug
+Service: chihiros_led_core.add_schedule
+Summary: LED schedule period sent
+Device: DYU1000FFD22CEB9AE2
+Address: FF:D2:2C:EB:9A:E2
+Action: add_schedule_period
+
+action: chihiros_led_core.add_schedule
+data:
+  entry_id: ""
+  entity_id: light.dyu1000ffd22ceb9ae2_red_2
+  address: "FF:D2:2C:EB:9A:E2"
+  start: "09:00"
+  end: "17:00"
+  active: true
+  brightness:
+    red: 5
+    green: 5
+    blue: 5
+    white: 5
+  levels:
+    red: 5
+    green: 5
+    blue: 5
+    white: 5
+  ramp_up_minutes: 1
+  weekdays:
+    - everyday
+  debug: true
+
+CTL / Terminal example:
+
+python -m chihirosctl led add-schedule --address FF:D2:2C:EB:9A:E2 --start 09:00 --end 17:00 --red 5 --green 5 --blue 5 --white 5 --ramp-up-minutes 1 --weekdays everyday --debug
+
+Summary: LED schedule period sent
+
+box neu 
+
+Raw Debug
+DEBUG    FF:D2:2C:EB:9A:E2: Sending commands ['5a0106005e04015c']
+[TX #1] Encode Message
+  Command Print    : [90, 1, 6, 0, 94, 4, 1, 92]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 6
+  Message ID High  : 0
+  Message ID Low   : 94
+  Mode             : 4
+  Parameters       : [1]
+  Checksum         : 92
+  Bedeutung        : App-Bestätigung Befehl=1
+------------------------------------------------------------------------
+DEBUG    FF:D2:2C:EB:9A:E2: Sending commands ['5a010b0060091a0701152d2265']
+[TX #2] Encode Message
+  Command Print    : [90, 1, 11, 0, 96, 9, 26, 7, 1, 21, 45, 34, 101]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 11
+  Message ID High  : 0
+  Message ID Low   : 96
+  Mode             : 9
+  Parameters       : [26, 7, 1, 21, 45, 34]
+  Checksum         : 101
+  Bedeutung        : Gerätezeit setzen 2026-07 Wochentag=1 21:45:34
+------------------------------------------------------------------------
+DEBUG    FF:D2:2C:EB:9A:E2: Sending commands ['5a010b0060091a0701152d2265']
+[TX #3] Encode Message
+  Command Print    : [90, 1, 11, 0, 96, 9, 26, 7, 1, 21, 45, 34, 101]
+  Command ID       : 90
+  Version          : 1
+  Command Length   : 11
+  Message ID High  : 0
+  Message ID Low   : 96
+  Mode             : 9
+  Parameters       : [26, 7, 1, 21, 45, 34]
+  Checksum         : 101
+  Bedeutung        : Gerätezeit setzen 2026-07 Wochentag=1 21:45:34
+------------------------------------------------------------------------
+DEBUG    FF:D2:2C:EB:9A:E2: Sending commands ['a5011300611909001100017f05050505ffffffff0c']
+[TX #4] Encode Message
+  Command Print    : [165, 1, 19, 0, 97, 25, 9, 0, 17, 0, 1, 127, 5, 5, 5, 5, 255, 255, 255, 255, 12]
+  Command ID       : 165
+  Version          : 1
+  Command Length   : 19
+  Message ID High  : 0
+  Message ID Low   : 97
+  Mode             : 25
+  Parameters       : [9, 0, 17, 0, 1, 127, 5, 5, 5, 5, 255, 255, 255, 255]
+  Checksum         : 12
+  Bedeutung        : LED-Zeitplan schreiben 09:00-17:00, Ramp=1 min, Wochentage=taeglich
+------------------------------------------------------------------------
+box neu 
+
+VERGLEICH APP-LOG
+------------------------------------------------------------------------
+[INFO]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "20.07.2026 21:45:34"}
+------------------------------------------------------------------------
+[INFO]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 21, 45, 34], "time": "20.07.2026 21:45:34"}
+------------------------------------------------------------------------
+[INFO]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 21, 45, 34], "time": "20.07.2026 21:45:34"}
+------------------------------------------------------------------------
+[INFO]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [9, 0, 17, 0, 1, 127, 5, 5, 5, 5, 255, 255, 255, 255], "time": "20.07.2026 21:45:38"}
+------------------------------------------------------------------------
+
+bottom zum kopueren vergleich  rechts
+box neu 
+
+GERÄTEANTWORT
+------------------------------------------------------------------------
+RX: 5B 15 0A 00 01 0A 01 FF FF FF FF 04 95 84
+[RX] Decode Message
+  Command Print    : [91, 21, 10, 0, 1, 10, 1, 255, 255, 255, 255, 4, 149, 132]
+  Command ID       : 91
+  Version          : 21
+  Command Length   : 10
+  Message ID High  : 0
+  Message ID Low   : 1
+  Mode             : 10
+  Parameters       : [1, 255, 255, 255, 255, 4, 149]
+  Checksum         : 132
+  Bedeutung        : Laufzeitmeldung Firmware=21, Laufzeit=1173 min
+RX: 5B 15 30 00 01 FE 01 15 2D 00 00 00 00 00 00 00 00 00 00 00 00 00 01 15 2D 16 0F 64 17 0F 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+[RX] Decode Message
+  Command Print    : [91, 21, 48, 0, 1, 254, 1, 21, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 21, 45, 22, 15, 100, 23, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  Command ID       : 91
+  Version          : 21
+  Command Length   : 48
+  Message ID High  : 0
+  Message ID Low   : 1
+  Mode             : 254
+  Parameters       : [1, 21, 45, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 21, 45, 22, 15, 100, 23, 15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  Checksum         : 0
+  Bedeutung        : Zeitplan-Snapshot Kurvenpunkte=2, Zeitplaene=1
+  Details          : Zeitplan 1: 22:15-23:15 Level=100% Ramp=1 min
+  Details          : Punkt 1: 22:15 Level=100%
+  Details          : Punkt 2: 23:15 Level=0%
+------------------------------------------------------------------------
+
