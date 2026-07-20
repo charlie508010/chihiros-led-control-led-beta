@@ -411,7 +411,7 @@ class ChihirosDevice:
         """Remove an automation setting from the light."""
         if weekdays is None:
             weekdays = [WeekdaySelect.everyday]
-        cmd = commands.create_delete_auto_setting_command(
+        delete_command = commands.create_delete_auto_setting_command(
             self.get_next_msg_id(),
             sunrise.time(),
             sunset.time(),
@@ -419,7 +419,15 @@ class ChihirosDevice:
             encode_selected_weekdays(weekdays),
             brightness_channels=self._channel_count(),
         )
-        await self._send_command(cmd, 3, immediate_after_prelude=True)
+        commands_to_send = [delete_command]
+        if self.model.schedule_reset_parameter != 5:
+            commands_to_send.append(
+                commands.create_auto_parameter_command(
+                    self.get_next_msg_id(),
+                    self.model.schedule_reset_parameter,
+                )
+            )
+        await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
 
     async def replace_setting(
         self,
