@@ -127,7 +127,7 @@ def render_compare_log(
         return ""
     lines = ["-" * 72, "VERGLEICH APP-LOG", "-" * 72]
     for row in rows:
-        lines.append(f"[INFO]  {json.dumps(row, ensure_ascii=False)}")
+        lines.append(f"[INFO SYSTEM]  {json.dumps(row, ensure_ascii=False)}")
         lines.append("-" * 72)
     return "\n".join(lines)
 

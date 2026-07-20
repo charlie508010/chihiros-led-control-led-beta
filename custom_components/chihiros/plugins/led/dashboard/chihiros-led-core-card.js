@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1079";
+import "./panels/chihiros-led-panel.js?v=0.2.1080";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1272,9 +1272,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const sections = this.debugOutputSections(output);
     if (!sections.length) return `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`;
     return `<div class="debug-section-list${levelClass}">${sections.map((section, index) => {
-      const title = String(section.title || "").trim().toLowerCase() === "vergleich app-log"
-        ? "Info System"
-        : (section.title || this.tr("debug_output"));
+      const title = section.title || this.tr("debug_output");
       return `
         <section class="debug-section-box">
           <header>

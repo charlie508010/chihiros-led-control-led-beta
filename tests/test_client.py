@@ -54,6 +54,8 @@ def test_compare_log_renders_sent_frames_only() -> None:
     output = asyncio.run(run())
 
     assert '"dir": "tx"' in output
+    assert "[INFO SYSTEM]" in output
+    assert "[INFO]  {" not in output
     assert '"dir": "rx"' not in output
     assert "5B" not in output
 
