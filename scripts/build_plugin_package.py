@@ -22,7 +22,10 @@ def build(source: Path, output_dir: Path) -> Path:
         for path in sorted(
             item
             for item in source.rglob("*")
-            if item.is_file() and "__pycache__" not in item.parts and item.suffix not in {".pyc", ".pyo"}
+            if item.is_file()
+            and "dist" not in item.relative_to(source).parts
+            and "__pycache__" not in item.parts
+            and item.suffix not in {".pyc", ".pyo"}
         ):
             relative = path.relative_to(source).as_posix()
             data = path.read_bytes()

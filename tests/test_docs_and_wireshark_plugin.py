@@ -28,7 +28,15 @@ def test_wireshark_package_is_external_and_reproducible_artifact_exists() -> Non
     assert manifest["runtimes"] == ["addon"]
     assert set(manifest["backend_actions"]) == {"analyze_wireshark_text", "run_wireshark_adb_action"}
     with tarfile.open(artifact, "r:gz") as bundle:
-        assert set(bundle.getnames()) == {"README.md", "backend.py", "plugin.json", "www/wireshark-plugin.js"}
+        assert set(bundle.getnames()) == {
+            "README.md",
+            "backend.py",
+            "build.sh",
+            "build_tgz.py",
+            "plugin.json",
+            "start.sh",
+            "www/wireshark-plugin.js",
+        }
 
 
 def test_wireshark_decoder_handles_saved_led_frame() -> None:
