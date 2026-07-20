@@ -10,6 +10,7 @@ from datetime import datetime
 
 from ..vendor.chihiros_led_control.models import RGB_CHANNELS, WHITE_CHANNELS, WRGB_CHANNELS, DeviceModel
 from ..vendor.chihiros_led_control.protocol import (
+    FanStatusNotification,
     ParsedNotification,
     RuntimeNotification,
     SchedulePoint,
@@ -44,6 +45,11 @@ FAKE_DEVICES = (
         address=f"{FAKE_ADDRESS_PREFIX}:00:00:03",
         name="DYNA2-fake",
         model=DeviceModel("Fake A II", ("DYNA2",), WHITE_CHANNELS),
+    ),
+    FakeChihirosDeviceInfo(
+        address=f"{FAKE_ADDRESS_PREFIX}:00:00:04",
+        name="DYVVD3FACEC0000004",
+        model=DeviceModel("Fake WRGB VIVID III", ("DYVVD3",), WRGB_CHANNELS, has_fan=True),
     ),
 )
 FAKE_DEVICES_BY_ADDRESS = {device.address: device for device in FAKE_DEVICES}
@@ -84,7 +90,9 @@ class FakeChihirosDevice:
         self._callbacks: set[NotificationCallback] = set()
         self._brightness = {color: 0 for color in self.model.color_channels}
         self._auto_mode = False
+        self._fan_speed = 0
         self.last_runtime_notification: RuntimeNotification | None = None
+        self.last_fan_status_notification: FanStatusNotification | None = None
         self.last_schedule_snapshot_notification: ScheduleSnapshotNotification | None = None
 
     @property
@@ -134,6 +142,35 @@ class FakeChihirosDevice:
         )
         self._notify_callbacks(self.last_runtime_notification)
         self._notify_callbacks(self.last_schedule_snapshot_notification)
+        if self.model.has_fan:
+            self.last_fan_status_notification = FanStatusNotification(
+                firmware_version=27,
+                fan_rpm=self._fan_speed * 20,
+                temperature_celsius=25,
+                raw=bytes.fromhex("5b 1b 10 00 01 0b 00 00 19 00 01 00 00 00 00 00 00 22"),
+            )
+            self._notify_callbacks(self.last_fan_status_notification)
+
+    async def query_status_active(self, notification_wait: float = 3.0) -> None:
+        """Publish fake status for the active dashboard diagnostic poll."""
+        del notification_wait
+        await self.query_status()
+
+    async def set_fan_speed(self, speed_percent: int) -> None:
+        """Set fake fan speed and publish its status notification."""
+        if not self.model.has_fan:
+            raise ValueError(f"Model does not support fan control: {self.model.name}")
+        if speed_percent < 0 or speed_percent > 100:
+            raise ValueError("Fan speed must be between 0 and 100 percent")
+        await asyncio.sleep(0)
+        self._fan_speed = speed_percent
+        self.last_fan_status_notification = FanStatusNotification(
+            firmware_version=27,
+            fan_rpm=speed_percent * 20,
+            temperature_celsius=25,
+            raw=bytes.fromhex("5b 1b 10 00 01 0b 00 00 19 00 01 00 00 00 00 00 00 22"),
+        )
+        self._notify_callbacks(self.last_fan_status_notification)
 
     async def set_brightness(self, brightness: int | Sequence[int] | Mapping[str | int, int]) -> None:
         """Set fake brightness state."""

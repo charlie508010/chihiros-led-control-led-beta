@@ -12,6 +12,7 @@ import chihiros_led_control.client as client_module
 from chihiros_led_control.client import ChihirosDevice
 from chihiros_led_control.models import RGB_CHANNELS, WHITE_CHANNELS, WRGB_CHANNELS, DeviceModel
 from chihiros_led_control.protocol import (
+    FanStatusNotification,
     RuntimeNotification,
     SchedulePoint,
     ScheduleSnapshotNotification,
@@ -363,6 +364,31 @@ def test_query_status_active_sends_base_auth_and_waits_for_notification() -> Non
     assert wait == 4.0
 
 
+def test_set_fan_speed_requires_supported_model_and_sends_command() -> None:
+    """Fan control is limited to fan-equipped models and sends mode 15."""
+    sent: list[bytes] = []
+
+    async def run() -> None:
+        unsupported = ChihirosDevice(FakeBLEDevice(), DeviceModel("Test", (), WHITE_CHANNELS))  # type: ignore[arg-type]
+        with pytest.raises(ValueError, match="does not support fan control"):
+            await unsupported.set_fan_speed(50)
+
+        vivid = ChihirosDevice(  # type: ignore[arg-type]
+            FakeBLEDevice(),
+            DeviceModel("WRGB VIVID III", ("DYVVD3",), WRGB_CHANNELS, has_fan=True),
+        )
+
+        async def capture(command: bytes | bytearray, _retry: int) -> None:
+            sent.append(bytes(command))
+
+        vivid._send_command = capture  # type: ignore[method-assign]
+        await vivid.set_fan_speed(53)
+
+    asyncio.run(run())
+
+    assert sent[0][5:-1] == bytes([15, 53])
+
+
 def test_send_command_disconnects_after_command_batch() -> None:
     """Command batches do not keep the BLE connection alive."""
     events: list[str] = []
@@ -451,6 +477,26 @@ def test_notification_handler_stores_and_publishes_runtime_notification() -> Non
         raw=bytes(frame),
     )
     assert received == [device.last_runtime_notification]
+
+
+def test_notification_handler_stores_and_publishes_fan_status() -> None:
+    """Parsed fan notifications are stored and sent to subscribers."""
+    received: list[FanStatusNotification] = []
+    frame = bytearray.fromhex("5b 1b 10 00 01 0b 02 58 19 00 01 00 00 00 00 00 48 22")
+
+    async def run() -> ChihirosDevice:
+        device = ChihirosDevice(  # type: ignore[arg-type]
+            FakeBLEDevice(),
+            DeviceModel("WRGB VIVID III", ("DYVVD3",), WRGB_CHANNELS, has_fan=True),
+        )
+        device.add_notification_callback(received.append)
+        device._notification_handler(None, frame)  # type: ignore[arg-type]
+        return device
+
+    device = asyncio.run(run())
+
+    assert device.last_fan_status_notification == FanStatusNotification(27, 600, 25, bytes(frame))
+    assert received == [device.last_fan_status_notification]
 
 
 def test_notification_handler_stores_and_publishes_schedule_snapshot() -> None:

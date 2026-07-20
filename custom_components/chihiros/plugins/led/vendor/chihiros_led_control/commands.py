@@ -37,6 +37,13 @@ def create_set_brightness_command(msg_id: tuple[int, int], color: int, brightnes
     return create_command_encoding(90, 7, msg_id, [color, brightness_level])
 
 
+def create_set_fan_speed_command(msg_id: tuple[int, int], speed_percent: int) -> bytearray:
+    """Create a fan speed command for fan-equipped LED devices."""
+    if speed_percent < 0 or speed_percent > 100:
+        raise ValueError("Fan speed must be between 0 and 100 percent")
+    return create_command_encoding(90, 15, msg_id, [speed_percent])
+
+
 def create_apply_manual_color_command(msg_id: tuple[int, int]) -> bytearray:
     """Create the command that applies a manually selected LED color."""
     return create_command_encoding(90, 5, msg_id, [11, 255, 255])

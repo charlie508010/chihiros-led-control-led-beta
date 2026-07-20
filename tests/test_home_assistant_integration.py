@@ -24,6 +24,8 @@ try:
     import homeassistant.components as ha_components
     from homeassistant import loader, requirements
     from homeassistant.components.bluetooth import update_coordinator as bluetooth_update
+    from homeassistant.components.fan import ATTR_PERCENTAGE, SERVICE_SET_PERCENTAGE
+    from homeassistant.components.fan import DOMAIN as FAN_DOMAIN
     from homeassistant.components.light import ATTR_BRIGHTNESS
     from homeassistant.components.light import DOMAIN as LIGHT_DOMAIN
     from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
@@ -64,8 +66,13 @@ except ImportError as err:
         allow_module_level=True,
     )
 
-from custom_components.chihiros.plugins.led.vendor.chihiros_led_control.models import RGB_CHANNELS, DeviceModel
+from custom_components.chihiros.plugins.led.vendor.chihiros_led_control.models import (
+    RGB_CHANNELS,
+    WRGB_CHANNELS,
+    DeviceModel,
+)
 from custom_components.chihiros.plugins.led.vendor.chihiros_led_control.protocol import (
+    FanStatusNotification,
     ParsedNotification,
     RuntimeNotification,
     SchedulePoint,
@@ -82,15 +89,22 @@ TEST_ADDRESS = "FA:CE:C0:00:10:01"
 class TrackingChihirosClient:
     """Mock external Chihiros client used behind the Home Assistant integration boundary."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, has_fan: bool = False) -> None:
         """Initialize the tracking client."""
-        self.model = DeviceModel("Test RGB", ("TEST-RGB",), RGB_CHANNELS)
+        self.model = DeviceModel(
+            "Test VIVID III" if has_fan else "Test RGB",
+            ("DYVVD3",) if has_fan else ("TEST-RGB",),
+            WRGB_CHANNELS if has_fan else RGB_CHANNELS,
+            has_fan=has_fan,
+        )
         self.last_runtime_notification: RuntimeNotification | None = None
+        self.last_fan_status_notification: FanStatusNotification | None = None
         self.last_schedule_snapshot_notification: ScheduleSnapshotNotification | None = None
         self.query_status_calls = 0
         self.brightness_calls: list[int | Sequence[int] | Mapping[str | int, int]] = []
         self.auto_mode_calls: list[datetime | None] = []
         self.manual_mode_calls = 0
+        self.fan_speed_calls: list[int] = []
         self.add_setting_calls: list[dict[str, Any]] = []
         self.remove_setting_calls: list[dict[str, Any]] = []
         self.reset_settings_calls = 0
@@ -144,6 +158,14 @@ class TrackingChihirosClient:
         )
         self._notify(self.last_runtime_notification)
         self._notify(self.last_schedule_snapshot_notification)
+        if self.model.has_fan:
+            self.last_fan_status_notification = FanStatusNotification(
+                firmware_version=27,
+                fan_rpm=600,
+                temperature_celsius=25,
+                raw=bytes.fromhex("5b 1b 10 00 01 0b 02 58 19 00 01 00 00 00 00 00 48 22"),
+            )
+            self._notify(self.last_fan_status_notification)
 
     async def set_brightness(self, brightness: int | Sequence[int] | Mapping[str | int, int]) -> None:
         """Record a brightness write."""
@@ -164,6 +186,10 @@ class TrackingChihirosClient:
     async def set_manual_mode(self) -> None:
         """Record enabling manual mode."""
         self.manual_mode_calls += 1
+
+    async def set_fan_speed(self, speed_percent: int) -> None:
+        """Record a fan-speed write."""
+        self.fan_speed_calls.append(speed_percent)
 
     async def add_setting(
         self,
@@ -269,7 +295,7 @@ async def hass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> HomeAssistant
     hass_instance.data[loader.DATA_CUSTOM_COMPONENTS] = {DOMAIN: integration}
     hass_instance.data[loader.DATA_INTEGRATIONS][DOMAIN] = integration
     builtin_components_path = Path(ha_components.__file__).parent
-    for platform_domain in (LIGHT_DOMAIN, SWITCH_DOMAIN, SENSOR_DOMAIN):
+    for platform_domain in (LIGHT_DOMAIN, SWITCH_DOMAIN, SENSOR_DOMAIN, FAN_DOMAIN):
         seed_integration(
             platform_domain,
             f"homeassistant.components.{platform_domain}",
@@ -296,9 +322,11 @@ async def hass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> HomeAssistant
 async def _setup_entry(
     hass: HomeAssistant,
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    has_fan: bool = False,
 ) -> tuple[ConfigEntry, TrackingChihirosClient]:
     """Set up the integration through Home Assistant's config entry interface."""
-    client = TrackingChihirosClient()
+    client = TrackingChihirosClient(has_fan=has_fan)
 
     async def wait_for_step(label: str, awaitable: Any) -> Any:
         try:
@@ -457,6 +485,37 @@ async def test_light_and_auto_mode_services_drive_client(
 
     assert client.manual_mode_calls == 1
     assert hass.states.get(auto_switch).state == STATE_OFF
+
+
+async def test_vivid_iii_sets_up_fan_and_status_sensors(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fan-equipped model exposes fan control, measured RPM, and temperature."""
+    _entry, client = await _setup_entry(hass, monkeypatch, has_fan=True)
+    entity_registry = er.async_get(hass)
+    fan_entity = _entity_id(entity_registry, FAN_DOMAIN, f"{TEST_ADDRESS}_fan")
+    rpm_sensor = _entity_id(entity_registry, SENSOR_DOMAIN, f"{TEST_ADDRESS}_fan_rpm")
+    temperature_sensor = _entity_id(
+        entity_registry,
+        SENSOR_DOMAIN,
+        f"{TEST_ADDRESS}_fan_temperature_celsius",
+    )
+
+    assert hass.states.get(rpm_sensor).state == "600"
+    assert hass.states.get(temperature_sensor).state == "25"
+
+    await hass.services.async_call(
+        FAN_DOMAIN,
+        SERVICE_SET_PERCENTAGE,
+        {ATTR_ENTITY_ID: fan_entity, ATTR_PERCENTAGE: 53},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+
+    assert client.fan_speed_calls == [53]
+    assert hass.states.get(fan_entity).state == STATE_ON
+    assert hass.states.get(fan_entity).attributes[ATTR_PERCENTAGE] == 53
 
 
 async def test_schedule_services_validate_and_drive_client(

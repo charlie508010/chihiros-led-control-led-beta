@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1056";
+import "./panels/chihiros-led-panel.js?v=0.2.1057";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1530,6 +1530,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         source: "Quelle",
         ble_on_action: "bei Aktion",
         presets: "Voreinstellungen",
+        fan_control: "Lüftersteuerung",
+        fan_speed: "Lüfterdrehzahl",
+        fan_percentage: "Lüfterleistung",
+        temperature: "Temperatur",
         online: "Online",
         offline: "Offline",
         schedule_edit: "Zeitplan bearbeiten",
@@ -1780,6 +1784,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         source: "Source",
         ble_on_action: "on action",
         presets: "Presets",
+        fan_control: "Fan control",
+        fan_speed: "Fan speed",
+        fan_percentage: "Fan output",
+        temperature: "Temperature",
         online: "Online",
         offline: "Offline",
         schedule_edit: "Edit schedule",
@@ -1916,6 +1924,20 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         const ledChannel = (this.ledChannels || []).find((item) => item.id === channel);
         if (ledChannel) ledChannel.value = value;
         if (typeof this.updateLedWattDisplays === "function") this.updateLedWattDisplays();
+      });
+    });
+    this.querySelectorAll("[data-led-fan-control]").forEach((el) => {
+      const syncFanControls = () => {
+        const value = Math.max(0, Math.min(100, Math.round(Number(el.value) || 0)));
+        this.querySelectorAll("[data-led-fan-control]").forEach((peer) => {
+          peer.value = String(value);
+        });
+        return value;
+      };
+      el.addEventListener("input", syncFanControls);
+      el.addEventListener("change", () => this.setLedFanPercentage(syncFanControls()));
+      el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") this.setLedFanPercentage(syncFanControls());
       });
     });
     this.querySelectorAll("[data-led-channel-action]").forEach((el) => {
@@ -2319,6 +2341,17 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-info-list { display:grid; gap:7px; margin:0; }
         .led-info-list b.is-unknown { color:rgba(255,255,255,.48); font-weight:600; }
         .led-device-presets-card .led-preset-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); margin:0; }
+        .led-device-fan-card { display:grid; gap:9px; }
+        .led-device-fan-card h2 { margin:0; }
+        .led-fan-metrics { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+        .led-fan-metrics > span { min-width:0; display:grid; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:2px 6px; padding:7px 8px; border:1px solid rgba(81,154,190,.26); border-radius:7px; background:rgba(0,0,0,.16); }
+        .led-fan-metrics ha-icon { grid-row:1 / 3; --mdc-icon-size:20px; color:#03c9ff; }
+        .led-fan-metrics b { color:rgba(255,255,255,.62); font-size:10px; text-transform:uppercase; }
+        .led-fan-metrics strong { overflow:hidden; color:var(--primary-text-color); font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+        .led-fan-control { display:grid; grid-template-columns:minmax(0,1fr) 64px auto; align-items:center; gap:8px; }
+        .led-fan-control input[type="range"] { width:100%; min-width:0; accent-color:#03c9ff; }
+        .led-fan-control input[type="number"] { width:64px; min-height:32px; box-sizing:border-box; border:1px solid rgba(3,201,255,.35); border-radius:7px; background:rgba(255,255,255,.06); color:var(--primary-text-color); padding:4px 7px; text-align:right; font:inherit; font-weight:800; }
+        .led-fan-control > span { color:rgba(255,255,255,.68); font-weight:800; }
         .led-channels-card { grid-column:1 / -1; grid-row:1; min-height:220px; }
         .led-channels-title-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; margin-bottom:12px; }
         .led-channels-title-row h2 { margin:0; }
@@ -2869,7 +2902,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         @media (pointer:coarse) {
           input[type="range"][data-led-number],
           input[type="range"][data-led-schedule-control],
-          input[type="range"][data-led-template-control] { touch-action:pan-y; }
+          input[type="range"][data-led-template-control],
+          input[type="range"][data-led-fan-control] { touch-action:pan-y; }
         }
         @media (max-width:700px) {
           .led-page { grid-template-columns:minmax(0,1fr); }

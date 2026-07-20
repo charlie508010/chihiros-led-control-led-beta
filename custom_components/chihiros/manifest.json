@@ -71,6 +71,10 @@
       "connectable": true
     },
     {
+      "local_name": "DYVVD3*",
+      "connectable": true
+    },
+    {
       "local_name": "DYLED*",
       "connectable": true
     },
@@ -94,5 +98,5 @@
   "requirements": [
     "bleak-retry-connector==4.6.1"
   ],
-  "version": "0.2.1056"
+  "version": "0.2.1057"
 }

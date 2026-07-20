@@ -10,15 +10,17 @@ from typing import Any
 from homeassistant.components.bluetooth.passive_update_coordinator import (
     PassiveBluetoothCoordinatorEntity,
 )
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorEntityDescription, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime
+from homeassistant.const import REVOLUTIONS_PER_MINUTE, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ....const import DOMAIN
 from ..coordinator import (
+    ATTR_FAN_RPM,
+    ATTR_FAN_TEMPERATURE_CELSIUS,
     ATTR_FIRMWARE_VERSION,
     ATTR_LAST_NOTIFICATION,
     ATTR_RECENT_NOTIFICATIONS,
@@ -57,6 +59,24 @@ SENSOR_DESCRIPTIONS = (
     ),
 )
 
+FAN_SENSOR_DESCRIPTIONS = (
+    SensorEntityDescription(
+        key=ATTR_FAN_RPM,
+        name="Fan Speed",
+        native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key=ATTR_FAN_TEMPERATURE_CELSIUS,
+        name="Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -65,13 +85,14 @@ async def async_setup_entry(
 ) -> None:
     """Set up notification sensors for Chihiros LED Control."""
     chihiros_data: ChihirosData = hass.data[DOMAIN][entry.entry_id]
+    descriptions = SENSOR_DESCRIPTIONS + (FAN_SENSOR_DESCRIPTIONS if chihiros_data.device.model.has_fan else ())
     async_add_entities(
         ChihirosNotificationSensor(
             chihiros_data.coordinator,
             chihiros_data.device,
             description,
         )
-        for description in SENSOR_DESCRIPTIONS
+        for description in descriptions
     )
 
 
@@ -99,6 +120,8 @@ class ChihirosNotificationSensor(
         self._attr_device_info = chihiros_device_info(device, coordinator.address)
         self._attr_device_class = description.device_class
         self._attr_native_unit_of_measurement = description.native_unit_of_measurement
+        self._attr_state_class = description.state_class
+        self._attr_suggested_display_precision = description.suggested_display_precision
         self._attr_force_update = description.key == ATTR_LAST_NOTIFICATION
 
     @property

@@ -65,6 +65,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       runtime_entity: String(device.runtime_entity || String(device.firmware_entity || "").replace(/_firmware_version$/, "_runtime")),
       schedule_entity: String(device.schedule_entity || ""),
       last_notification_entity: String(device.last_notification_entity || ""),
+      fan_entity: String(device.fan_entity || ""),
+      fan_rpm_entity: String(device.fan_rpm_entity || ""),
+      fan_temperature_entity: String(device.fan_temperature_entity || ""),
+      has_fan: Boolean(device.has_fan || device.fan_entity || /vivid\s*iii|dyvvd3/i.test(String(device.model || device.name || ""))),
       channels: Array.isArray(device.channels) && device.channels.length ? device.channels.map((channel, chIndex) => ({
         id: Number(channel.id || chIndex + 1),
         name: String(channel.name || `CH${chIndex + 1}`),
@@ -86,7 +90,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     ];
     const colorOrder = new Map(colorMap.map(([key], index) => [key, index]));
     const supportedColors = new Set(colorMap.map(([key]) => key));
-    const devicePattern = /^(light|switch|sensor)\.([a-z0-9]*[0-9a-f]{12})_(.+)$/;
+    const devicePattern = /^(light|switch|sensor|fan)\.([a-z0-9]*[0-9a-f]{12})_(.+)$/;
     const deviceKey = (slug) => {
       const hex = String(slug || "").match(/[0-9a-f]{12}$/i);
       return hex ? hex[0].toLowerCase() : "";
@@ -130,6 +134,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
           runtime_entity: "",
           schedule_entity: "",
           last_notification_entity: "",
+          fan_entity: "",
+          fan_rpm_entity: "",
+          fan_temperature_entity: "",
+          has_fan: false,
           channels: [],
         });
       }
@@ -142,6 +150,12 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       if (domain === "sensor" && (suffix === "runtime" || suffix === "runtime_minutes")) group.runtime_entity = entityId;
       if (domain === "sensor" && suffix === "schedule") group.schedule_entity = entityId;
       if (domain === "sensor" && suffix === "last_notification") group.last_notification_entity = entityId;
+      if (domain === "sensor" && (suffix === "fan_rpm" || suffix === "fan_speed")) group.fan_rpm_entity = entityId;
+      if (domain === "sensor" && (suffix === "fan_temperature_celsius" || suffix === "temperature")) group.fan_temperature_entity = entityId;
+      if (domain === "fan" && suffix === "fan") {
+        group.fan_entity = entityId;
+        group.has_fan = true;
+      }
     });
     const entities = Object.entries(this._hass.states)
       .filter(([entityId, state]) => {
@@ -190,6 +204,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
           runtime_entity: "",
           schedule_entity: "",
           last_notification_entity: "",
+          fan_entity: "",
+          fan_rpm_entity: "",
+          fan_temperature_entity: "",
+          has_fan: false,
           channels: [],
         });
       }
@@ -221,6 +239,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         ...device,
         label: `${this.tr("device")} ${index + 1}`,
         model: device.model && device.model !== "LED" ? device.model : (device.channels.length >= 4 ? "WRGB" : "LED"),
+        has_fan: Boolean(device.has_fan || device.fan_entity || /vivid\s*iii|dyvvd3/i.test(String(device.model || ""))),
         power_entity: device.power_entity || (device.channels[0] ? device.channels[0].entity : ""),
         channels: device.channels.map(({ available: _available, ...channel }) => channel),
       }));
@@ -377,6 +396,68 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const max = this.ledMaxBrightness(device);
     const presets = { off: 0, low: Math.round(max * 0.25), medium: Math.round(max * 0.6), high: max };
     return presets[preset] ?? presets.medium;
+  }
+
+  ledDeviceHasFan(device = this.activeLedDevice || {}) {
+    return Boolean(device && (device.has_fan || device.fan_entity || /vivid\s*iii|dyvvd3/i.test(String(device.model || device.name || ""))));
+  }
+
+  ledFanEntityValue(entityId, fallback = "-") {
+    const state = entityId && this._hass && this._hass.states ? this._hass.states[entityId] : null;
+    if (!state || ["unknown", "unavailable"].includes(String(state.state || "").toLowerCase())) return fallback;
+    return String(state.state);
+  }
+
+  ledFanPercentage(device = this.activeLedDevice || {}) {
+    const state = device && device.fan_entity && this._hass && this._hass.states
+      ? this._hass.states[device.fan_entity]
+      : null;
+    const percentage = Number(state && state.attributes && state.attributes.percentage);
+    if (Number.isFinite(percentage)) return Math.max(0, Math.min(100, Math.round(percentage)));
+    return state && state.state === "on" ? 100 : 0;
+  }
+
+  async setLedFanPercentage(rawValue) {
+    const device = this.activeLedDevice || {};
+    const percentage = Math.max(0, Math.min(100, Math.round(Number(rawValue) || 0)));
+    if (!this._hass || !device.fan_entity) return false;
+    try {
+      await this._hass.callService("fan", "set_percentage", { percentage }, { entity_id: device.fan_entity });
+      await this.addLedHistory(this.tr("fan_control"), `${percentage} %`, null, { status: "ok" });
+      this.render();
+      return true;
+    } catch (err) {
+      this.dialogState = {
+        type: "debug",
+        channel: 1,
+        output: `FAIL\n${this.tr("fan_control")}\n${err && err.message ? err.message : err}`,
+        running: false,
+        noChannel: true,
+        level: "error",
+      };
+      this.render();
+      return false;
+    }
+  }
+
+  ledFanControlCard(device = this.activeLedDevice || {}) {
+    const percentage = this.ledFanPercentage(device);
+    const rpm = this.ledFanEntityValue(device.fan_rpm_entity);
+    const temperature = this.ledFanEntityValue(device.fan_temperature_entity);
+    const disabled = device.fan_entity ? "" : "disabled";
+    return `
+      <section class="card led-device-presets-card led-device-fan-card">
+        <h2>${this.tr("fan_control")}</h2>
+        <div class="led-fan-metrics">
+          <span><ha-icon icon="mdi:thermometer"></ha-icon><b>${this.tr("temperature")}</b><strong>${this.escapeHtml(temperature)} °C</strong></span>
+          <span><ha-icon icon="mdi:fan"></ha-icon><b>${this.tr("fan_speed")}</b><strong>${this.escapeHtml(rpm)} RPM</strong></span>
+        </div>
+        <div class="led-fan-control">
+          <input type="range" min="0" max="100" step="1" value="${percentage}" data-led-fan-control ${disabled} aria-label="${this.tr("fan_control")}">
+          <input type="number" min="0" max="100" step="1" value="${percentage}" data-led-fan-control ${disabled} aria-label="${this.tr("fan_percentage")}">
+          <span>%</span>
+        </div>
+      </section>`;
   }
 
   applyLedDevice(deviceId, fallback = true) {
@@ -3433,14 +3514,14 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
             </div>
           </section>
         </section>
-        <section class="card led-device-presets-card">
+        ${this.ledDeviceHasFan(device) ? this.ledFanControlCard(device) : `<section class="card led-device-presets-card">
           <h2>${this.tr("presets")}</h2>
           <div class="led-preset-grid">
             <button type="button" data-action="led-preset:low"><ha-icon icon="mdi:weather-sunset"></ha-icon><span>${this.ledPresetValue("low")}</span></button>
             <button type="button" data-action="led-preset:medium"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>${this.ledPresetValue("medium")}</span></button>
             <button type="button" data-action="led-preset:high"><ha-icon icon="mdi:brightness-7"></ha-icon><span>${this.ledPresetValue("high")}</span></button>
           </div>
-        </section>
+        </section>`}
         <section class="card led-channels-card">
           ${showWatts
             ? `<div class="led-channels-title-row"><h2>${this.tr("color_channels")}</h2><span class="led-total-watt"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-total-watts>${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(initialWattValues))} W / ${this.ledWattFormat(this.ledMaxPowerWatts(device))} W</span></span></div>`

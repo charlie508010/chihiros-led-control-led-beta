@@ -20,6 +20,7 @@ class DeviceModel:
     schedule_reset_parameter: int = 5
     schedule_reset_from_snapshot: bool = False
     max_power_watts: float | None = None
+    has_fan: bool = False
 
 
 WHITE_CHANNELS = MappingProxyType({"white": 0})
@@ -132,6 +133,7 @@ SUPPORTED_MODELS: tuple[DeviceModel, ...] = (
         ("DYSILN", "DYSL30", "DYSL45", "DYSL60", "DYSL90", "DYSL120", "DYSL12"),
         RGB_CHANNELS,
     ),
+    DeviceModel("WRGB VIVID III", ("DYVVD3",), WRGB_CHANNELS, has_fan=True),
     DeviceModel("C II", ("DYNC2N",), WHITE_CHANNELS),
     DeviceModel("C II RGB", ("DYNCRGP", "DYNCRGB"), RGB_CHANNELS),
     DeviceModel(

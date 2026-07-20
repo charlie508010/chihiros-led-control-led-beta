@@ -5,6 +5,7 @@ This repository contains a python **CLI** script as well as a **Home Assistant i
 ## Supported Devices
 - [Chihiros LED A2](https://www.chihirosaquaticstudio.com/products/chihiros-a-ii-built-in-bluetooth)
 - [Chihiros WRGB II](https://www.chihirosaquaticstudio.com/products/chihiros-wrgb-ii-led-built-in-bluetooth) (Regular, Pro, Slim; Pro is true WRGB)
+- Chihiros WRGB VIVID III (true WRGB, including fan control and fan RPM/temperature sensors)
 - Chihiros Tiny Terrarium Egg
 - Chihiros C II (RGB, White)
 - Chihiros Universal WRGB
@@ -129,6 +130,9 @@ uv run chihirosctl turn-off <device-address>
 
 # manually set the brightness to 100
 uv run chihirosctl set-brightness <device-address> 100
+
+# set the fan to 50 percent on a WRGB VIVID III
+uv run chihirosctl set-fan-speed <device-address> 50
 
 # create an automatic timed setting that turns on the light from 8:00 to 18:00 at brightness 100
 uv run chihirosctl add-setting <device-address> 8:00 18:00 100

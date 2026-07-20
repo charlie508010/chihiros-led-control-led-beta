@@ -13,6 +13,7 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 
 from .runtime import ChihirosClient
 from .vendor.chihiros_led_control.protocol import (
+    FanStatusNotification,
     ParsedNotification,
     RuntimeNotification,
     SchedulePoint,
@@ -27,6 +28,8 @@ ATTR_RUNTIME_NOTIFICATION_PAYLOAD = "runtime_notification_payload"
 ATTR_LAST_NOTIFICATION = "last_notification"
 ATTR_RECENT_NOTIFICATIONS = "recent_notifications"
 ATTR_SCHEDULE_POINTS = "schedule_points"
+ATTR_FAN_RPM = "fan_rpm"
+ATTR_FAN_TEMPERATURE_CELSIUS = "fan_temperature_celsius"
 
 
 class ChihirosDataUpdateCoordinator(PassiveBluetoothDataUpdateCoordinator):
@@ -113,6 +116,11 @@ class ChihirosDataUpdateCoordinator(PassiveBluetoothDataUpdateCoordinator):
             self.data[ATTR_FIRMWARE_VERSION] = notification.firmware_version
             self.data[ATTR_SCHEDULE_POINTS] = tuple(_schedule_point_to_dict(point) for point in notification.points)
             debug_notification = _notification_to_debug_dict(notification, "schedule_snapshot")
+        elif isinstance(notification, FanStatusNotification):
+            self.data[ATTR_FIRMWARE_VERSION] = notification.firmware_version
+            self.data[ATTR_FAN_RPM] = notification.fan_rpm
+            self.data[ATTR_FAN_TEMPERATURE_CELSIUS] = notification.temperature_celsius
+            debug_notification = _notification_to_debug_dict(notification, "fan_status")
         if debug_notification is not None:
             self.data[ATTR_LAST_NOTIFICATION] = debug_notification
             recent = list(self.data.get(ATTR_RECENT_NOTIFICATIONS, ()))
@@ -147,7 +155,7 @@ def _schedule_point_to_dict(point: SchedulePoint) -> dict[str, Any]:
 
 
 def _notification_to_debug_dict(
-    notification: RuntimeNotification | ScheduleSnapshotNotification,
+    notification: RuntimeNotification | FanStatusNotification | ScheduleSnapshotNotification,
     parsed_type: str,
 ) -> dict[str, Any]:
     """Return a Home Assistant-friendly raw notification diagnostic payload."""

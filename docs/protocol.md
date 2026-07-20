@@ -265,7 +265,24 @@ snapshot as a status payload whose checksum/trailer is not yet confirmed.
 | `0x5a` / `90` | `0x06` / `6` | `[color, time_index, level]` | Old 48-point auto curve update; `time_index` is `0..47` in 30-minute steps |
 | `0x5a` / `90` | `0x07` / `7` | `[color, brightness]` | Manual brightness |
 | `0x5a` / `90` | `0x09` / `9` | `[year - 2000, month, date_field, hour, minute, second]` | Set device time |
+| `0x5a` / `90` | `0x0f` / `15` | `[speed_percent]` | Fan speed, `0` to `100`; confirmed on WRGB VIVID III |
 | `0xa5` / `165` | `0x19` / `25` | 14 bytes | Add, update, or delete auto schedule |
+
+## Fan Status Notifications
+
+Fan-equipped devices such as the WRGB VIVID III (advertised prefix `DYVVD3`)
+send `0x5b` notifications with mode `0x0b` while connected:
+
+```text
+5b 1b 10 00 01 0b 02 58 19 00 01 00 00 00 00 00 48 22
+```
+
+- Bytes `6..7`: measured fan RPM, big-endian (`0x0258 = 600`).
+- Byte `8`: temperature in whole degrees Celsius (`0x19 = 25`).
+- Remaining bytes are treated as opaque because this mode does not use the
+  normal XOR trailer reliably.
+
+Fan speed is set with command `0x5a`, mode `0x0f`, and one percentage byte.
 
 ## Observed Command Families
 

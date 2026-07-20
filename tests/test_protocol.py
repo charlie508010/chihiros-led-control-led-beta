@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
+
 from chihiros_led_control import commands
 from chihiros_led_control.models import RGB_CHANNELS, WHITE_CHANNELS, WRGB_CHANNELS
 from chihiros_led_control.protocol import (
+    FanStatusNotification,
     RuntimeNotification,
     SchedulePoint,
     ScheduleSnapshotNotification,
@@ -128,6 +131,20 @@ def test_base_auth_command_encoding() -> None:
     assert commands.create_base_auth_command((0, 1)) == bytearray([90, 1, 6, 0, 1, 4, 1, 3])
 
 
+def test_set_fan_speed_command_matches_captured_frames() -> None:
+    """Fan speed commands match WRGB VIVID III captures."""
+    assert commands.create_set_fan_speed_command((0, 0xC7), 100) == bytearray.fromhex("5A 01 06 00 C7 0F 64 AB")
+    assert commands.create_set_fan_speed_command((0, 0xC5), 53) == bytearray.fromhex("5A 01 06 00 C5 0F 35 F8")
+    assert commands.create_set_fan_speed_command((0, 0xCB), 0) == bytearray.fromhex("5A 01 06 00 CB 0F 00 C3")
+
+
+def test_set_fan_speed_command_validates_range() -> None:
+    """Fan speed commands reject percentages outside 0..100."""
+    for speed in (-1, 101):
+        with pytest.raises(ValueError, match="Fan speed"):
+            commands.create_set_fan_speed_command((0, 1), speed)
+
+
 def test_auto_setting_command_accepts_four_channel_brightness() -> None:
     """Auto schedule commands can encode true WRGB brightness values."""
     command = commands.create_add_auto_setting_command(
@@ -178,6 +195,18 @@ def test_parse_runtime_notification_uses_changing_tail_counter() -> None:
     assert parse_notification(frame) == RuntimeNotification(
         firmware_version=21,
         runtime_minutes=2192,
+        raw=bytes(frame),
+    )
+
+
+def test_parse_fan_status_notification() -> None:
+    """Fan notifications expose firmware, RPM, and temperature."""
+    frame = bytearray.fromhex("5b 1b 10 00 01 0b 02 58 19 00 01 00 00 00 00 00 48 22")
+
+    assert parse_notification(frame) == FanStatusNotification(
+        firmware_version=27,
+        fan_rpm=600,
+        temperature_celsius=25,
         raw=bytes(frame),
     )
 

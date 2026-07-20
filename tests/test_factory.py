@@ -104,6 +104,15 @@ def test_detect_model_does_not_rely_on_fixed_slicing() -> None:
     assert detect_model("DYSL120-short").name == "WRGB II Slim"
 
 
+def test_detect_model_matches_wrgb_vivid_iii_prefix() -> None:
+    """VIVID III advertisements resolve to true WRGB metadata with fan support."""
+    model = detect_model("DYVVD3CDA1ECD07A4D")
+
+    assert model.name == "WRGB VIVID III"
+    assert dict(model.color_channels) == {"white": 3, "red": 0, "green": 1, "blue": 2}
+    assert model.has_fan is True
+
+
 def test_unknown_model_needs_device_type() -> None:
     """Unknown models use fallback metadata and need a type."""
     assert detect_model("UNKNOWN").fallback is True

@@ -718,6 +718,13 @@ def set_brightness(device_address: str, brightness: Annotated[list[int], typer.A
     _run_device_func(device_address, command)
 
 
+@led_app.command("set-fan-speed")
+@app.command()
+def set_fan_speed(device_address: str, speed_percent: Annotated[int, typer.Argument(min=0, max=100)]) -> None:
+    """Set fan speed percentage on fan-equipped lights."""
+    _run_device_func(device_address, lambda dev: dev.set_fan_speed(speed_percent))
+
+
 @led_app.command("add-setting")
 @app.command()
 def add_setting(

@@ -21,6 +21,16 @@ class RuntimeNotification:
 
 
 @dataclass(frozen=True)
+class FanStatusNotification:
+    """Parsed fan-equipped device status notification."""
+
+    firmware_version: int
+    fan_rpm: int
+    temperature_celsius: int
+    raw: bytes = field(default=b"", compare=False)
+
+
+@dataclass(frozen=True)
 class SchedulePoint:
     """Parsed auto schedule point."""
 
@@ -38,7 +48,7 @@ class ScheduleSnapshotNotification:
     raw: bytes = field(default=b"", compare=False)
 
 
-ParsedNotification = RuntimeNotification | ScheduleSnapshotNotification
+ParsedNotification = RuntimeNotification | FanStatusNotification | ScheduleSnapshotNotification
 
 
 def next_message_id(current_msg_id: tuple[int, int] = (0, 0)) -> tuple[int, int]:
@@ -135,6 +145,11 @@ def parse_notification(
         # from the tail also supports captured variants with an extra 0xff.
         runtime_minutes = (data[-3] << 8) | data[-2] if len(data) >= 14 else (data[6] << 8) | data[7]
         return RuntimeNotification(firmware_version, runtime_minutes, bytes(data))
+
+    if mode == 0x0B and len(data) >= 9:
+        fan_rpm = (data[6] << 8) | data[7]
+        temperature_celsius = data[8]
+        return FanStatusNotification(firmware_version, fan_rpm, temperature_celsius, bytes(data))
 
     if mode == 0xFE:
         if color_channels is None:

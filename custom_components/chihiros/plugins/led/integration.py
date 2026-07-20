@@ -61,7 +61,7 @@ from .services import async_update_led_services
 from .storage.history import record_led_notification_poll
 
 _LOGGER = logging.getLogger(__name__)
-PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH, Platform.SENSOR, Platform.FAN]
 
 __all__ = [
     "ADD_SCHEDULE_SCHEMA",
@@ -153,12 +153,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def _async_poll_runtime(_now: Any) -> None:
             async def _query() -> NotificationPollPayload:
                 previous_runtime = runtime.client.last_runtime_notification
+                previous_fan = runtime.client.last_fan_status_notification
                 previous_schedule = runtime.client.last_schedule_snapshot_notification
                 await runtime.client.query_status_active()
                 fresh = tuple(
                     notification
                     for notification, previous in (
                         (runtime.client.last_runtime_notification, previous_runtime),
+                        (runtime.client.last_fan_status_notification, previous_fan),
                         (runtime.client.last_schedule_snapshot_notification, previous_schedule),
                     )
                     if notification is not None and notification is not previous
@@ -175,7 +177,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 address=runtime.address,
                 device_type="led",
                 mode=0x04,
-                expected_modes=(0x0A, 0xFE),
+                expected_modes=(0x0A, 0x0B, 0xFE),
                 query=_query,
             )
             await _async_record_poll(result.status, result.output, result.notifications)

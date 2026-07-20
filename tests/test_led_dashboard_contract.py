@@ -697,7 +697,8 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     assert "@media (pointer:coarse)" in dashboard
     assert 'input[type="range"][data-led-number],' in dashboard
     assert 'input[type="range"][data-led-schedule-control],' in dashboard
-    assert 'input[type="range"][data-led-template-control] { touch-action:pan-y; }' in dashboard
+    assert 'input[type="range"][data-led-template-control],' in dashboard
+    assert 'input[type="range"][data-led-fan-control] { touch-action:pan-y; }' in dashboard
     assert "@media (max-width:700px)" in dashboard
     assert ".led-page { grid-template-columns:minmax(0,1fr); }" in dashboard
     assert ".led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }" in dashboard
@@ -795,3 +796,32 @@ def test_enable_auto_mode_button_uses_response_service_instead_of_schedule_write
     assert "this.runDeviceService({" in implementation
     assert 'service: "set_schedule"' not in implementation
     assert "Auto-Mode-Entitaet nicht gefunden" not in implementation
+
+
+def test_vivid_iii_replaces_presets_with_fan_status_and_control() -> None:
+    """Fan-equipped LED models expose temperature, RPM, and percentage control."""
+    panel = source(LED_PANEL)
+    dashboard = source(DASHBOARD)
+
+    assert "const devicePattern = /^(light|switch|sensor|fan)" in panel
+    assert 'suffix === "fan_rpm" || suffix === "fan_speed"' in panel
+    assert 'suffix === "fan_temperature_celsius" || suffix === "temperature"' in panel
+    assert 'domain === "fan" && suffix === "fan"' in panel
+    assert "ledDeviceHasFan(device" in panel
+    assert "this.ledDeviceHasFan(device) ? this.ledFanControlCard(device)" in panel
+    assert 'this._hass.callService("fan", "set_percentage", { percentage }' in panel
+    assert 'data-led-fan-control' in panel
+    assert 'fan_control: "Lüftersteuerung"' in dashboard
+    assert 'fan_control: "Fan control"' in dashboard
+    assert 'this.querySelectorAll("[data-led-fan-control]")' in dashboard
+    assert ".led-fan-metrics {" in dashboard
+
+
+def test_vivid_iii_fake_is_discoverable_as_dashboard_demo_device() -> None:
+    """The fake VIVID III name ends in its compact MAC so dashboard grouping can find it."""
+    fake = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "testing" / "fake.py")
+
+    assert 'name="DYVVD3FACEC0000004"' in fake
+    assert 'address=f"{FAKE_ADDRESS_PREFIX}:00:00:04"' in fake
+    assert "async def query_status_active" in fake
+    assert "temperature_celsius=25" in fake
