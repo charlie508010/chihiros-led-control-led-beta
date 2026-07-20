@@ -13,7 +13,7 @@ from rich import print
 from rich.table import Table
 from typing_extensions import Annotated
 
-from . import commands, store
+from . import store
 from .client import ChihirosDevice
 from .factory import detect_model, get_device_from_address
 from .weekday_encoding import WeekdaySelect, encode_selected_weekdays
@@ -774,46 +774,6 @@ def remove_setting(
     _run_device_func(device_address, command)
 
 
-@led_app.command("delete-setting-exact")
-def delete_setting_exact(
-    device_address: str,
-    sunrise: Annotated[datetime, typer.Argument(formats=["%H:%M"])],
-    sunset: Annotated[datetime, typer.Argument(formats=["%H:%M"])],
-    ramp_up_in_minutes: Annotated[int, typer.Option(min=1, max=150)] = 1,
-    weekdays: Annotated[list[WeekdaySelect], typer.Option()] = [WeekdaySelect.everyday],
-    finalize: Annotated[
-        bool,
-        typer.Option("--finalize/--no-finalize", help="Direkt nach dem Loeschframe Parameter 40 senden."),
-    ] = False,
-) -> None:
-    """Send one exact LED schedule delete frame, optionally followed by parameter 40."""
-
-    async def command(dev: ChihirosDevice) -> None:
-        if DEBUG_ENABLED:
-            dev.set_log_level(logging.DEBUG)
-        _clear_debug_frames(dev)
-        delete_command = commands.create_delete_auto_setting_command(
-            dev.get_next_msg_id(),
-            sunrise.time(),
-            sunset.time(),
-            ramp_up_in_minutes,
-            encode_selected_weekdays(weekdays),
-            brightness_channels=dev._channel_count(),
-        )
-        commands_to_send = [bytes(delete_command)]
-        if finalize:
-            commands_to_send.append(bytes(commands.create_auto_parameter_command(dev.get_next_msg_id(), 40)))
-        await dev._send_command(commands_to_send, 3, immediate_after_prelude=True)
-        print(
-            f"Gesendet: LED-Zeitplan deaktivieren {sunrise:%H:%M}-{sunset:%H:%M}, "
-            f"Ramp={ramp_up_in_minutes} min, Abschluss={'40' if finalize else 'nein'}"
-        )
-        if DEBUG_ENABLED:
-            _print_led_protocol_debug(dev)
-
-    _run_device_func(device_address, command)
-
-
 @led_app.command("reset-settings")
 @app.command()
 def reset_settings(device_address: str) -> None:
@@ -830,58 +790,6 @@ def reset_settings(device_address: str) -> None:
     _run_device_func(device_address, command)
 
 
-@led_app.command("reset-settings-7")
-def reset_settings_7(device_address: str) -> None:
-    """Send the historically verified DYU1000 reset sequence 18 then 7."""
-
-    async def command(dev: ChihirosDevice) -> None:
-        if DEBUG_ENABLED:
-            dev.set_log_level(logging.DEBUG)
-        _clear_debug_frames(dev)
-        commands_to_send = [
-            bytes(commands.create_switch_to_automatic_tab_command(dev.get_next_msg_id())),
-            bytes(commands.create_auto_parameter_command(dev.get_next_msg_id(), 7)),
-        ]
-        await dev._send_command(commands_to_send, 3, connection_prelude="automatic_tab")
-        print("Gesendet: historischer DYU1000-Zeitplanreset [18,255] -> [7,255,255]")
-        if DEBUG_ENABLED:
-            _print_led_protocol_debug(dev)
-
-    _run_device_func(device_address, command)
-
-
-@led_app.command("test-auto-parameter")
-def test_auto_parameter(
-    device_address: str,
-    first_parameter: Annotated[int, typer.Argument(min=0, max=255)],
-) -> None:
-    """Send diagnostic mode 5 parameters [VALUE, 255, 255]."""
-
-    async def command(dev: ChihirosDevice) -> None:
-        if DEBUG_ENABLED:
-            dev.set_log_level(logging.DEBUG)
-        _clear_debug_frames(dev)
-        await dev.send_auto_parameter(first_parameter)
-        if DEBUG_ENABLED:
-            _print_led_protocol_debug(dev)
-
-    _run_device_func(device_address, command)
-
-
-@led_app.command("hard-reset")
-@app.command("hard-reset")
-def hard_reset(device_address: str) -> None:
-    """Send LED hard-reset stages 5, 6, 7, and final stop/exit stage 4."""
-
-    async def command(dev: ChihirosDevice) -> None:
-        if DEBUG_ENABLED:
-            dev.set_log_level(logging.DEBUG)
-        _clear_debug_frames(dev)
-        await dev.hard_reset()
-        if DEBUG_ENABLED:
-            _print_led_protocol_debug(dev)
-
-    _run_device_func(device_address, command)
 
 
 
