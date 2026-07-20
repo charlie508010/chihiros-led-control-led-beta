@@ -55,6 +55,8 @@ async def async_load_plugins(hass: HomeAssistant, domain: str) -> PluginRegistry
 
     registry = PluginRegistry()
     for manifest in discover_plugin_manifests(plugin_roots(hass)):
+        if "home_assistant" not in manifest.runtimes:
+            continue
         try:
             module = _load_module(manifest)
             setup = getattr(module, "async_setup_plugin", None)

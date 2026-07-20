@@ -18,12 +18,16 @@ class PluginManifest:
     plugin_id: str
     name: str
     version: str
+    requires_core: str
     root: Path
     python_entrypoint: str
     frontend: str
     cli_entrypoint: str
     platforms: tuple[str, ...]
     tabs: tuple[dict[str, str], ...]
+    runtimes: tuple[str, ...]
+    backend_entrypoint: str
+    backend_actions: tuple[str, ...]
 
     @classmethod
     def from_path(cls, path: Path) -> PluginManifest:
@@ -39,12 +43,16 @@ class PluginManifest:
             plugin_id=plugin_id,
             name=str(data.get("name") or plugin_id).strip(),
             version=str(data.get("version") or "0.0.0").strip(),
+            requires_core=str(data.get("requires_core") or "").strip(),
             root=path.parent.resolve(),
             python_entrypoint=_safe_relative_path(data.get("python_entrypoint"), "plugin.py"),
             frontend=_safe_relative_path(data.get("frontend"), ""),
             cli_entrypoint=str(data.get("cli_entrypoint") or "").strip(),
             platforms=_normalize_platforms(data.get("platforms")),
             tabs=tabs,
+            runtimes=_normalize_runtimes(data.get("runtimes")),
+            backend_entrypoint=_safe_relative_path(data.get("backend_entrypoint"), ""),
+            backend_actions=_normalize_backend_actions(data.get("backend_actions")),
         )
 
     def public_data(self) -> dict[str, Any]:
@@ -53,9 +61,13 @@ class PluginManifest:
             "id": self.plugin_id,
             "name": self.name,
             "version": self.version,
+            "requires_core": self.requires_core,
             "frontend": self.frontend,
             "platforms": list(self.platforms),
             "tabs": [dict(tab) for tab in self.tabs],
+            "runtimes": list(self.runtimes),
+            "backend_entrypoint": self.backend_entrypoint,
+            "backend_actions": list(self.backend_actions),
         }
 
 
@@ -100,3 +112,29 @@ def _normalize_platforms(value: object) -> tuple[str, ...]:
         if platform not in platforms:
             platforms.append(platform)
     return tuple(platforms)
+
+
+def _normalize_runtimes(value: object) -> tuple[str, ...]:
+    rows = value if isinstance(value, list) else ["home_assistant", "addon"]
+    runtimes: list[str] = []
+    for row in rows:
+        runtime = str(row or "").strip()
+        if runtime not in {"home_assistant", "addon"}:
+            raise ValueError(f"Invalid plugin runtime {runtime!r}")
+        if runtime not in runtimes:
+            runtimes.append(runtime)
+    if not runtimes:
+        raise ValueError("Plugin runtimes must not be empty")
+    return tuple(runtimes)
+
+
+def _normalize_backend_actions(value: object) -> tuple[str, ...]:
+    rows = value if isinstance(value, list) else []
+    actions: list[str] = []
+    for row in rows:
+        action = str(row or "").strip()
+        if not _PLUGIN_ID.fullmatch(action):
+            raise ValueError(f"Invalid plugin backend action {action!r}")
+        if action not in actions:
+            actions.append(action)
+    return tuple(actions)

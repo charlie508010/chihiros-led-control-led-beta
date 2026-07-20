@@ -59,6 +59,63 @@ MODEL_POWER_WATTS: Mapping[str, Mapping[str, float]] = MappingProxyType(
     }
 )
 
+# Source metadata is kept next to the values so UI and documentation changes cannot silently turn an estimate into a
+# manufacturer specification. ``official_product_page`` means the model/size table was checked against Chihiros' own
+# product material; ``empirical`` is deliberately limited to the locally measured Universal WRGB profile.
+MODEL_POWER_SOURCES: Mapping[str, Mapping[str, str]] = MappingProxyType(
+    {
+        "Z Light TINY": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-z-light-tiny-led-light",
+            }
+        ),
+        "Tiny Terrarium Egg": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-tiny-terrarium-egg",
+            }
+        ),
+        "A II": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-a-ii-led-light",
+            }
+        ),
+        "WRGB II": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-wrgb-ii-led-light",
+            }
+        ),
+        "WRGB II Pro": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-wrgb-ii-pro-led-light",
+            }
+        ),
+        "WRGB II Slim": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-wrgb-ii-slim-led-light",
+            }
+        ),
+        "C II": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-c-ii-led-light",
+            }
+        ),
+        "C II RGB": MappingProxyType(
+            {
+                "status": "official_product_page",
+                "url": "https://www.chihirosaquaticstudio.com/products/chihiros-c-ii-rgb-led-light",
+            }
+        ),
+        "Universal WRGB": MappingProxyType({"status": "empirical", "url": ""}),
+    }
+)
+
 MODEL_CODE_POWER_KEYS: Mapping[str, str] = MappingProxyType(
     {
         "DYSSD": "default",

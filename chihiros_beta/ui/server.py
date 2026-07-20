@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import mimetypes
 import os
@@ -9,12 +10,13 @@ import re
 import shlex
 import sqlite3
 import subprocess
+import tarfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from datetime import time as datetime_time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib import error, request
 from urllib.parse import parse_qs, quote, unquote, urlparse
 
@@ -65,6 +67,19 @@ HA_STORAGE = CONFIG_ROOT / ".storage"
 SETTINGS_PATH = Path(os.environ.get("CHIHIROS_DASHBOARD_SETTINGS", "/data/dashboard_settings.json"))
 CORE_TABS = ["led", "config"]
 DEFAULT_DIAGNOSTIC_RETENTION_DAYS = 0
+EXTERNAL_PLUGIN_ROOT = CONFIG_ROOT / ".chihiros_led_core" / "plugins"
+PLUGIN_BACKUP_ROOT = CONFIG_ROOT / ".chihiros_led_core" / "plugin_backups"
+PLUGIN_STAGING_ROOT = CONFIG_ROOT / ".chihiros_led_core" / "plugin_staging"
+PLUGIN_QUARANTINE_ROOT = CONFIG_ROOT / ".chihiros_led_core" / "plugin_quarantine"
+MAX_PLUGIN_ARCHIVE_BYTES = 25 * 1024 * 1024
+MAX_PLUGIN_UNPACKED_BYTES = 50 * 1024 * 1024
+MAX_PLUGIN_FILES = 512
+_PLUGIN_BACKEND_CACHE: dict[str, object] = {}
+STARTUP_EXTERNAL_PLUGIN_IDS = (
+    frozenset(path.parent.name for path in EXTERNAL_PLUGIN_ROOT.glob("*/plugin.json"))
+    if EXTERNAL_PLUGIN_ROOT.is_dir()
+    else frozenset()
+)
 
 
 def plugin_manifest_rows() -> list[dict[str, object]]:
@@ -72,13 +87,15 @@ def plugin_manifest_rows() -> list[dict[str, object]]:
     roots = (
         Path(__file__).resolve().parents[2] / "custom_components" / "chihiros" / "plugins",
         SOURCE_ROOT / "custom_components" / "chihiros" / "plugins",
-        CONFIG_ROOT / ".chihiros_led_core" / "plugins",
+        EXTERNAL_PLUGIN_ROOT,
     )
     plugins: dict[str, dict[str, object]] = {}
     for root in roots:
         if not root.is_dir():
             continue
         for path in sorted(root.glob("*/plugin.json")):
+            if root == EXTERNAL_PLUGIN_ROOT and path.parent.name not in STARTUP_EXTERNAL_PLUGIN_IDS:
+                continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
@@ -88,6 +105,19 @@ def plugin_manifest_rows() -> list[dict[str, object]]:
             plugin_id = str(data.get("id") or "").strip()
             if not re.fullmatch(r"[a-z][a-z0-9_]*", plugin_id) or plugin_id in plugins:
                 continue
+            runtimes = data.get("runtimes", ["home_assistant", "addon"])
+            if not isinstance(runtimes, list) or "addon" not in runtimes:
+                continue
+            try:
+                frontend = _safe_plugin_relative_path(data.get("frontend"), allow_empty=True)
+                backend_entrypoint = _safe_plugin_relative_path(data.get("backend_entrypoint"), allow_empty=True)
+            except ValueError:
+                continue
+            backend_actions = [
+                str(action)
+                for action in data.get("backend_actions", [])
+                if re.fullmatch(r"[a-z][a-z0-9_]*", str(action))
+            ]
             tabs = [
                 {
                     "id": str(tab.get("id") or "").strip(),
@@ -101,8 +131,14 @@ def plugin_manifest_rows() -> list[dict[str, object]]:
                 "id": plugin_id,
                 "name": str(data.get("name") or plugin_id),
                 "version": str(data.get("version") or "0.0.0"),
-                "frontend": str(data.get("frontend") or ""),
+                "requires_core": str(data.get("requires_core") or ""),
+                "frontend": frontend,
+                "module": f"./plugins/{plugin_id}/{frontend}" if frontend else "",
+                "backend_entrypoint": backend_entrypoint,
+                "backend_actions": backend_actions,
+                "runtimes": runtimes,
                 "tabs": tabs or [{"id": plugin_id, "title": plugin_id, "icon": ""}],
+                "_root": str(path.parent.resolve()),
             }
     return [plugins[key] for key in sorted(plugins)]
 
@@ -135,7 +171,149 @@ def installed_plugin_kinds() -> list[str]:
 
 def plugin_assets() -> dict[str, dict[str, object]]:
     """Return public plugin metadata used by the dashboard shell."""
-    return {str(plugin["id"]): plugin for plugin in plugin_manifest_rows()}
+    return {
+        str(plugin["id"]): {key: value for key, value in plugin.items() if not key.startswith("_")}
+        for plugin in plugin_manifest_rows()
+    }
+
+
+def _safe_plugin_relative_path(value: object, *, allow_empty: bool = False) -> str:
+    text = str(value or "").strip().replace("\\", "/")
+    if not text and allow_empty:
+        return ""
+    candidate = Path(text)
+    if not text or candidate.is_absolute() or ".." in candidate.parts:
+        raise ValueError(f"Invalid plugin path: {text!r}")
+    return text
+
+
+def _plugin_manifest(plugin_id: str) -> dict[str, object]:
+    for plugin in plugin_manifest_rows():
+        if plugin.get("id") == plugin_id:
+            return plugin
+    raise ValueError(f"Plugin not installed: {plugin_id}")
+
+
+def call_plugin_backend(plugin_id: str, action: str, args: list[object]) -> object:
+    """Call one explicitly allowlisted action from an installed add-on plugin."""
+    plugin = _plugin_manifest(plugin_id)
+    if action not in plugin.get("backend_actions", []):
+        raise ValueError(f"Plugin action not allowed: {plugin_id}.{action}")
+    backend_entrypoint = str(plugin.get("backend_entrypoint") or "")
+    if not backend_entrypoint:
+        raise ValueError(f"Plugin has no backend: {plugin_id}")
+    root = Path(str(plugin["_root"])).resolve()
+    backend_path = (root / backend_entrypoint).resolve()
+    if root not in backend_path.parents or not backend_path.is_file():
+        raise ValueError(f"Plugin backend not found: {plugin_id}")
+    module = _PLUGIN_BACKEND_CACHE.get(plugin_id)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(f"chihiros_addon_plugin_{plugin_id}", backend_path)
+        if spec is None or spec.loader is None:
+            raise ValueError(f"Plugin backend cannot be loaded: {plugin_id}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _PLUGIN_BACKEND_CACHE[plugin_id] = module
+    function = getattr(module, action, None)
+    if not callable(function):
+        raise ValueError(f"Plugin action missing: {plugin_id}.{action}")
+    return function(*args)
+
+
+def install_plugin_tgz(payload: bytes) -> dict[str, object]:
+    """Install a validated TGZ without deleting an existing or rejected plugin."""
+    timestamp = datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
+    files: list[tuple[PurePosixPath, bytes]] = []
+    seen: set[str] = set()
+    total_size = 0
+    with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as archive:
+        members = archive.getmembers()
+        if len(members) > MAX_PLUGIN_FILES:
+            raise ValueError(f"Plugin archive contains more than {MAX_PLUGIN_FILES} entries")
+        for member in members:
+            name = member.name.replace("\\", "/").removeprefix("./")
+            relative = PurePosixPath(name)
+            if not name or relative.is_absolute() or ".." in relative.parts:
+                raise ValueError(f"Unsafe plugin archive path: {member.name}")
+            normalized = relative.as_posix()
+            if normalized in seen:
+                raise ValueError(f"Duplicate plugin archive path: {normalized}")
+            seen.add(normalized)
+            if member.isdir():
+                continue
+            if not member.isfile():
+                raise ValueError(f"Unsupported plugin archive entry: {normalized}")
+            total_size += member.size
+            if total_size > MAX_PLUGIN_UNPACKED_BYTES:
+                raise ValueError("Plugin archive exceeds the 50 MiB unpacked limit")
+            extracted = archive.extractfile(member)
+            if extracted is None:
+                raise ValueError(f"Plugin archive entry cannot be read: {normalized}")
+            files.append((relative, extracted.read()))
+    manifest_payload = next((content for path, content in files if path.as_posix() == "plugin.json"), None)
+    if manifest_payload is None:
+        raise ValueError("Plugin archive must contain plugin.json at its root")
+    try:
+        manifest = json.loads(manifest_payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as err:
+        raise ValueError("Plugin manifest is not valid UTF-8 JSON") from err
+    if not isinstance(manifest, dict):
+        raise ValueError("Plugin manifest must contain an object")
+    plugin_id = str(manifest.get("id") or "").strip()
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", plugin_id) or plugin_id in {"led", "config"}:
+        raise ValueError(f"Invalid or reserved plugin id: {plugin_id!r}")
+    runtimes = manifest.get("runtimes")
+    if not isinstance(runtimes, list) or "addon" not in runtimes:
+        raise ValueError("Uploaded plugins must declare the addon runtime")
+    requires_core = str(manifest.get("requires_core") or "").strip()
+    if len(requires_core) > 64 or not re.fullmatch(r"[0-9A-Za-z.*+<>=!~^, -]*", requires_core):
+        raise ValueError("Plugin requires_core is invalid")
+    frontend = _safe_plugin_relative_path(manifest.get("frontend"), allow_empty=True)
+    backend = _safe_plugin_relative_path(manifest.get("backend_entrypoint"), allow_empty=True)
+    actions = manifest.get("backend_actions", [])
+    if not isinstance(actions, list) or any(not re.fullmatch(r"[a-z][a-z0-9_]*", str(item)) for item in actions):
+        raise ValueError("Plugin backend_actions must contain safe action names")
+    available = {path.as_posix() for path, _content in files}
+    if frontend and frontend not in available:
+        raise ValueError(f"Plugin frontend not found in archive: {frontend}")
+    if backend and backend not in available:
+        raise ValueError(f"Plugin backend not found in archive: {backend}")
+
+    PLUGIN_STAGING_ROOT.mkdir(parents=True, exist_ok=True)
+    stage = PLUGIN_STAGING_ROOT / f"{plugin_id}-{timestamp}"
+    stage.mkdir(parents=False, exist_ok=False)
+    try:
+        for relative, content in files:
+            target = stage.joinpath(*relative.parts)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+        EXTERNAL_PLUGIN_ROOT.mkdir(parents=True, exist_ok=True)
+        target = EXTERNAL_PLUGIN_ROOT / plugin_id
+        backup_path: Path | None = None
+        if target.exists():
+            PLUGIN_BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
+            backup_path = PLUGIN_BACKUP_ROOT / f"{plugin_id}-{timestamp}"
+            target.replace(backup_path)
+        try:
+            stage.replace(target)
+        except OSError:
+            if backup_path is not None and backup_path.exists() and not target.exists():
+                backup_path.replace(target)
+            raise
+    except Exception:
+        if stage.exists():
+            PLUGIN_QUARANTINE_ROOT.mkdir(parents=True, exist_ok=True)
+            stage.replace(PLUGIN_QUARANTINE_ROOT / stage.name)
+        raise
+    _PLUGIN_BACKEND_CACHE.pop(plugin_id, None)
+    return {
+        "ok": True,
+        "plugin": plugin_id,
+        "version": str(manifest.get("version") or "0.0.0"),
+        "backup": str(backup_path) if backup_path is not None else "",
+        "restart_required": True,
+    }
+
 
 def addon_info_is_installed(data: dict[str, object]) -> bool:
     """Return true only for add-ons installed on this Home Assistant host."""
@@ -150,6 +328,7 @@ def addon_info_is_installed(data: dict[str, object]) -> bool:
 def plugin_title() -> str:
     """Return the display title for this LED add-on."""
     return "LED Core"
+
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
@@ -223,6 +402,12 @@ class Handler(BaseHTTPRequestHandler):
         if request_path in ("/api/history", "/api/led-history"):
             self.save_history(self.read_json(), default_scope="led" if request_path == "/api/led-history" else "")
             return
+        if request_path == "/api/plugins/install":
+            self.install_plugin_archive(parsed)
+            return
+        if request_path == "/api/plugin-backend":
+            self.run_plugin_backend(self.read_json())
+            return
         if request_path == "/api/addon-refresh":
             self.refresh_addon_update_source(self.read_json())
             return
@@ -230,6 +415,46 @@ class Handler(BaseHTTPRequestHandler):
             self.install_addon_source_update(self.read_json())
             return
         self.send_json(404, {"message": "Not found"})
+
+    def install_plugin_archive(self, _parsed: object) -> None:
+        """Validate and atomically install one configuration-local TGZ plugin."""
+        try:
+            content_length = int(self.headers.get("content-length", "0") or "0")
+        except ValueError:
+            content_length = 0
+        if content_length <= 0 or content_length > MAX_PLUGIN_ARCHIVE_BYTES:
+            self.send_json(413, {"message": "Plugin archive must be between 1 byte and 25 MiB"})
+            return
+        content_type = str(self.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+        if content_type not in {"application/gzip", "application/x-gzip", "application/octet-stream"}:
+            self.send_json(415, {"message": "Only .tgz gzip archives are supported"})
+            return
+        payload = self.rfile.read(content_length)
+        try:
+            result = install_plugin_tgz(payload)
+        except (OSError, ValueError, tarfile.TarError) as err:
+            self.send_json(400, {"message": str(err)})
+            return
+        self.send_json(200, result)
+
+    def run_plugin_backend(self, body: bytes) -> None:
+        """Dispatch one allowlisted add-on plugin action."""
+        try:
+            data = json.loads(body.decode("utf-8") or "{}")
+            plugin_id = str(data.get("plugin") or "").strip()
+            action = str(data.get("action") or "").strip()
+            args = data.get("args", [])
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", plugin_id):
+                raise ValueError("Invalid plugin id")
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", action):
+                raise ValueError("Invalid plugin action")
+            if not isinstance(args, list):
+                raise ValueError("Plugin args must be a list")
+            result = call_plugin_backend(plugin_id, action, args)
+        except (json.JSONDecodeError, TypeError, ValueError) as err:
+            self.send_json(400, {"message": str(err)})
+            return
+        self.send_json(200, result if isinstance(result, dict) else {"result": result})
 
     def save_dashboard_settings(self, body: bytes) -> None:
         try:
@@ -642,8 +867,21 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(raw_path).lstrip("/") or "index.html"
         root = ROOT
         allowed_roots = [ROOT.resolve()]
+        if path.startswith("plugins/"):
+            parts = path.split("/", 2)
+            if len(parts) != 3 or not re.fullmatch(r"[a-z][a-z0-9_]*", parts[1]):
+                self.send_json(404, {"message": "Not found"})
+                return
+            try:
+                plugin = _plugin_manifest(parts[1])
+            except ValueError:
+                self.send_json(404, {"message": "Not found"})
+                return
+            root = Path(str(plugin["_root"])).resolve()
+            path = parts[2]
+            allowed_roots = [root]
         target = (root / path).resolve()
-        if not target.is_file() or not any(str(target).startswith(str(allowed)) for allowed in allowed_roots):
+        if not target.is_file() or not any(target == allowed or allowed in target.parents for allowed in allowed_roots):
             self.send_json(404, {"message": "Not found"})
             return
         content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
@@ -1052,6 +1290,7 @@ def build_dashboard_state() -> dict[str, object]:
         "state_db_path": str(current_state_db_path()),
     }
 
+
 def led_templates() -> dict[str, object]:
     def decode_values(raw: str) -> list[int]:
         try:
@@ -1158,7 +1397,9 @@ def ensure_led_device_status_table(conn: sqlite3.Connection) -> None:
         )
         """
     )
-    columns = {str(row.get("name") or "") for row in sqlite_rows_with_conn(conn, "PRAGMA table_info(led_device_status)")}
+    columns = {
+        str(row.get("name") or "") for row in sqlite_rows_with_conn(conn, "PRAGMA table_info(led_device_status)")
+    }
     if "schedule_window" not in columns:
         conn.execute("ALTER TABLE led_device_status ADD COLUMN schedule_window TEXT NOT NULL DEFAULT ''")
 
@@ -1385,7 +1626,11 @@ def seconds_until_next_led_schedule_boundary(now: datetime | None = None) -> flo
             if "everyday" not in normalized_days and weekday_names[schedule_date.weekday()] not in normalized_days:
                 continue
             start_at = datetime.combine(schedule_date, datetime_time(start_hour, start_minute))
-            end_date = schedule_date if (end_hour, end_minute) > (start_hour, start_minute) else schedule_date + timedelta(days=1)
+            end_date = (
+                schedule_date
+                if (end_hour, end_minute) > (start_hour, start_minute)
+                else schedule_date + timedelta(days=1)
+            )
             end_at = datetime.combine(end_date, datetime_time(end_hour, end_minute))
             candidates.extend(boundary for boundary in (start_at, end_at) if boundary > current)
     if not candidates:

@@ -29,14 +29,14 @@ def test_led_plugin_has_complete_manifest_and_isolated_subsystems() -> None:
     assert data["id"] == "led"
     assert data["python_entrypoint"] == "plugin.py"
     assert data["frontend"] == "dashboard/chihiros-led-card.js"
-    assert data["platforms"] == ["light", "sensor", "switch"]
+    assert data["platforms"] == ["light", "sensor", "switch", "fan"]
     for directory in ("protocol", "services", "entities", "storage", "cli", "dashboard", "translations"):
         assert (LED_PLUGIN / directory).is_dir()
     assert (LED_PLUGIN / "const.py").is_file()
     assert (LED_PLUGIN / "validators.py").is_file()
     assert (LED_PLUGIN / "services" / "runtime.py").is_file()
     assert (LED_PLUGIN / "storage" / "runtime.py").is_file()
-    for platform in ("light", "sensor", "switch"):
+    for platform in ("light", "sensor", "switch", "fan"):
         assert (LED_PLUGIN / "entities" / f"{platform}.py").is_file()
 
 
@@ -81,8 +81,8 @@ def test_led_manifest_exposes_entity_platforms_to_core() -> None:
     module = _load_manifest_module()
     manifest = module.PluginManifest.from_path(LED_PLUGIN / "plugin.json")
 
-    assert manifest.platforms == ("light", "sensor", "switch")
-    assert manifest.public_data()["platforms"] == ["light", "sensor", "switch"]
+    assert manifest.platforms == ("light", "sensor", "switch", "fan")
+    assert manifest.public_data()["platforms"] == ["light", "sensor", "switch", "fan"]
 
 
 def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values() -> None:

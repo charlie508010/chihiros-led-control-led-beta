@@ -10,7 +10,7 @@ from chihiros_led_control.factory import (
     needs_device_type,
     resolve_model,
 )
-from chihiros_led_control.models import FALLBACK, MODEL_POWER_WATTS, model_power_watts
+from chihiros_led_control.models import FALLBACK, MODEL_POWER_SOURCES, MODEL_POWER_WATTS, model_power_watts
 
 
 class FakeBLEDevice:
@@ -70,6 +70,14 @@ def test_model_power_table_contains_manufacturer_values() -> None:
         "1500": 100,
     }
     assert model_power_watts("A II", "1201") == 58
+
+
+def test_power_values_have_explicit_source_status() -> None:
+    """Every automatic power family records whether its source is official or empirical."""
+    assert set(MODEL_POWER_SOURCES) == set(MODEL_POWER_WATTS)
+    assert MODEL_POWER_SOURCES["WRGB II Pro"]["status"] == "official_product_page"
+    assert MODEL_POWER_SOURCES["WRGB II Pro"]["url"].startswith("https://www.chihirosaquaticstudio.com/")
+    assert dict(MODEL_POWER_SOURCES["Universal WRGB"]) == {"status": "empirical", "url": ""}
 
 
 def test_detect_model_resolves_product_specific_power() -> None:

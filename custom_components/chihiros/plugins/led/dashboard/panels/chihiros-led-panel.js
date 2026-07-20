@@ -317,6 +317,12 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   resolveLedMaxPowerWatts(device = {}) {
+    const deviceId = String(device && device.id || "");
+    const overrides = this.uiSettings && this.uiSettings.deviceMaxPowerWatts
+      ? this.uiSettings.deviceMaxPowerWatts
+      : {};
+    const manual = Math.max(0, Number(overrides[deviceId]) || 0);
+    if (manual > 0) return manual;
     const configured = Math.max(0, Number(device && device.max_power_watts) || 0);
     if (configured > 0) return configured;
     const text = [device.id, device.label, device.name, device.model]
@@ -338,12 +344,12 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   supportsLedWattEstimates(device = this.activeLedDevice || {}) {
-    const text = [device && device.id, device && device.name, device && device.model]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-    return (text.includes("universal wrgb") || /dyu(550|600|700|800|920|1000|1200|1500)/.test(text))
-      && this.ledMaxPowerWatts(device) > 0;
+    return this.ledMaxPowerWatts(device) > 0;
+  }
+
+  usesUniversalWrgbPowerProfile(device = this.activeLedDevice || {}) {
+    const text = [device && device.id, device && device.name, device && device.model].filter(Boolean).join(" ").toLowerCase();
+    return text.includes("universal wrgb") || /dyu(550|600|700|800|920|1000|1200|1500)/.test(text);
   }
 
   ledWattChannelKey(channel = {}) {
@@ -381,6 +387,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       white: [[0, 0], [1, 1], [11, 1], [30, 2], [100, 12]],
     };
     const points = channelPowerPoints[this.ledWattChannelKey(channel)];
+    if (!this.usesUniversalWrgbPowerProfile()) {
+      const channelCount = Math.max(1, (this.ledChannels || []).length);
+      return this.ledMaxPowerWatts() * Math.max(0, Math.min(100, Number(value) || 0)) / 100 / channelCount;
+    }
     if (!points) return 0;
     return this.ledWattInterpolate(points, value) * (this.ledMaxPowerWatts() / 61);
   }
@@ -391,6 +401,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       .filter((item) => item.key);
     const levels = channels.map((item, index) => Math.max(0, Math.min(100, Number(values[index]) || 0)));
     const maxPowerWatts = this.ledMaxPowerWatts();
+    if (!this.usesUniversalWrgbPowerProfile()) {
+      const average = levels.length ? levels.reduce((sum, level) => sum + level, 0) / levels.length : 0;
+      return Math.min(maxPowerWatts, maxPowerWatts * average / 100);
+    }
     const completeRgbw = channels.length === 4 && new Set(channels.map((item) => item.key)).size === 4;
     if (completeRgbw && levels.every((level) => Math.abs(level - levels[0]) < 0.001)) {
       const totalPowerPoints = [[0, 0], [1, 3], [11, 8], [30, 17], [100, 61]];
@@ -419,9 +433,13 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const value = values[index] || 0;
       const watts = this.ledChannelEstimatedWatts(channel, value);
       field.textContent = value > 0 ? `≈ ${this.ledWattFormat(watts)} W` : "0 W";
+      field.title = this.tr("estimated_power");
     });
     const total = this.querySelector("[data-led-total-watts]");
-    if (total) total.textContent = `${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(values))} W / ${this.ledWattFormat(this.ledMaxPowerWatts())} W`;
+    if (total) {
+      total.textContent = `${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(values))} W / ${this.ledWattFormat(this.ledMaxPowerWatts())} W`;
+      total.title = this.tr("estimated_power");
+    }
   }
 
   ledPresetValue(preset, device = this.activeLedDevice || {}) {
@@ -2145,7 +2163,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
               <b>${this.tr(value > 0 ? "on" : "off")}</b>
             </button>
           </div>
-          ${showWatts ? `<span class="led-channel-watt"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-channel-watts="${channel.id}">${value > 0 ? `≈ ${this.ledWattFormat(watts)} W` : "0 W"}</span></span>` : ""}
+          ${showWatts ? `<span class="led-channel-watt" title="${this.escapeHtml(this.tr("estimated_power"))}"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-channel-watts="${channel.id}">${value > 0 ? `≈ ${this.ledWattFormat(watts)} W` : "0 W"}</span></span>` : ""}
           <button class="led-channel-history-button" type="button" data-led-channel-history="${channel.id}" title="${this.tr("history")}" aria-label="${this.tr("history")}"><ha-icon icon="mdi:history"></ha-icon><span>${this.tr("history")}</span></button>
         </div>
         <div class="led-channel-control">
@@ -3565,7 +3583,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         </section>`}
         <section class="card led-channels-card">
           ${showWatts
-            ? `<div class="led-channels-title-row"><h2>${this.tr("color_channels")}</h2><span class="led-total-watt"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-total-watts>${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(initialWattValues))} W / ${this.ledWattFormat(this.ledMaxPowerWatts(device))} W</span></span></div>`
+            ? `<div class="led-channels-title-row"><h2>${this.tr("color_channels")}</h2><span class="led-total-watt" title="${this.escapeHtml(this.tr("estimated_power"))}"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-total-watts>${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(initialWattValues))} W / ${this.ledWattFormat(this.ledMaxPowerWatts(device))} W</span></span></div>`
             : `<h2>${this.tr("color_channels")}</h2>`}
           ${channelContent}
         </section>

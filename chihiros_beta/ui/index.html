@@ -109,7 +109,18 @@
       let addonDatabase = {};
       let addonKind = "core";
       let addonTitle = "LED Core";
-      const enabledTabs = ["led", "config"];
+      let enabledTabs = ["led", "config"];
+      let installedPlugins = [];
+      let pluginAssets = {};
+
+      async function loadPluginAssets(assets = {}) {
+        window.ChihirosPlugins = window.ChihirosPlugins || {};
+        for (const [pluginId, asset] of Object.entries(assets || {})) {
+          if (!asset || !asset.module || pluginId === "led") continue;
+          await import(`${asset.module}?v=${encodeURIComponent(asset.version || Date.now())}`);
+          if (!window.ChihirosPlugins[pluginId]) throw new Error(`Plugin frontend did not register: ${pluginId}`);
+        }
+      }
 
       function defaultTabForKind() {
         return "led";
@@ -234,7 +245,7 @@
           enabled_tabs: enabledTabs,
           plugin_kind: addonKind,
           plugin_title: addonTitle,
-          installed_plugins: [],
+          installed_plugins: installedPlugins,
           language: "de",
           addon_mode: true,
           addon_database: addonDatabase,
@@ -253,6 +264,10 @@
         .then((response) => response.json())
         .then(async (data) => {
           addonKind = "core";
+          enabledTabs = Array.isArray(data.enabled_tabs) ? data.enabled_tabs : enabledTabs;
+          installedPlugins = Array.isArray(data.installed_plugins) ? data.installed_plugins : [];
+          pluginAssets = data.plugin_assets || {};
+          await loadPluginAssets(pluginAssets);
           setAddonTitle(data.plugin_title);
           ensureCard();
           applyCardState(Array.isArray(data.devices) ? data.devices : []);
@@ -266,6 +281,10 @@
         const data = await response.json();
         addonDatabase = data.database || addonDatabase || {};
         addonKind = "core";
+        enabledTabs = Array.isArray(data.enabled_tabs) ? data.enabled_tabs : enabledTabs;
+        installedPlugins = Array.isArray(data.installed_plugins) ? data.installed_plugins : installedPlugins;
+        pluginAssets = data.plugin_assets || pluginAssets;
+        await loadPluginAssets(pluginAssets);
         setAddonTitle(data.plugin_title);
         ensureCard();
         hassShell.states = data.states || {};
@@ -306,6 +325,26 @@
       const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
       window.ChihirosAddonApi = {
+        installPlugin: async (file) => {
+          const response = await fetch("./api/plugins/install", {
+            method: "POST",
+            headers: { "content-type": "application/gzip" },
+            body: file,
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || `Plugin installation failed (${response.status})`);
+          return data;
+        },
+        callPluginBackend: async (plugin, action, args = []) => {
+          const response = await fetch("./api/plugin-backend", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ plugin, action, args }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.message || `Plugin action failed (${response.status})`);
+          return data;
+        },
         saveDatabaseConfig: async (payload) => {
           const response = await fetch("./api/dashboard-settings", {
             method: "POST",

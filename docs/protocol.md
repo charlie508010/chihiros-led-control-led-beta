@@ -5,6 +5,10 @@ Chihiros LED devices. They are based on the working implementation in this
 repository plus reverse-engineering notes from the old Chihiros Magic app, the
 newer Flutter app, and BLE captures.
 
+Evidence labels used below: **confirmed** means exercised by code and captures, **empirical** means repeatably decoded
+without a manufacturer contract, and **unknown** remains opaque. Bytes are not assigned a meaning merely because
+their value looks plausible.
+
 ## BLE Transport
 
 Most supported devices use a Nordic UART-style BLE service:
@@ -108,6 +112,9 @@ Known channel IDs:
 
 For RGB and WRGB devices, each channel is sent as a separate command.
 
+The dashboard's manual takeover sends the selected channel values and disables automatic scheduling for the manual
+session. This is application orchestration, not a separate BLE opcode.
+
 Captured example for channel `0` at `100%`:
 
 ```text
@@ -137,6 +144,9 @@ Other observed `0x5a / 0x05` first parameters:
 | `6` | Temporary/new-firmware demo in the old app |
 | `11` / `0x0b` | First-connect/manual setup command, exact meaning unknown |
 | `18` | Enable auto mode |
+
+The Auto tab combines confirmed time/schedule writes with the locally stored scheduler snapshot. Snapshot comparison
+is a core safety check and does not imply that every snapshot trailer byte is understood.
 
 ## Auto Schedule Settings
 
@@ -177,6 +187,12 @@ brightness fields set to `255`:
 Only one setting can be configured per day, so settings cannot conflict. There
 is a maximum of 7 settings.
 
+## Legacy A-II curves
+
+The older A-II automation path uses command `0x5a`, mode `0x06`, with `[channel, time_index, level]`.
+`time_index` is confirmed as `0..47` in half-hour increments and level is `0..100`. This 48-point curve is separate
+from the newer `0xa5 / 0x19` scheduler and is retained for compatible firmware.
+
 ## Weekday Bitmask
 
 Weekdays are encoded as a 7-bit mask:
@@ -208,6 +224,9 @@ The third date field is firmware/app-generation dependent:
 - The old Chihiros Magic 2.6.0e app used day of month.
 
 Captured newer-style examples use the weekday-like form.
+
+The core sends time immediately before schedule activation when required. Whether a firmware stores the full date or
+only uses weekday/time is unknown.
 
 ## Runtime And Status Responses
 
@@ -283,6 +302,20 @@ send `0x5b` notifications with mode `0x0b` while connected:
   normal XOR trailer reliably.
 
 Fan speed is set with command `0x5a`, mode `0x0f`, and one percentage byte.
+
+VIVID III support, including model code `DYVVD3` and fan control, follows upstream commit
+`8a48f94a9266e92e08dc7b575876855b9b8f059d`. RPM and temperature are empirical notification fields; all remaining
+bytes stay opaque.
+
+## Evidence summary
+
+| Area | Confirmed | Empirical | Unknown |
+| --- | --- | --- | --- |
+| Frame | command, length, message ID, mode, XOR for normal frames | reserved-`0x5a` handling on observed LEDs | trailers on special notifications |
+| Manual | channel IDs and brightness | manual-takeover sequencing | firmware-side persistence |
+| Scheduler | weekday mask, time, ramp, channel levels | snapshots and old A-II curve observations | special snapshot trailer |
+| Runtime | query and minute counter | legacy `0xb5` seconds frame | unused status bytes |
+| Fan | set percentage | VIVID III RPM and temperature | remaining notification payload |
 
 ## Observed Command Families
 

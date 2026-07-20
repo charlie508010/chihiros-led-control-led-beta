@@ -6,7 +6,8 @@
   "python_entrypoint": "plugin.py",
   "frontend": "dashboard/chihiros-led-card.js",
   "cli_entrypoint": "chihiros_led_control.led_cli:app",
-  "platforms": ["light", "sensor", "switch"],
+  "platforms": ["light", "sensor", "switch", "fan"],
+  "runtimes": ["home_assistant", "addon"],
   "tabs": [
     {
       "id": "led",

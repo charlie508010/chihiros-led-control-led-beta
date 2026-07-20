@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1059";
+import "./panels/chihiros-led-panel.js?v=0.2.1060";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -59,6 +59,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       activeTab: "led",
       channelNames: {},
       deviceNames: {},
+      deviceMaxPowerWatts: {},
     };
     try {
       const raw = window.localStorage.getItem(this.uiSettingsKey());
@@ -72,7 +73,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const configured = Array.isArray(this.config?.enabled_tabs) ? this.config.enabled_tabs : ["led", "config"];
     const enabled = configured
       .map((tab) => String(tab || "").trim())
-      .filter((tab, index, tabs) => ["led", "config"].includes(tab) && tabs.indexOf(tab) === index);
+      .filter((tab, index, tabs) => (
+        ["led", "config"].includes(tab) || Boolean(window.ChihirosPlugins && window.ChihirosPlugins[tab])
+      ) && tabs.indexOf(tab) === index);
     return enabled.length ? enabled : ["led"];
   }
 
@@ -83,13 +86,26 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     return `<svg class="tab-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16v8H4z"/><path d="M7 8V5m5 3V5m5 3V5M7 19v-3m5 3v-3m5 3v-3"/></svg>`;
   }
 
+  pluginTitle(tab) {
+    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[tab];
+    if (!plugin) return String(tab || "");
+    if (typeof plugin.title === "function") return plugin.title(this);
+    return String(plugin.title || tab);
+  }
+
+  pluginPanel(tab) {
+    const plugin = window.ChihirosPlugins && window.ChihirosPlugins[tab];
+    if (!plugin || typeof plugin.renderPanel !== "function") return "";
+    return String(plugin.renderPanel(this) || "");
+  }
+
   coreTabBar() {
     return `
       <nav class="device-tabs" aria-label="Chihiros LED Core">
         ${this.enabledCoreTabs().map((tab) => `
           <button type="button" data-tab="${tab}" class="${this.activeTab === tab ? "active" : ""}">
             ${this.coreTabIcon(tab)}
-            <span>${this.tr(tab)}</span>
+            <span>${["led", "config"].includes(tab) ? this.tr(tab) : this.escapeHtml(this.pluginTitle(tab))}</span>
           </button>`).join("")}
         ${this.config?.addon_mode ? `
           <button type="button" class="addon-update-button" data-addon-update>
@@ -138,6 +154,13 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const language = this.language();
     const showMac = this.uiSettings?.showMac !== false;
     const dashboardDebug = Boolean(this.uiSettings?.dashboardDebug);
+    const powerOverrides = this.uiSettings?.deviceMaxPowerWatts || {};
+    const powerRows = (this.ledDevices || []).map((device) => {
+      const id = String(device.id || "");
+      const label = String(device.label || device.name || id);
+      const value = Number(powerOverrides[id]);
+      return `<label class="config-row wide"><span>${this.escapeHtml(label)} · W</span><input type="number" min="0.1" max="1000" step="0.1" value="${Number.isFinite(value) && value > 0 ? value : ""}" data-device-power-watts="${this.escapeHtml(id)}" placeholder="${this.tr("automatic")}"></label>`;
+    }).join("");
     return `
       <div class="config-page">
         ${this.addonDatabasePanel()}
@@ -159,7 +182,20 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             <span>${this.tr("dashboard_debug")}</span>
           </label>
           <small class="settings-note">${this.tr("dashboard_debug_hint")}</small>
+          <h3>${this.tr("rated_power")}</h3>
+          <small class="settings-note">${this.tr("rated_power_hint")}</small>
+          ${powerRows || `<small class="settings-note">${this.tr("no_device")}</small>`}
         </section>
+        ${this.config?.addon_mode ? `<section class="card config-card">
+          <h2>${this.tr("plugin_install")}</h2>
+          <p class="settings-note">${this.tr("plugin_install_hint")}</p>
+          <label class="config-row wide">
+            <span>${this.tr("plugin_archive")}</span>
+            <input type="file" accept=".tgz,.tar.gz,application/gzip" data-plugin-archive>
+          </label>
+          <div class="db-actions"><button type="button" class="primary" data-plugin-install>${this.tr("install")}</button></div>
+          <small class="settings-note" data-plugin-install-status></small>
+        </section>` : ""}
       </div>`;
   }
 
@@ -360,6 +396,41 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             level: "error",
           };
           this.render();
+        }
+      });
+    });
+    this.querySelectorAll("[data-device-power-watts]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const id = String(input.getAttribute("data-device-power-watts") || "");
+        const value = Number(input.value);
+        const current = { ...((this.uiSettings && this.uiSettings.deviceMaxPowerWatts) || {}) };
+        if (Number.isFinite(value) && value >= 0.1 && value <= 1000) current[id] = value;
+        else delete current[id];
+        this.uiSettings = { ...(this.uiSettings || {}), deviceMaxPowerWatts: current };
+        this.saveUiSettings();
+        this.render();
+      });
+    });
+    this.querySelectorAll("[data-plugin-install]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const input = this.querySelector("[data-plugin-archive]");
+        const status = this.querySelector("[data-plugin-install-status]");
+        const file = input && input.files && input.files[0];
+        if (!file) {
+          if (status) status.textContent = this.tr("plugin_select_first");
+          return;
+        }
+        button.disabled = true;
+        if (status) status.textContent = this.tr("plugin_installing");
+        try {
+          const api = window.ChihirosAddonApi;
+          if (!api || typeof api.installPlugin !== "function") throw new Error(this.tr("service_unavailable"));
+          const result = await api.installPlugin(file);
+          if (status) status.textContent = `${this.tr("plugin_installed")}: ${result.plugin} ${result.version}. ${this.tr("restart_addon")}`;
+        } catch (error) {
+          if (status) status.textContent = `${this.tr("plugin_install_failed")}: ${error && error.message ? error.message : error}`;
+        } finally {
+          button.disabled = false;
         }
       });
     });
@@ -1452,6 +1523,19 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         database: "Datenbank",
         database_subtitle: "Scheduler, Vorlagen, Übertragungsstatus und Diagnosen",
         integration_database: "LED-Core-Speicher",
+        plugin_install: "Plugin installieren",
+        plugin_install_hint: "Vertrauenswürdiges TGZ hochladen. Das Plugin wird erst nach einem Neustart des LED-Core-Add-ons geladen.",
+        plugin_archive: "TGZ-Datei",
+        plugin_select_first: "Bitte zuerst eine TGZ-Datei auswählen.",
+        plugin_installing: "Plugin wird geprüft und installiert …",
+        plugin_installed: "Plugin installiert",
+        plugin_install_failed: "Plugin-Installation fehlgeschlagen",
+        restart_addon: "LED-Core-Add-on neu starten.",
+        install: "Installieren",
+        rated_power: "Nennleistung",
+        estimated_power: "Geschätzter Verbrauch; kein Messwert",
+        rated_power_hint: "Optionale Leistung für Controller oder Modelle ohne eindeutig erkennbare Größe. Sie hat Vorrang vor der automatischen Erkennung.",
+        automatic: "automatisch",
         recorder_storage_hint: "Entity-Zustände, History und Statistiken bleiben im Home-Assistant-Recorder.",
         own_database: "Eigene DB",
         active_sqlite: "Aktive SQLite",
@@ -1706,6 +1790,19 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         database: "Database",
         database_subtitle: "Schedules, templates, transfer status and diagnostics",
         integration_database: "LED Core storage",
+        plugin_install: "Install plugin",
+        plugin_install_hint: "Upload a trusted TGZ. The plugin is loaded only after restarting the LED Core add-on.",
+        plugin_archive: "TGZ file",
+        plugin_select_first: "Select a TGZ file first.",
+        plugin_installing: "Validating and installing plugin …",
+        plugin_installed: "Plugin installed",
+        plugin_install_failed: "Plugin installation failed",
+        restart_addon: "Restart the LED Core add-on.",
+        install: "Install",
+        rated_power: "Rated power",
+        estimated_power: "Estimated consumption; not a measured value",
+        rated_power_hint: "Optional power for controllers or models whose size cannot be detected. It takes precedence over automatic detection.",
+        automatic: "automatic",
         recorder_storage_hint: "Entity states, history and statistics remain in the Home Assistant Recorder.",
         own_database: "Own DB",
         active_sqlite: "Active SQLite",
@@ -2977,11 +3074,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       </style>
       <div class="wrap">
         ${this.coreTabBar()}
-        ${this.activeTab === "config" ? this.configPanel() : this.ledPanel()}
+        ${this.activeTab === "config" ? this.configPanel() : (this.activeTab === "led" ? this.ledPanel() : this.pluginPanel(this.activeTab))}
       </div>
       ${this.dialog()}`;
     this.bindCoreEvents();
     if (this.activeTab === "led") this.bindLedEvents();
+    if (!["led", "config"].includes(this.activeTab)) {
+      const plugin = window.ChihirosPlugins && window.ChihirosPlugins[this.activeTab];
+      if (plugin && typeof plugin.bindEvents === "function") plugin.bindEvents(this);
+    }
   }
 }
 
