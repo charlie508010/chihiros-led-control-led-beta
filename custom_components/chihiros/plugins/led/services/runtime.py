@@ -156,16 +156,16 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     previous_weekdays=parse_weekdays(previous_period.get(ATTR_WEEKDAYS)),
                     weekdays=parse_weekdays(call.data.get(ATTR_WEEKDAYS)),
                 )
-                replaced = True
+                _replaced = True
             else:
                 await async_add_schedule_period(chihiros_data, call.data)
-                replaced = False
+                _replaced = False
             verification_scheduled = active
             if verification_scheduled:
                 target = _verification_row(call.data)
                 await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
                 _schedule_led_verification(hass, chihiros_data, target, restore_rows)
-            return {"replaced": replaced, "verification_scheduled": verification_scheduled}
+            return {}
 
         return await _async_led_send_service(
             call,

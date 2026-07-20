@@ -222,7 +222,7 @@ def _ctl_example_lines(service: str, data: dict[str, Any]) -> list[str]:
         weekday_text = ",".join(str(item) for item in weekdays) if isinstance(weekdays, list) else str(weekdays or "")
         ramp = max(1, int(data.get("ramp_up_minutes", 1)))
         active = data.get("active")
-        parts = ["python -m chihiros_led_control.cli", "led", "add-schedule"]
+        parts = ["python -m chihirosctl", "led", "add-schedule"]
         if address:
             parts.extend(["--address", address])
         if start:
@@ -242,13 +242,13 @@ def _ctl_example_lines(service: str, data: dict[str, Any]) -> list[str]:
 
     if service.endswith(".set_schedule"):
         return [
-            "python -m chihiros_led_control.cli led set-schedule "
+            "python -m chihirosctl led set-schedule "
             + (f"--address {address} " if address else "")
             + "--debug"
         ]
 
     if service.endswith(".reset_schedule"):
-        command = "python -m chihiros_led_control.cli --debug led reset-settings"
+        command = "python -m chihirosctl --debug led reset-settings"
         if address:
             command += f' "{address}"'
         return [command]

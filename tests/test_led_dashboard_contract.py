@@ -420,7 +420,7 @@ def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> No
 
     assert "await asyncio.sleep(60)" in services
     assert "initialize LED schedule storage" in services
-    assert '"verification_scheduled": verification_scheduled' in services
+    assert "return {}" in services
     assert "await _remove_stored_schedule_rows(chihiros_data.device, stored_rows[:2])" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
     assert "verification_scheduled = active" in services

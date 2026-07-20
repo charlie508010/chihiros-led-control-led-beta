@@ -42,7 +42,7 @@ def test_make_debug_data_builds_shared_sections() -> None:
     assert "action: chihiros_led_core.reset_schedule" in sections[1]["value"]
     assert "debug: true" in sections[1]["value"]
     assert (
-        'python -m chihiros_led_control.cli --debug led reset-settings "AA:BB:CC:DD:EE:FF"'
+        'python -m chihirosctl --debug led reset-settings "AA:BB:CC:DD:EE:FF"'
         in sections[1]["value"]
     )
     assert "reset-schedule" not in sections[1]["value"]
@@ -77,5 +77,5 @@ def test_build_debug_sections_adds_copyable_led_schedule_examples() -> None:
     assert "action: chihiros_led_core.add_schedule" in doc
     assert "address: \"AA:BB:CC:DD:EE:FF\"" in doc
     assert "debug: true" in doc
-    assert "python -m chihiros_led_control.cli led add-schedule" in doc
+    assert "python -m chihirosctl led add-schedule" in doc
     assert "--red 65 --green 40 --blue 65 --white 50" in doc
