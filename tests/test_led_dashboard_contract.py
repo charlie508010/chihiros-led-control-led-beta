@@ -250,6 +250,15 @@ def test_led_database_status_action_aligns_with_the_power_toggle() -> None:
     assert "grid-template-columns:28px 266px auto" in dashboard
 
 
+def test_selected_led_can_be_limited_to_one_channel_for_scheduler_verification() -> None:
+    """The temporary device-specific test limit must feed the same channel list used by the scheduler."""
+    panel = source(LED_PANEL)
+
+    assert 'device.address === "D5:41:68:57:77:7E" ? 1' in panel
+    assert ".slice(0, testChannelLimit)" in panel
+    assert "channels," in panel
+
+
 def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
     """Only LED configuration and diagnostics use the integration-owned SQLite database."""
     server = source(ADDON_SERVER)
