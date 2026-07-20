@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1087";
+import "./panels/chihiros-led-panel.js?v=0.2.1088";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1286,10 +1286,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
 
   async copyText(text = "") {
     const value = String(text || "");
-    if (!value) return;
+    if (!value) return false;
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(value);
-      return;
+      return true;
     }
     const textarea = document.createElement("textarea");
     textarea.value = value;
@@ -1297,8 +1297,34 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     textarea.style.opacity = "0";
     document.body.appendChild(textarea);
     textarea.select();
-    document.execCommand("copy");
+    const copied = document.execCommand("copy");
     textarea.remove();
+    if (!copied) throw new Error(this.tr("copy_failed"));
+    return true;
+  }
+
+  async copyWithFeedback(button, text = "") {
+    if (!button) {
+      await this.copyText(text);
+      return;
+    }
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    try {
+      await this.copyText(text);
+      button.textContent = this.tr("copied");
+      button.classList.add("ok");
+    } catch (err) {
+      button.textContent = this.tr("copy_failed");
+      button.classList.add("error");
+      throw err;
+    } finally {
+      window.setTimeout(() => {
+        button.textContent = originalLabel;
+        button.disabled = false;
+        button.classList.remove("ok", "error");
+      }, 1400);
+    }
   }
 
   sharedDialogActions(buttons = []) {
@@ -1680,6 +1706,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         command_copied: "Befehl kopiert",
         copy: "Kopieren",
         copy_all: "Alles kopieren",
+        copied: "Kopiert",
+        copy_failed: "Kopieren fehlgeschlagen",
         no_entities: "Keine passenden Home-Assistant-Entities gefunden.",
         status: "Status",
         active: "Aktiv",
@@ -1957,6 +1985,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         command_copied: "Command copied",
         copy: "Copy",
         copy_all: "Copy all",
+        copied: "Copied",
+        copy_failed: "Copy failed",
         no_entities: "No matching Home Assistant entities found.",
         status: "Status",
         active: "Active",
@@ -2275,12 +2305,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             (this.dialogState && (this.dialogState.output || this.dialogState.ledScheduleMessage)) || "",
           );
           if (entity === "all") {
-            await this.copyText(output);
+            await this.copyWithFeedback(el, output);
           } else {
             const index = Number(entity);
             const sections = this.debugOutputSections(output);
             const section = Number.isInteger(index) ? sections[index] : null;
-            await this.copyText(section ? section.value : output);
+            await this.copyWithFeedback(el, section ? section.value : output);
           }
         }
         if (kind === "close-dialog") this.closeDialog();
