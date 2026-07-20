@@ -825,3 +825,17 @@ def test_vivid_iii_fake_is_discoverable_as_dashboard_demo_device() -> None:
     assert 'address=f"{FAKE_ADDRESS_PREFIX}:00:00:04"' in fake
     assert "async def query_status_active" in fake
     assert "temperature_celsius=25" in fake
+
+
+def test_dashboard_adds_local_vivid_demo_without_real_fan_device() -> None:
+    """The standalone panel exposes a harmless local fan demo as a third device."""
+    panel_shell = source(LED_DASHBOARD / "chihiros-panel.js")
+    panel = source(LED_PANEL)
+
+    assert "show_fan_demo: true" in panel_shell
+    assert "this.config.show_fan_demo === true" in panel
+    assert '!resolved.some((device) => this.ledDeviceHasFan(device))' in panel
+    assert 'label: "VIVID III Demo"' in panel
+    assert 'address: "FA:CE:C0:00:00:04"' in panel
+    assert "fan_demo: true" in panel
+    assert "device.fan_rpm = percentage * 20" in panel

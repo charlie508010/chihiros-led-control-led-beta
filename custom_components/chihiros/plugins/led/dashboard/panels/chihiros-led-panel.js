@@ -51,7 +51,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const discovered = this.discoverLedDevices();
     const devices = (configured && configured.length ? configured : discovered)
       .filter((device) => this.isLedDeviceConfig(device));
-    return devices.map((device, index) => ({
+    const resolved = devices.map((device, index) => ({
       id: String(device.id || `led_${index + 1}`),
       label: String(device.label || device.tab_name || device.name || `${this.tr("device")} ${index + 1}`),
       name: String(device.name || `LED ${index + 1}`),
@@ -78,6 +78,38 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         entity: String(channel.entity || ""),
       })) : [],
     }));
+    if (this._hass && this.config.show_fan_demo === true && !resolved.some((device) => this.ledDeviceHasFan(device))) {
+      resolved.push({
+        id: "facec0000004",
+        label: "VIVID III Demo",
+        name: "DYVVD3FACEC0000004",
+        address: "FA:CE:C0:00:00:04",
+        model: "WRGB VIVID III Demo",
+        max_brightness: 100,
+        max_power_watts: 0,
+        power_entity: "",
+        auto_entity: "",
+        firmware_entity: "",
+        runtime_entity: "",
+        schedule_entity: "",
+        last_notification_entity: "",
+        fan_entity: "",
+        fan_rpm_entity: "",
+        fan_temperature_entity: "",
+        has_fan: true,
+        fan_demo: true,
+        fan_percentage: 30,
+        fan_rpm: 600,
+        fan_temperature: 25,
+        channels: [
+          { id: 1, name: "Rot", color: "#ff4d4f", key: "red", value: 30, entity: "" },
+          { id: 2, name: "Gruen", color: "#39d353", key: "green", value: 30, entity: "" },
+          { id: 3, name: "Blau", color: "#2ea8ff", key: "blue", value: 30, entity: "" },
+          { id: 4, name: "Weiss", color: "#f0f6fc", key: "white", value: 30, entity: "" },
+        ],
+      });
+    }
+    return resolved;
   }
 
   discoverLedDevices() {
@@ -414,12 +446,19 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       : null;
     const percentage = Number(state && state.attributes && state.attributes.percentage);
     if (Number.isFinite(percentage)) return Math.max(0, Math.min(100, Math.round(percentage)));
+    if (device && device.fan_demo) return Math.max(0, Math.min(100, Math.round(Number(device.fan_percentage) || 0)));
     return state && state.state === "on" ? 100 : 0;
   }
 
   async setLedFanPercentage(rawValue) {
     const device = this.activeLedDevice || {};
     const percentage = Math.max(0, Math.min(100, Math.round(Number(rawValue) || 0)));
+    if (device.fan_demo) {
+      device.fan_percentage = percentage;
+      device.fan_rpm = percentage * 20;
+      this.render();
+      return true;
+    }
     if (!this._hass || !device.fan_entity) return false;
     try {
       await this._hass.callService("fan", "set_percentage", { percentage }, { entity_id: device.fan_entity });
@@ -442,9 +481,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   ledFanControlCard(device = this.activeLedDevice || {}) {
     const percentage = this.ledFanPercentage(device);
-    const rpm = this.ledFanEntityValue(device.fan_rpm_entity);
-    const temperature = this.ledFanEntityValue(device.fan_temperature_entity);
-    const disabled = device.fan_entity ? "" : "disabled";
+    const rpm = device.fan_demo ? String(device.fan_rpm) : this.ledFanEntityValue(device.fan_rpm_entity);
+    const temperature = device.fan_demo
+      ? String(device.fan_temperature)
+      : this.ledFanEntityValue(device.fan_temperature_entity);
+    const disabled = device.fan_entity || device.fan_demo ? "" : "disabled";
     return `
       <section class="card led-device-presets-card led-device-fan-card">
         <h2>${this.tr("fan_control")}</h2>

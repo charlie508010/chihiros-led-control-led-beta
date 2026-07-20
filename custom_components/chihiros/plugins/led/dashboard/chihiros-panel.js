@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.0";
-import "./chihiros-led-core-card.js?v=0.2.1057";
+import "./chihiros-led-core-card.js?v=0.2.1058";
 
 class ChihirosLedCorePanel extends HTMLElement {
   set hass(hass) {
@@ -37,6 +37,7 @@ class ChihirosLedCorePanel extends HTMLElement {
         installed_plugins: [],
         addon_mode: true,
         show_mac: true,
+        show_fan_demo: true,
       });
     }
     if (this._hass) {
