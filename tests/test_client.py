@@ -1025,7 +1025,7 @@ def test_replace_setting_does_not_enable_auto_mode() -> None:
 
 
 def test_dyu1000_replace_setting_matches_app_edit_sequence() -> None:
-    """DYU1000 edit sends the observed delete/finalize/delete/finalize/add sequence."""
+    """DYU1000 active edit sends only the replacement row after the connection prelude."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
@@ -1060,12 +1060,8 @@ def test_dyu1000_replace_setting_matches_app_edit_sequence() -> None:
 
     asyncio.run(run())
 
-    assert [command[5] for command in sent_commands] == [25, 5, 25, 5, 25]
-    assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
-    assert sent_commands[1][6:-1] == bytes([40, 255, 255])
-    assert sent_commands[2][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
-    assert sent_commands[3][6:-1] == bytes([40, 255, 255])
-    assert sent_commands[4][6:-1] == bytes([12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255])
+    assert [command[5] for command in sent_commands] == [25]
+    assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255])
 
 
 def test_replace_settings_resets_existing_rows_without_switching_automatic_tab() -> None:
