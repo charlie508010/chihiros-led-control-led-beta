@@ -1,59 +1,61 @@
 # Wireshark Debug: Add erster Scheduler
 
+This capture compares one selected scheduler write from the current HCI capture
+against the matching App log frames.
+
+| Field | Value |
+| --- | --- |
+| Label | Add erster Scheduler |
+| Source | Wireshark Vergleich App-Log |
+| File | `btsnoop_hci_2026-07-20-22-35-25.frames.jsonl` |
+
+## Marked capture frames
+
+| # | Source | Command | Mode | Parameters |
+| ---: | --- | ---: | ---: | --- |
+| 1 | Capture | `90` | `4` | `[1]` |
+| 2 | Capture | `90` | `9` | `[26,7,1,22,35,22]` |
+| 3 | Capture | `90` | `9` | `[26,7,1,22,35,22]` |
+| 4 | Capture | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` |
+
+Raw selected frames:
+
 ```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ Bezeichnung : Add erster Scheduler                                         │
-│ Quelle      : Wireshark Vergleich App-Log                                  │
-│ Datei       : btsnoop_hci_2026-07-20-22-35-25.frames.jsonl                 │
-├────────────────────────────────────────────────────────────────────────────┤
-│ 1) Markierte Frames aus aktuellem Mitschnitt                       4 Frames │
-│                                                                            │
-│ #01 Capture  cmd=90   mode=4                                               │
-│     parm=[1]                                                               │
-│                                                                            │
-│ #02 Capture  cmd=90   mode=9                                               │
-│     parm=[26,7,1,22,35,22]                                                 │
-│                                                                            │
-│ #03 Capture  cmd=90   mode=9                                               │
-│     parm=[26,7,1,22,35,22]                                                 │
-│                                                                            │
-│ #04 Capture  cmd=165  mode=25                                              │
-│     parm=[12,0,18,0,1,127,100,100,100,100,255,255,255,255]                 │
-├────────────────────────────────────────────────────────────────────────────┤
-│ 2) Vergleich App-Log                                              4 Frames │
-│                                                                            │
-│ #01 App-Log  cmd=90   mode=4                                               │
-│     parm=[1]                                                               │
-│                                                                            │
-│ #02 App-Log  cmd=90   mode=9                                               │
-│     parm=[26,7,1,22,38,20]                                                 │
-│                                                                            │
-│ #03 App-Log  cmd=90   mode=9                                               │
-│     parm=[26,7,1,22,38,20]                                                 │
-│                                                                            │
-│ #04 App-Log  cmd=165  mode=25                                              │
-│     parm=[12,0,18,0,1,127,100,100,100,100,255,255,255,255]                 │
-├────────────────────────────────────────────────────────────────────────────┤
-│ 3) Vergleichsergebnis                                                       │
-│                                                                            │
-│ Aktueller Mitschnitt : 4 Frames                                             │
-│ App-Log              : 4 Frames                                             │
-│ Status               : OK - keine Unterschiede gefunden                     │
-│                                                                            │
-│ #01 OK                                                                     │
-│     Capture : 90|4|[1]                                                     │
-│     App-Log : 90|4|[1]                                                     │
-│                                                                            │
-│ #02 OK                                                                     │
-│     Capture : 90|9|[26,7,1,22,35,22]                                       │
-│     App-Log : 90|9|[26,7,1,22,38,20]                                       │
-│                                                                            │
-│ #03 OK                                                                     │
-│     Capture : 90|9|[26,7,1,22,35,22]                                       │
-│     App-Log : 90|9|[26,7,1,22,38,20]                                       │
-│                                                                            │
-│ #04 OK                                                                     │
-│     Capture : 165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]     │
-│     App-Log : 165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]     │
-└────────────────────────────────────────────────────────────────────────────┘
+[INFO APP] {"time":"21.07.2026 00:35:22.533","dir":"tx","cmd":90,"mode":4,"parm":[1]}
+[INFO APP] {"time":"21.07.2026 00:35:22.836","dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,35,22]}
+[INFO APP] {"time":"21.07.2026 00:35:22.938","dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,35,22]}
+[INFO APP] {"time":"21.07.2026 00:35:24.057","dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255]}
 ```
+
+## App log frames
+
+| # | Source | Command | Mode | Parameters |
+| ---: | --- | ---: | ---: | --- |
+| 1 | App log | `90` | `4` | `[1]` |
+| 2 | App log | `90` | `9` | `[26,7,1,22,38,20]` |
+| 3 | App log | `90` | `9` | `[26,7,1,22,38,20]` |
+| 4 | App log | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` |
+
+Raw App log:
+
+```text
+[INFO] {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"20.07.2026 22:38:20"}
+[INFO] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
+[INFO] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
+[INFO] {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255],"time":"20.07.2026 22:38:24"}
+```
+
+## Comparison result
+
+| Metric | Value |
+| --- | --- |
+| Current capture | 4 frames |
+| App log | 4 frames |
+| Status | OK - keine Unterschiede gefunden |
+
+| # | Status | Current capture | App log |
+| ---: | --- | --- | --- |
+| 1 | OK | `90|4|[1]` | `90|4|[1]` |
+| 2 | OK | `90|9|[26,7,1,22,35,22]` | `90|9|[26,7,1,22,38,20]` |
+| 3 | OK | `90|9|[26,7,1,22,35,22]` | `90|9|[26,7,1,22,38,20]` |
+| 4 | OK | `165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` | `165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` |
