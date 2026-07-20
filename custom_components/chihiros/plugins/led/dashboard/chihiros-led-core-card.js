@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1037";
+import "./panels/chihiros-led-panel.js?v=0.2.1038";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1440,6 +1440,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         current_plan: "Aktueller Plan",
         device: "Gerät",
         device_name: "Gerätename",
+        change_device_name: "Gerätename ändern",
         led: "LED",
         config: "Config",
         display: "Anzeige",
@@ -1689,6 +1690,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         current_plan: "Current plan",
         device: "Device",
         device_name: "Device name",
+        change_device_name: "Change device name",
         led: "LED",
         config: "Config",
         display: "Display",
@@ -1829,25 +1831,13 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     if (type === "led-schedule-share") return this.ledScheduleShareDialog();
     if (type === "led-auto-mode-editor") return this.ledAutoModeDialog();
     if (type === "led-device-power-editor") return this.ledDevicePowerDialog();
+    if (type === "led-device-name-editor") return this.ledDeviceNameDialog();
     return "";
   }
 
   bindLedEvents() {
     this.querySelectorAll("[data-led-device]").forEach((el) => {
       el.addEventListener("click", () => this.setLedDevice(el.getAttribute("data-led-device")));
-    });
-    this.querySelectorAll("[data-led-device-name-form]").forEach((form) => {
-      form.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const input = form.querySelector("[data-led-device-name]");
-        const deviceId = String(this.activeLedDevice && this.activeLedDevice.id || "");
-        const name = String(input && input.value || "").trim().slice(0, 48);
-        if (!deviceId || !name) return;
-        const deviceNames = { ...((this.uiSettings && this.uiSettings.deviceNames) || {}), [deviceId]: name };
-        this.uiSettings = { ...(this.uiSettings || {}), deviceNames };
-        this.saveUiSettings();
-        this.render();
-      });
     });
     this.querySelectorAll("[data-led-schedule-edit]").forEach((el) => {
       el.addEventListener("click", (ev) => {
@@ -2034,6 +2024,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
         if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
         if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
+        if (kind === "led-device-name-edit" && typeof this.openLedDeviceNameDialog === "function") this.openLedDeviceNameDialog();
+        if (kind === "led-device-name-save" && typeof this.saveLedDeviceNameDialog === "function") this.saveLedDeviceNameDialog();
         if (kind === "dialog") {
           if (String(entity || "").startsWith("led-")) {
             this.openDialogState(entity, Number(extra), { activeTab: "led" });
@@ -2307,7 +2299,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-device-control-card .led-device-edit-box h2 { grid-column:1; margin:0; }
         .led-device-edit-box h3 { margin:0 0 8px; color:rgba(255,255,255,.82); font-size:12px; font-weight:800; letter-spacing:.03em; text-transform:uppercase; }
         .led-device-edit-actions { display:grid; gap:7px; }
-        .led-device-name-row { display:grid; grid-template-columns:minmax(120px, auto) minmax(160px, 1fr) auto; align-items:center; gap:10px; margin:0 0 14px; }
+        .led-device-name-row { display:grid; grid-template-columns:minmax(120px, auto) minmax(160px, 1fr); align-items:center; gap:10px; margin:0 0 14px; }
         .led-device-name-row input { min-height:34px; border:1px solid rgba(81,154,190,.35); border-radius:6px; background:rgba(255,255,255,.08); color:var(--primary-text-color); padding:0 10px; font:inherit; }
         .led-device-name-row button { min-height:34px; }
         .led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0, 1.35fr) minmax(170px, .65fr); gap:18px; align-items:center; }

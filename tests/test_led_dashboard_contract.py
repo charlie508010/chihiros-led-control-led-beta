@@ -232,10 +232,13 @@ def test_led_device_name_is_editable_and_used_by_the_device_tab() -> None:
     dashboard = source(DASHBOARD)
 
     assert "ledDeviceDisplayName(device)" in panel
-    assert 'data-led-device-name-form' in panel
+    assert 'data-action="led-device-name-edit"' in panel
     assert 'data-led-device-name' in panel
+    assert 'type: "led-device-name-editor"' in panel
+    assert "ledDeviceNameDialog()" in panel
+    assert 'kind === "led-device-name-save"' in dashboard
     assert "deviceNames: {}" in dashboard
-    assert "[deviceId]: name" in dashboard
+    assert "[deviceId]: name" in panel
     assert "this.saveUiSettings();" in dashboard
 
 
