@@ -682,6 +682,19 @@ def test_total_history_timestamp_uses_configured_language_and_first_row() -> Non
     assert ".led-history-timeline-copy time { margin-left:auto;" in dashboard
 
 
+def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
+    """Mobile LED cards stay within the viewport while wide tables scroll locally."""
+    dashboard = source(DASHBOARD)
+
+    assert ".led-template-front-table-wrap { max-width:100%; overflow-x:auto; }" in dashboard
+    assert ".led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:auto; }" in dashboard
+    assert "@media (max-width:700px)" in dashboard
+    assert ".led-page { grid-template-columns:minmax(0,1fr); }" in dashboard
+    assert ".led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }" in dashboard
+    assert ".led-page .led-channels { grid-template-columns:minmax(0,1fr); }" in dashboard
+    assert ".config-card-head { flex-direction:column; align-items:stretch; }" in dashboard
+
+
 def test_template_panel_shows_filtered_template_count() -> None:
     """The template header reports the number of rows in the selected source."""
     panel = source(LED_PANEL)

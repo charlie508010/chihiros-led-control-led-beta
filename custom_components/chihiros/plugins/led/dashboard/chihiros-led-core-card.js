@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1046";
+import "./panels/chihiros-led-panel.js?v=0.2.1047";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2375,7 +2375,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-template-front-actions button { min-height:34px; border:1px solid rgba(125,211,252,.36); border-radius:8px; background:rgba(125,211,252,.08); color:#7dd3fc; font:inherit; font-weight:800; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; cursor:pointer; }
         .led-template-front-actions button:hover { border-color:rgba(125,211,252,.72); background:rgba(125,211,252,.16); }
         .led-template-front-table { width:100%; margin-top:0; border-collapse:collapse; font-size:12px; }
-        .led-template-front-table-wrap.scroll-limit-5 { max-height:228px; overflow-y:auto; overflow-x:auto; margin-top:0; padding-right:4px; }
+        .led-template-front-table-wrap { max-width:100%; overflow-x:auto; }
+        .led-template-front-table-wrap.scroll-limit-5 { max-height:228px; overflow-y:auto; margin-top:0; padding-right:4px; }
         .led-template-front-table-wrap.scroll-limit-5 .led-template-front-table { margin-top:0; }
         .led-template-front-table-wrap.scroll-limit-5 thead th { position:sticky; top:0; z-index:2; background:#132125; }
         .led-template-front-table th, .led-template-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; white-space:nowrap; }
@@ -2578,8 +2579,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-schedule-dialog-footer button:disabled { opacity:.55; cursor:wait; }
         .led-schedule-dialog-footer .danger { border-color:rgba(255,196,0,.42); color:#ffdd70; background:rgba(255,196,0,.08); }
         .led-schedule-dialog-footer .danger:hover { border-color:rgba(255,196,0,.8); background:rgba(255,196,0,.14); }
-        .led-schedule-summary-list { display:grid; gap:8px; }
-        .led-schedule-summary-list.scroll-limit-5 { max-height:292px; overflow-y:auto; overflow-x:hidden; padding-right:4px; }
+        .led-schedule-summary-list { display:grid; gap:8px; max-width:100%; overflow-x:auto; }
+        .led-schedule-summary-list.scroll-limit-5 { max-height:292px; overflow-y:auto; padding-right:4px; }
         .schedule-summary-row { display:grid; grid-template-columns:24px 130px minmax(0,1fr) 20px; align-items:center; gap:10px; min-height:40px; width:100%; padding:0 10px; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:rgba(0,0,0,.14); color:inherit; font:inherit; text-align:left; cursor:pointer; }
         .schedule-summary-row:hover { border-color:rgba(3,201,255,.45); background:rgba(0,122,166,.12); }
         .schedule-summary-index { color:#03c9ff; font-weight:700; }
@@ -2860,6 +2861,17 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-notification-block h3 { margin:0 0 8px; color:#69dcff; font-size:12px; text-transform:uppercase; }
         .led-notification-block pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--primary-text-color); font:12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
         @media (max-width:700px) {
+          .led-page { grid-template-columns:minmax(0,1fr); }
+          .led-channels-card { grid-column:1; grid-row:1; }
+          .led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }
+          .led-template-card { grid-column:1; grid-row:3; }
+          .led-connection-card { grid-column:1; grid-row:4; }
+          .led-device-control-card { grid-column:1; grid-row:5; }
+          .led-device-presets-card { grid-column:1; grid-row:6; }
+          .led-page .led-channels { grid-template-columns:minmax(0,1fr); }
+          .config-card-head { flex-direction:column; align-items:stretch; }
+          .led-template-header-actions, .led-schedule-header-actions { width:100%; justify-content:flex-start; }
+          .led-template-header-actions select { flex:1 1 auto; min-width:0; }
           .led-notification-tabs { grid-template-columns:repeat(2, minmax(0,1fr)); }
           .led-notification-tab-panel { grid-template-columns:1fr; }
         }
