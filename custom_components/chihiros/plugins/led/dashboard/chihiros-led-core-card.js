@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1054";
+import "./panels/chihiros-led-panel.js?v=0.2.1055";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2866,6 +2866,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-notification-block.wide { grid-column:1 / -1; }
         .led-notification-block h3 { margin:0 0 8px; color:#69dcff; font-size:12px; text-transform:uppercase; }
         .led-notification-block pre { margin:0; white-space:pre-wrap; overflow-wrap:anywhere; color:var(--primary-text-color); font:12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
+        @media (pointer:coarse) {
+          input[type="range"][data-led-number],
+          input[type="range"][data-led-schedule-control],
+          input[type="range"][data-led-template-control] { touch-action:pan-y; }
+        }
         @media (max-width:700px) {
           .led-page { grid-template-columns:minmax(0,1fr); }
           .led-channels-card { grid-column:1; grid-row:1; }
