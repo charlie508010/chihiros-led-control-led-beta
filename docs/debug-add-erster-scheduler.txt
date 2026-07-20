@@ -1,24 +1,33 @@
 # Wireshark Debug: Add erster Scheduler
 
-This capture compares one selected scheduler write from the current HCI capture
-against the matching App log frames.
+Dieses Beispiel dokumentiert einen Wireshark-Vergleich für das Hinzufügen des
+ersten LED-Zeitplan-Eintrags. Verglichen werden vier markierte TX-Frames aus dem
+aktuellen Mitschnitt mit den passenden Frames aus dem App-Log.
 
-| Field | Value |
+## Übersicht
+
+| Feld | Wert |
 | --- | --- |
-| Label | Add erster Scheduler |
-| Source | Wireshark Vergleich App-Log |
-| File | `btsnoop_hci_2026-07-20-22-35-25.frames.jsonl` |
+| Bezeichnung | Add erster Scheduler |
+| Quelle | Wireshark Vergleich App-Log |
+| Datei | `btsnoop_hci_2026-07-20-22-35-25.frames.jsonl` |
+| Aktueller Mitschnitt | 4 Frames |
+| App-Log | 4 Frames |
+| Ergebnis | OK - keine Unterschiede gefunden |
 
-## Marked capture frames
+## Vergleich
 
-| # | Source | Command | Mode | Parameters |
-| ---: | --- | ---: | ---: | --- |
-| 1 | Capture | `90` | `4` | `[1]` |
-| 2 | Capture | `90` | `9` | `[26,7,1,22,35,22]` |
-| 3 | Capture | `90` | `9` | `[26,7,1,22,35,22]` |
-| 4 | Capture | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` |
+| # | Aktueller Mitschnitt | App-Log | Status |
+| ---: | --- | --- | --- |
+| 1 | `90|4|[1]` | `90|4|[1]` | OK |
+| 2 | `90|9|[26,7,1,22,35,22]` | `90|9|[26,7,1,22,38,20]` | OK |
+| 3 | `90|9|[26,7,1,22,35,22]` | `90|9|[26,7,1,22,38,20]` | OK |
+| 4 | `165|25|[...]` | `165|25|[...]` | OK |
 
-Raw selected frames:
+Frame `#4` enthält den vollständigen Scheduler-Payload. Die kompletten Bytes
+stehen in den Rohdaten unten.
+
+## Markierte Frames aus aktuellem Mitschnitt
 
 ```text
 [INFO APP] {"time":"21.07.2026 00:35:22.533","dir":"tx","cmd":90,"mode":4,"parm":[1]}
@@ -27,16 +36,7 @@ Raw selected frames:
 [INFO APP] {"time":"21.07.2026 00:35:24.057","dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255]}
 ```
 
-## App log frames
-
-| # | Source | Command | Mode | Parameters |
-| ---: | --- | ---: | ---: | --- |
-| 1 | App log | `90` | `4` | `[1]` |
-| 2 | App log | `90` | `9` | `[26,7,1,22,38,20]` |
-| 3 | App log | `90` | `9` | `[26,7,1,22,38,20]` |
-| 4 | App log | `165` | `25` | `[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` |
-
-Raw App log:
+## App-Log Frames
 
 ```text
 [INFO] {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"20.07.2026 22:38:20"}
@@ -45,17 +45,26 @@ Raw App log:
 [INFO] {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255],"time":"20.07.2026 22:38:24"}
 ```
 
-## Comparison result
+## Rohes Vergleichsergebnis
 
-| Metric | Value |
-| --- | --- |
-| Current capture | 4 frames |
-| App log | 4 frames |
-| Status | OK - keine Unterschiede gefunden |
-
-| # | Status | Current capture | App log |
-| ---: | --- | --- | --- |
-| 1 | OK | `90|4|[1]` | `90|4|[1]` |
-| 2 | OK | `90|9|[26,7,1,22,35,22]` | `90|9|[26,7,1,22,38,20]` |
-| 3 | OK | `90|9|[26,7,1,22,35,22]` | `90|9|[26,7,1,22,38,20]` |
-| 4 | OK | `165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` | `165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]` |
+```text
+VERGLEICH
+------------------------------------------------------------------------
+Aktueller Mitschnitt: 4 Frames
+App-Log: 4 Frames
+------------------------------------------------------------------------
+#1
+  Aktueller Mitschnitt  90|4|[1]
+  Vergleich App-Log   : 90|4|[1] ok
+#2
+  Aktueller Mitschnitt  90|9|[26,7,1,22,35,22]
+  Vergleich App-Log   : 90|9|[26,7,1,22,38,20] ok
+#3
+  Aktueller Mitschnitt  90|9|[26,7,1,22,35,22]
+  Vergleich App-Log   : 90|9|[26,7,1,22,38,20] ok
+#4
+  Aktueller Mitschnitt  165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255]
+  Vergleich App-Log   : 165|25|[12,0,18,0,1,127,100,100,100,100,255,255,255,255] ok
+OK: Keine Unterschiede gefunden.
+------------------------------------------------------------------------
+```
