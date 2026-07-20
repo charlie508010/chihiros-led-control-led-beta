@@ -677,6 +677,7 @@ def test_total_history_timestamp_uses_configured_language_and_first_row() -> Non
     assert "formatHistoryTimestamp(value)" in dashboard
     assert 'this.language() === "en" ? "en-US" : "de-DE"' in dashboard
     assert '${timestamp ? `<time>${this.escapeHtml(timestamp)}</time>` : ""}</div>' in dashboard
+    assert ".led-history-timeline { position:relative; display:grid; grid-auto-rows:max-content; align-content:start;" in dashboard
     assert ".led-history-timeline-copy time { margin-left:auto;" in dashboard
 
 

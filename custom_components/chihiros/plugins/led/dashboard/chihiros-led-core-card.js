@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1044";
+import "./panels/chihiros-led-panel.js?v=0.2.1045";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2777,7 +2777,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .eye-action ha-icon, .eye-action .ui-icon { --mdc-icon-size:20px; width:20px; height:20px; }
         .front-history { min-height: 142px; }
         .front-history-list { max-height:270px; overflow-y:auto; padding-right:4px; }
-        .led-history-timeline { position:relative; display:grid; max-height:270px; overflow-y:auto; padding:2px 5px 2px 0; }
+        .led-history-timeline { position:relative; display:grid; grid-auto-rows:max-content; align-content:start; max-height:270px; overflow-y:auto; padding:2px 5px 2px 0; }
         .led-history-timeline.expanded { max-height:min(72vh, 760px); padding-top:8px; }
         .led-history-timeline-entry { position:relative; display:grid; grid-template-columns:30px minmax(0,1fr); gap:7px; min-height:46px; padding:5px 4px 5px 0; }
         .led-history-timeline-entry[data-action] { cursor:pointer; }
