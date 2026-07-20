@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1080";
+import "./panels/chihiros-led-panel.js?v=0.2.1081";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1233,7 +1233,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         : `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`,
       actions: [
         { action: "copy-debug:all", label: this.tr("copy_all"), className: "secondary", type: "button" },
-        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button" },
+        { action: "close-dialog", label: this.tr("close"), className: "link", type: "button", attrs: "data-close-dialog" },
       ],
     });
   }
@@ -2284,6 +2284,13 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           }
         }
         if (kind === "close-dialog") this.closeDialog();
+      });
+    });
+    this.querySelectorAll("[data-close-dialog]").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.closeDialog();
       });
     });
     this.querySelectorAll("[data-led-schedule-weekday-all]").forEach((el) => {

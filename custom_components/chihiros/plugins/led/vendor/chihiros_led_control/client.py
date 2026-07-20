@@ -436,24 +436,41 @@ class ChihirosDevice:
         """Replace one active automation setting without changing device mode."""
         previous_weekdays = previous_weekdays or [WeekdaySelect.everyday]
         weekdays = weekdays or [WeekdaySelect.everyday]
-        commands_to_send = [
-            commands.create_delete_auto_setting_command(
+        delete_command = commands.create_delete_auto_setting_command(
+            self.get_next_msg_id(),
+            previous_sunrise.time(),
+            previous_sunset.time(),
+            previous_ramp_up_in_minutes,
+            encode_selected_weekdays(previous_weekdays),
+            brightness_channels=self._channel_count(),
+        )
+        add_command = commands.create_add_auto_setting_command(
+            self.get_next_msg_id(),
+            sunrise.time(),
+            sunset.time(),
+            self._brightness_parameter_values(max_brightness),
+            ramp_up_in_minutes,
+            encode_selected_weekdays(weekdays),
+        )
+        commands_to_send = [delete_command, add_command]
+        if self.model.schedule_reset_parameter != 5:
+            first_finalize = commands.create_auto_parameter_command(
+                self.get_next_msg_id(),
+                self.model.schedule_reset_parameter,
+            )
+            second_delete_command = commands.create_delete_auto_setting_command(
                 self.get_next_msg_id(),
                 previous_sunrise.time(),
                 previous_sunset.time(),
                 previous_ramp_up_in_minutes,
                 encode_selected_weekdays(previous_weekdays),
                 brightness_channels=self._channel_count(),
-            ),
-            commands.create_add_auto_setting_command(
+            )
+            second_finalize = commands.create_auto_parameter_command(
                 self.get_next_msg_id(),
-                sunrise.time(),
-                sunset.time(),
-                self._brightness_parameter_values(max_brightness),
-                ramp_up_in_minutes,
-                encode_selected_weekdays(weekdays),
-            ),
-        ]
+                self.model.schedule_reset_parameter,
+            )
+            commands_to_send = [delete_command, first_finalize, second_delete_command, second_finalize, add_command]
         await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
 
     async def reset_settings(self) -> None:
