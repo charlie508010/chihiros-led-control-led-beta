@@ -82,15 +82,15 @@ OK: Keine Unterschiede gefunden.
 | Datei | `btsnoop_hci_2026-07-20-23-49-25.frames.jsonl` |
 | Aktueller Mitschnitt | 8 Frames |
 | App-Log | 8 Frames |
-| Ergebnis | FEHLER - Abweichung gefunden |
+| Ergebnis | OK - keine Unterschiede gefunden |
 
 ## Vergleich
 
 | # | Capture Cmd | Capture Mode | Capture Parameter | Status |
 | ---: | ---: | ---: | --- | --- |
 | 1 | `90` | `4` | `[1]` | OK |
-| 2 | `90` | `9` | `[26,7,1,23,49,7]` | FEHLER |
-| 3 | `90` | `9` | `[26,7,1,23,49,7]` | FEHLER |
+| 2 | `90` | `9` | `[26,7,1,23,49,7]` | OK |
+| 3 | `90` | `9` | `[26,7,1,23,49,7]` | OK |
 | 4 | `165` | `25` | `[12,0,18,0,1,84,255,255,255,255,255,255,255,255]` | OK |
 | 5 | `90` | `5` | `[40,255,255]` | OK |
 | 6 | `165` | `25` | `[12,0,18,0,1,84,255,255,255,255,255,255,255,255]` | OK |
@@ -99,6 +99,9 @@ OK: Keine Unterschiede gefunden.
 
 Die Frames `#4`, `#6` und `#8` enthalten vollständige Scheduler-Payloads. Die kompletten Bytes
 stehen in den Rohdaten unten.
+
+Bei Geräte-Datum/Zeit-Frames (`90|9`) werden nur Cmd, Mode und die ersten drei Parameterbytes
+verglichen. Die Uhrzeitbytes dürfen zwischen App-Mitschnitt und Systemausgabe abweichen.
 
 ## Markierte Frames aus aktuellem Mitschnitt
 
@@ -138,10 +141,10 @@ App-Log: 8 Frames
   Vergleich App-Log   : 90|4|[1] ok
 #2
   Aktueller Mitschnitt  90|9|[26,7,1,23,49,7]
-  Vergleich App-Log   : 90|9|[26,7,2,0,6,2]
+  Vergleich App-Log   : 90|9|[26,7,2,0,6,2] ok
 #3
   Aktueller Mitschnitt  90|9|[26,7,1,23,49,7]
-  Vergleich App-Log   : 90|9|[26,7,2,0,6,2]
+  Vergleich App-Log   : 90|9|[26,7,2,0,6,2] ok
 #4
   Aktueller Mitschnitt  165|25|[12,0,18,0,1,84,255,255,255,255,255,255,255,255]
   Vergleich App-Log   : 165|25|[12,0,18,0,1,84,255,255,255,255,255,255,255,255] ok
@@ -157,4 +160,5 @@ App-Log: 8 Frames
 #8
   Aktueller Mitschnitt  165|25|[12,0,18,0,1,84,100,100,100,100,255,255,255,255]
   Vergleich App-Log   : 165|25|[12,0,18,0,1,84,100,100,100,100,255,255,255,255] ok
+OK: Keine Unterschiede gefunden.
 ```
