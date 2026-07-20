@@ -2653,6 +2653,15 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const message = String(this.dialogState.ledScheduleMessage || "").trim();
     const messageLevel = String(this.dialogState.ledScheduleMessageLevel || "error").trim();
     const visibleMessage = messageLevel === "error" ? message.replace(/^FAIL\s*\n/i, "").trim() : message;
+    const messageIsStructuredDebug = message
+      && typeof this.debugOutputSections === "function"
+      && this.debugOutputSections(message).length > 1
+      && typeof this.debugOutputMarkup === "function";
+    const messageLevelClass = messageIsStructuredDebug ? "debug" : messageLevel;
+    const messageBody = messageIsStructuredDebug
+      ? this.debugOutputMarkup(message, "")
+      : `<strong>${messageLevel === "error" ? "FAIL" : (messageLevel === "pending" ? this.tr("running") : this.tr("status"))}</strong>
+              <pre>${this.escapeHtml(visibleMessage)}</pre>`;
     const submitting = Boolean(this._ledScheduleSubmitting);
     const currentDevice = this.activeLedDevice || {};
     const overviewCards = editIndex === null && !isNewDialog ? `
@@ -2688,9 +2697,8 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
             </div>
           </header>
           <div class="led-schedule-dialog-body">
-            ${message ? `<div class="led-schedule-dialog-message ${this.escapeHtml(messageLevel)}">
-              <strong>${messageLevel === "error" ? "FAIL" : (messageLevel === "pending" ? this.tr("running") : this.tr("status"))}</strong>
-              <pre>${this.escapeHtml(visibleMessage)}</pre>
+            ${message ? `<div class="led-schedule-dialog-message ${this.escapeHtml(messageLevelClass)}">
+              ${messageBody}
             </div>` : ""}
             ${overviewCards}
             <div class="led-schedule-dialog-editor">

@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1066";
+import "./panels/chihiros-led-panel.js?v=0.2.1067";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2269,7 +2269,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         if (kind === "confirm-dialog-yes" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(true);
         if (kind === "confirm-dialog-no" && typeof this.resolveConfirmDialog === "function") await this.resolveConfirmDialog(false);
         if (kind === "copy-debug") {
-          const output = String(this.dialogState && this.dialogState.output || "");
+          const output = String(
+            (this.dialogState && (this.dialogState.output || this.dialogState.ledScheduleMessage)) || "",
+          );
           if (entity === "all") {
             await this.copyText(output);
           } else {
@@ -2682,6 +2684,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-schedule-dialog-message { width:100%; min-width:0; max-width:100%; overflow:visible; box-sizing:border-box; border:1px solid rgba(255,77,79,.72); border-radius:10px; background:rgba(80,8,14,.72); color:#ffe8e8; padding:10px 12px; }
         .led-schedule-dialog-message.pending { max-height:none; overflow:visible; border-color:rgba(3,201,255,.58); background:rgba(3,42,58,.62); color:#d8f8ff; }
         .led-schedule-dialog-message.ok { border-color:rgba(57,211,83,.62); background:rgba(10,58,32,.62); color:#e7ffed; }
+        .led-schedule-dialog-message.debug { border-color:rgba(3,201,255,.38); background:rgba(0,0,0,.14); color:#e7f8ff; padding:0; }
         .led-schedule-dialog-message strong { display:block; margin-bottom:6px; color:#ff9a9a; font-size:12px; letter-spacing:.06em; }
         .led-schedule-dialog-message.pending strong { color:#8eefff; }
         .led-schedule-dialog-message.ok strong { color:#8cffaa; }
