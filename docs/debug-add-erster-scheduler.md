@@ -30,19 +30,19 @@ stehen in den Rohdaten unten.
 ## Markierte Frames aus aktuellem Mitschnitt
 
 ```text
-[INFO APP] {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"21.07.2026 00:35:22.533"}
-[INFO APP] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,35,22],"time":"21.07.2026 00:35:22.836"}
-[INFO APP] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,35,22],"time":"21.07.2026 00:35:22.938"}
-[INFO APP] {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255],"time":"21.07.2026 00:35:24.057"}
+[INFO APP] {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 00:35:22.533"}
+[INFO APP] {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 22, 35, 22], "time": "21.07.2026 00:35:22.836"}
+[INFO APP] {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 22, 35, 22], "time": "21.07.2026 00:35:22.938"}
+[INFO APP] {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255], "time": "21.07.2026 00:35:24.057"}
 ```
 
 ## App-Log Frames
 
 ```text
-[INFO SYSTEM] {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"20.07.2026 22:38:20"}
-[INFO SYSTEM] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
-[INFO SYSTEM] {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,22,38,20],"time":"20.07.2026 22:38:20"}
-[INFO SYSTEM] {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,127,100,100,100,100,255,255,255,255],"time":"20.07.2026 22:38:24"}
+[INFO SYSTEM] {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "20.07.2026 22:38:20"}
+[INFO SYSTEM] {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 22, 38, 20], "time": "20.07.2026 22:38:20"}
+[INFO SYSTEM] {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 22, 38, 20], "time": "20.07.2026 22:38:20"}
+[INFO SYSTEM] {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255], "time": "20.07.2026 22:38:24"}
 ```
 
 ## Rohes Vergleichsergebnis
@@ -107,14 +107,14 @@ verglichen. Die Uhrzeitbytes dürfen zwischen App-Mitschnitt und Systemausgabe a
 
 ```text
 Aktueller Mitschnitt: btsnoop_hci_2026-07-20-23-49-25.frames.jsonl
-[INFO APP]  {"dir":"tx","cmd":90,"mode":4,"parm":[1],"time":"21.07.2026 01:49:07.457"}
-[INFO APP]  {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,23,49,7],"time":"21.07.2026 01:49:07.761"}
-[INFO APP]  {"dir":"tx","cmd":90,"mode":9,"parm":[26,7,1,23,49,7],"time":"21.07.2026 01:49:07.859"}
-[INFO APP]  {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,84,255,255,255,255,255,255,255,255],"time":"21.07.2026 01:49:17.087"}
-[INFO APP]  {"dir":"tx","cmd":90,"mode":5,"parm":[40,255,255],"time":"21.07.2026 01:49:17.282"}
-[INFO APP]  {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,84,255,255,255,255,255,255,255,255],"time":"21.07.2026 01:49:21.465"}
-[INFO APP]  {"dir":"tx","cmd":90,"mode":5,"parm":[40,255,255],"time":"21.07.2026 01:49:21.635"}
-[INFO APP]  {"dir":"tx","cmd":165,"mode":25,"parm":[12,0,18,0,1,84,100,100,100,100,255,255,255,255],"time":"21.07.2026 01:49:22.298"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 01:49:07.457"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 23, 49, 7], "time": "21.07.2026 01:49:07.761"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 1, 23, 49, 7], "time": "21.07.2026 01:49:07.859"}
+[INFO APP]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 01:49:17.087"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [40, 255, 255], "time": "21.07.2026 01:49:17.282"}
+[INFO APP]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 01:49:21.465"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [40, 255, 255], "time": "21.07.2026 01:49:21.635"}
+[INFO APP]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 100, 100, 100, 100, 255, 255, 255, 255], "time": "21.07.2026 01:49:22.298"}
 ```
 
 ## App-Log Frames
