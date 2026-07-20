@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1033";
+import "./panels/chihiros-led-panel.js?v=0.2.1034";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -185,6 +185,55 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     };
     this.render();
     try {
+      const serviceFailure = (result) => {
+        const response = result && typeof result === "object"
+          ? (result.response || result.serviceResponse || null)
+          : null;
+        if (!response || typeof response !== "object") return "";
+        if (response.ok !== false && String(response.send_status || "").toLowerCase() !== "fail") return "";
+        return String(response.send_detail || response.message || response.error || "Home-Assistant-Service fehlgeschlagen");
+      };
+      const updateEntities = ["update.led_core_update", "update.chihiros_core_update"];
+      let updateEntity = "";
+      let updateState = null;
+      if (this._hass && typeof this._hass.callApi === "function") {
+        for (const candidate of updateEntities) {
+          try {
+            updateState = await this._hass.callApi("GET", `states/${candidate}`);
+            if (updateState) {
+              updateEntity = candidate;
+              break;
+            }
+          } catch (_err) {
+            // Try the next known entity name before using the Supervisor endpoint.
+          }
+        }
+      }
+      if (updateEntity && this._hass && typeof this._hass.callService === "function") {
+        const refreshResult = await this._hass.callService("homeassistant", "update_entity", { entity_id: updateEntity });
+        const refreshError = serviceFailure(refreshResult);
+        if (refreshError) throw new Error(`homeassistant.update_entity fehlgeschlagen: ${refreshError}`);
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          updateState = await this._hass.callApi("GET", `states/${updateEntity}`);
+          if (String(updateState && updateState.state || "").toLowerCase() === "on") break;
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
+        }
+        if (String(updateState && updateState.state || "").toLowerCase() === "on") {
+          const installResult = await this._hass.callService("update", "install", { entity_id: updateEntity });
+          const installError = serviceFailure(installResult);
+          if (installError) throw new Error(`update.install fehlgeschlagen: ${installError}`);
+          this.dialogState = {
+            type: "debug",
+            channel: 1,
+            output: `OK\nUpdate über ${updateEntity} gestartet.`,
+            running: false,
+            noChannel: true,
+            level: "ok",
+          };
+          this.render();
+          return;
+        }
+      }
       const api = window.ChihirosAddonApi;
       if (!api || typeof api.runAddonUpdate !== "function") throw new Error("LED-Core-Update-Endpunkt fehlt");
       const result = await api.runAddonUpdate();

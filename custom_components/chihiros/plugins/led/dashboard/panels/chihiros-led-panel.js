@@ -154,9 +154,21 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         const color = entityColor(entityId, attrs);
         const name = String(color || attrs.friendly_name || entityId.split(".")[1] || entityId);
         const match = String(entityId).toLowerCase().match(devicePattern);
-        return { entityId, state, attrs, name, color, deviceSlug: match ? deviceKey(match[2]) : "led_1" };
+        return {
+          entityId,
+          state,
+          attrs,
+          name,
+          color,
+          deviceSlug: match ? deviceKey(match[2]) : "led_1",
+          suffix: match ? match[3] : "",
+        };
       })
-      .sort((left, right) => (colorOrder.get(left.color) ?? 99) - (colorOrder.get(right.color) ?? 99));
+      .sort((left, right) => {
+        const colorDifference = (colorOrder.get(left.color) ?? 99) - (colorOrder.get(right.color) ?? 99);
+        if (colorDifference) return colorDifference;
+        return Number(left.suffix !== left.color) - Number(right.suffix !== right.color);
+      });
     entities.forEach((item) => {
       if (!groups.has(item.deviceSlug)) {
         groups.set(item.deviceSlug, {

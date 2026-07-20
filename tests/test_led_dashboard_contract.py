@@ -54,6 +54,26 @@ def test_private_addon_update_installs_the_supervisor_release_or_refreshes_the_r
     assert "cp -a /opt/chihiros-led-core-src/chihiros_beta/ui/. /opt/chihiros-led-core-ui/" in run
 
 
+def test_led_core_update_prefers_the_home_assistant_update_entity() -> None:
+    """The dashboard must verify service failures instead of displaying an unconditional success message."""
+    dashboard = source(DASHBOARD)
+
+    assert 'const updateEntities = ["update.led_core_update", "update.chihiros_core_update"]' in dashboard
+    assert 'this._hass.callService("homeassistant", "update_entity"' in dashboard
+    assert 'this._hass.callService("update", "install"' in dashboard
+    assert "if (refreshError) throw new Error" in dashboard
+    assert "if (installError) throw new Error" in dashboard
+
+
+def test_led_discovery_prefers_the_exact_color_entity_alias() -> None:
+    """Multiple HA aliases for a color must still resolve to one physical LED channel."""
+    panel = source(LED_PANEL)
+
+    assert 'suffix: match ? match[3] : ""' in panel
+    assert "Number(left.suffix !== left.color) - Number(right.suffix !== right.color)" in panel
+    assert "group.channels.findIndex((existing) => existing.key === channel.key)" in panel
+
+
 def test_led_core_addon_ignores_a_persisted_legacy_source_repository() -> None:
     """An old add-on option must never load the former combined dashboard."""
     run = source(ADDON_RUN)
