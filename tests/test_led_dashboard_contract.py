@@ -551,7 +551,7 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert "chihiros-led-core-layout:${user}:${deviceKey}" in panel
     assert "ledLayoutHasCustomOrder()" in panel
     assert "has-custom-layout" in panel
-    assert ".led-layout-page.is-editing.has-custom-layout > .led-layout-item" in core
+    assert ".led-layout-page.has-custom-layout > .led-layout-item { grid-row:auto !important; order:var(--led-layout-order,0); }" in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
     assert 'data-led-layout-handle' in panel
