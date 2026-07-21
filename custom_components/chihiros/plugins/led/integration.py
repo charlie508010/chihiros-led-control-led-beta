@@ -139,6 +139,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     if runtime.client.model.color_channels:
+
         async def _async_record_poll(status: str, output: str, notifications: int) -> None:
             try:
                 await hass.async_add_executor_job(

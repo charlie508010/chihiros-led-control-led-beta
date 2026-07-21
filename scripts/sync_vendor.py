@@ -11,15 +11,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCE = REPO_ROOT / "src" / "chihiros_led_control"
-VENDOR = (
-    REPO_ROOT
-    / "custom_components"
-    / "chihiros"
-    / "plugins"
-    / "led"
-    / "vendor"
-    / "chihiros_led_control"
-)
+VENDOR = REPO_ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "vendor" / "chihiros_led_control"
 
 EXCLUDED_DIRS = {
     "__pycache__",

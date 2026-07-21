@@ -30,10 +30,10 @@ def test_addon_icon_fallback_renders_real_svg_symbols() -> None:
     """The standalone add-on must render LED icons without Home Assistant's ha-icon component."""
     index = source(ADDON_INDEX)
 
-    assert 'const iconShapes = {' in index
+    assert "const iconShapes = {" in index
     assert 'observedAttributes() { return ["icon"]; }' in index
     assert 'this.innerHTML = `<svg viewBox="0 0 24 24"' in index
-    assert 'ha-icon::after' not in index
+    assert "ha-icon::after" not in index
 
 
 def test_hacs_brand_icon_is_packaged() -> None:
@@ -51,7 +51,7 @@ def test_private_addon_update_installs_the_supervisor_release_or_refreshes_the_r
     server = source(ADDON_SERVER)
     run = source(ADDON_RUN)
 
-    assert 'data-addon-update' in dashboard
+    assert "data-addon-update" in dashboard
     assert "Version: ${installed}\\nStand: aktuell" in dashboard
     assert "Installiert: ${installed}\\nLatest: ${latest}" not in dashboard
     assert 'fetch("./api/addon-update"' in index
@@ -110,7 +110,7 @@ def test_led_core_server_accepts_double_slash_ingress_api_paths() -> None:
     """Ingress may forward //api paths, which must reach the normal API handlers."""
     server = source(ADDON_SERVER)
 
-    assert server.count('request_path = f"/{parsed.path.lstrip(\'/\')}"') == 2
+    assert server.count("request_path = f\"/{parsed.path.lstrip('/')}\"") == 2
     assert 'if request_path == "/api/dashboard-state":' in server
     assert 'if request_path == "/api/dashboard-settings":' in server
     assert 'if request_path == "/api/ha-service":' in server
@@ -138,9 +138,7 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     """The separated LED integration must coexist with the combined Chihiros integration."""
     manifest = source(ROOT / "custom_components" / "chihiros" / "manifest.json")
     constants = source(ROOT / "custom_components" / "chihiros" / "const.py")
-    integration = source(
-        ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "integration.py"
-    )
+    integration = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "integration.py")
     dashboard = source(DASHBOARD)
     panel = source(LED_DASHBOARD / "chihiros-panel.js")
     run = source(ADDON_RUN)
@@ -154,9 +152,9 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     assert 'customElements.define("chihiros-led-core-panel"' in panel
     assert 'domain: "chihiros_led_core"' in dashboard
     assert 'callService("chihiros_led_core"' in dashboard
-    assert '/config/custom_components/chihiros_led_core' in run
-    assert '/config/.chihiros_led_core/chihiros_led_core.sqlite3' in run
-    assert 'rm -rf /config/custom_components/chihiros' not in run
+    assert "/config/custom_components/chihiros_led_core" in run
+    assert "/config/.chihiros_led_core/chihiros_led_core.sqlite3" in run
+    assert "rm -rf /config/custom_components/chihiros" not in run
 
 
 def test_hassfest_validates_the_manifest_domain_path() -> None:
@@ -208,7 +206,7 @@ def test_led_notification_dialog_keeps_the_selected_device_target() -> None:
     """A state refresh must not retarget an already opened notification dialog."""
     panel = source(LED_PANEL)
 
-    assert 'notificationEntity: this.resolveLedNotificationEntity(device)' in panel
+    assert "notificationEntity: this.resolveLedNotificationEntity(device)" in panel
     assert 'ledDeviceAddress: String(device.address || "").trim().toUpperCase()' in panel
     assert 'const entity = String(this.dialogState && this.dialogState.notificationEntity || "");' in panel
     assert 'if (!addressToken) return "";' in panel
@@ -222,7 +220,7 @@ def test_parallel_led_core_entities_accept_home_assistant_numeric_suffixes() -> 
     panel = source(LED_PANEL)
 
     assert 'r"(?:_\\d+)?$"' in server
-    assert '(red|green|blue|white)(?:_\\d+)?$' in panel
+    assert "(red|green|blue|white)(?:_\\d+)?$" in panel
     assert 'const suffix = rawSuffix.replace(/_\\d+$/, "");' in panel
     assert "isNonLedEntity" not in panel
 
@@ -231,11 +229,11 @@ def test_led_device_tabs_deduplicate_parallel_entities_by_mac_address() -> None:
     """Different entity prefixes for the same MAC must remain one physical LED device."""
     panel = source(LED_PANEL)
 
-    assert 'const deviceKey = (slug) =>' in panel
+    assert "const deviceKey = (slug) =>" in panel
     assert 'return hex ? hex[0].toLowerCase() : "";' in panel
-    assert 'const deviceSlug = deviceKey(rawDeviceSlug);' in panel
+    assert "const deviceSlug = deviceKey(rawDeviceSlug);" in panel
     assert 'deviceSlug: match ? deviceKey(match[2]) : "led_1"' in panel
-    assert 'group.channels.findIndex((existing) => existing.key === channel.key)' in panel
+    assert "group.channels.findIndex((existing) => existing.key === channel.key)" in panel
 
 
 def test_led_device_tabs_use_the_shared_styled_navigation() -> None:
@@ -255,7 +253,7 @@ def test_led_device_name_is_editable_and_used_by_the_device_tab() -> None:
 
     assert "ledDeviceDisplayName(device)" in panel
     assert 'data-action="led-device-name-edit"' in panel
-    assert 'data-led-device-name' in panel
+    assert "data-led-device-name" in panel
     assert 'type: "led-device-name-editor"' in panel
     assert "ledDeviceNameDialog()" in panel
     assert 'kind === "led-device-name-save"' in dashboard
@@ -304,8 +302,8 @@ def test_addon_promotes_only_addresses_with_led_color_light_entities() -> None:
     server = source(ADDON_SERVER)
 
     assert 'match.group(1).lower() != "light"' in server
-    assert 'match.group(3).lower() not in {' in server
-    assert 'if address not in led_addresses:' in server
+    assert "match.group(3).lower() not in {" in server
+    assert "if address not in led_addresses:" in server
 
 
 def test_addon_accepts_only_entities_owned_by_led_core() -> None:
@@ -417,14 +415,14 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
 def test_debug_sections_restore_headers_after_running_dialog() -> None:
     """Running debug is plain, completed structured debug keeps headers and copy buttons."""
     dashboard = source(DASHBOARD)
-    start = dashboard.index("debugOutputMarkup(output = \"\"")
+    start = dashboard.index('debugOutputMarkup(output = ""')
     end = dashboard.index("\n  async copyText", start)
     implementation = dashboard[start:end]
 
     assert "<pre>${this.escapeHtml(section.value)}</pre>" in implementation
     assert "<header>" in implementation
     assert "copy-debug:${index}" in implementation
-    assert "const title = section.title || this.tr(\"debug_output\");" in implementation
+    assert 'const title = section.title || this.tr("debug_output");' in implementation
     assert "options.debug && !options.running" in dashboard
     assert "...(options.running ? [] : [" in dashboard
     assert '{ action: "copy-debug:all", label: this.tr("copy_all")' in dashboard
@@ -524,7 +522,10 @@ def test_inactive_schedule_delete_only_removes_selected_row() -> None:
     assert "active = bool(call.data.get(ATTR_ACTIVE, True))" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
     assert 'ATTR_DELETE_ONLY = "delete_only"' in constants
-    assert "max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) else brightness_from_service_data(data)" in services
+    delete_only_brightness = (
+        "max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) else brightness_from_service_data(data)"
+    )
+    assert delete_only_brightness in services
 
 
 def test_scheduler_verification_is_queued_per_schedule_row() -> None:
@@ -567,7 +568,9 @@ def test_scheduler_crud_and_debug_contracts_remain_available() -> None:
 def test_led_layout_editor_contract_remains_available() -> None:
     """The LED dashboard layout editor must stay user-scoped and mobile-safe."""
     panel = source(LED_PANEL)
-    core = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "dashboard" / "chihiros-led-core-card.js")
+    core = source(
+        ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "dashboard" / "chihiros-led-core-card.js"
+    )
 
     assert "ledLayoutUserKey()" in panel
     assert 'return ["channels", "schedule", "history", "templates", "connection", "control", "presets"];' in panel
@@ -579,18 +582,27 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert ".led-device-topline .led-layout-toolbar { justify-content:flex-end; margin:0; }" in core
     assert "--led-layout-large-box-height:300px" in core
     assert ".led-layout-page.has-custom-layout > .led-layout-item," in core
-    assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
+    editing_layout_rule = (
+        ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; "
+        "grid-row:auto !important; order:var(--led-layout-order,0); }"
+    )
+    assert editing_layout_rule in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
     assert '.led-layout-page > [data-led-layout-item="schedule"] > .card,' in core
-    assert '.led-layout-page > [data-led-layout-item="connection"] > .card { height:var(--led-layout-large-box-height); max-height:var(--led-layout-large-box-height); overflow:auto; }' in core
+    large_connection_card_rule = (
+        '.led-layout-page > [data-led-layout-item="connection"] > .card { '
+        "height:var(--led-layout-large-box-height); "
+        "max-height:var(--led-layout-large-box-height); overflow:auto; }"
+    )
+    assert large_connection_card_rule in core
     assert '.led-layout-page > [data-led-layout-item="connection"] > .card { height:auto; max-height:none; }' in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
-    assert 'data-led-layout-handle' in panel
+    assert "data-led-layout-handle" in panel
     assert "clientX" in core
     assert 'document.createComment("led-layout-swap")' in core
     assert 'window.addEventListener("pointermove", move)' in core
-    assert 'saveOrder();' in core
+    assert "saveOrder();" in core
     assert "move_left" in core
     assert "move_right" in core
     assert "layout_item_schedule" in core
@@ -616,12 +628,11 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     assert "data-led-schedule-debug" not in implementation
     assert "ledScheduleDebug" not in implementation
     assert 'output: this.tr("debug_sending")' in implementation
-    assert 'running: true' in implementation
+    assert "running: true" in implementation
     assert "debug, dialog: true" in implementation
     assert (
         "remainingRows.length > 0 ? [{ ...remainingRows[0], active: false }] : "
-        "[{ ...deletedRow, active: false }]"
-        in implementation
+        "[{ ...deletedRow, active: false }]" in implementation
     )
     assert "delete_only: true" in implementation
     assert "delete_only: remainingRows.length > 0" not in implementation
@@ -803,7 +814,11 @@ def test_connection_panel_shows_runtime_sensor() -> None:
     assert 'class="led-schedule-check-dot ${verification.level}"' in panel
     assert '<th>${this.tr("check_short")}</th>' in panel
     assert ".led-schedule-front-table td:nth-child(3) { min-width:100px; white-space:nowrap; }" in dashboard
-    assert ".led-schedule-front-table td { border:1px solid rgba(255,255,255,.12); padding:7px 8px; text-align:left; vertical-align:middle; white-space:nowrap; }" in dashboard
+    schedule_table_cell_rule = (
+        ".led-schedule-front-table td { border:1px solid rgba(255,255,255,.12); "
+        "padding:7px 8px; text-align:left; vertical-align:middle; white-space:nowrap; }"
+    )
+    assert schedule_table_cell_rule in dashboard
     assert (
         '<th>#</th>\n              <th>${this.tr("check_short")}</th>\n              <th>${this.tr("time")}</th>'
     ) in panel
@@ -822,8 +837,12 @@ def test_total_history_timestamp_uses_configured_language_and_first_row() -> Non
     assert "formatHistoryTimestamp(value)" in dashboard
     assert 'this.language() === "en" ? "en-US" : "de-DE"' in dashboard
     assert '${timestamp ? `<time>${this.escapeHtml(timestamp)}</time>` : ""}</div>' in dashboard
-    assert ".modal { box-sizing:border-box; width:min(520px, calc(100vw - 40px)); max-width:100%; }" in dashboard
-    assert ".led-history-timeline { position:relative; display:grid; grid-auto-rows:max-content; align-content:start;" in dashboard
+    modal_width_rule = ".modal { box-sizing:border-box; width:min(520px, calc(100vw - 40px)); max-width:100%; }"
+    assert modal_width_rule in dashboard
+    assert (
+        ".led-history-timeline { position:relative; display:grid; grid-auto-rows:max-content; align-content:start;"
+        in dashboard
+    )
     assert ".led-history-timeline-copy time { margin-left:auto;" in dashboard
 
 
@@ -847,15 +866,24 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     assert ".led-page { grid-template-columns:minmax(0,1fr); }" in dashboard
     assert ".led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }" in dashboard
     assert ".led-page .led-channels { grid-template-columns:minmax(0,1fr); }" in dashboard
-    assert ".led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0,1fr); gap:8px; }" in dashboard
+    device_edit_actions_rule = (
+        ".led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0,1fr); gap:8px; }"
+    )
+    assert device_edit_actions_rule in dashboard
     assert ".led-device-edit-actions .action-row { grid-template-columns:28px minmax(0,1fr) auto;" in dashboard
     assert ".led-device-power-row > span { white-space:normal; overflow-wrap:anywhere; }" in dashboard
     assert ".led-schedule-row-grid > .led-schedule-color-control.led-schedule-time-control" in dashboard
-    assert ".led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }" in dashboard
+    schedule_time_title_rule = (
+        ".led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }"
+    )
+    assert schedule_time_title_rule in dashboard
     assert "data-led-schedule-debug" not in dashboard
     assert ".led-schedule-color-control.led-schedule-weekdays-control {" in dashboard
     assert "grid-template-columns:repeat(auto-fit, minmax(56px, 1fr));" in dashboard
-    assert ".led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }" in dashboard
+    schedule_weekdays_grid_rule = (
+        ".led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }"
+    )
+    assert schedule_weekdays_grid_rule in dashboard
     assert ".led-schedule-weekdays-control .weekday-chip { box-sizing:border-box; padding:4px; }" in dashboard
     assert ".config-card-head { flex-direction:column; align-items:stretch; }" in dashboard
 
@@ -899,7 +927,7 @@ def test_template_dialog_live_preview_debugs_without_dashboard_refresh() -> None
     assert "templateLivePreview: Boolean(enabled)" in panel
     assert 'data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}' in panel
     assert "this.queueLedTemplateLivePreview(false, name)" in dashboard
-    assert "async sendLedTemplateLivePreview(channelKey = \"\")" in panel
+    assert 'async sendLedTemplateLivePreview(channelKey = "")' in panel
     assert 'const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__"' in panel
     assert "data-led-template-live-preview-log" in panel
     assert "const showDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);" in panel
@@ -1013,7 +1041,7 @@ def test_vivid_iii_replaces_presets_with_fan_status_and_control() -> None:
     assert "ledDeviceHasFan(device" in panel
     assert "this.ledDeviceHasFan(device) ? this.ledFanControlCard(device)" in panel
     assert 'this._hass.callService("fan", "set_percentage", { percentage }' in panel
-    assert 'data-led-fan-control' in panel
+    assert "data-led-fan-control" in panel
     assert 'fan_control: "Lüftersteuerung"' in dashboard
     assert 'fan_control: "Fan control"' in dashboard
     assert 'this.querySelectorAll("[data-led-fan-control]")' in dashboard
@@ -1037,7 +1065,7 @@ def test_dashboard_adds_local_vivid_demo_without_real_fan_device() -> None:
 
     assert "show_fan_demo: true" in panel_shell
     assert "this.config.show_fan_demo === true" in panel
-    assert '!resolved.some((device) => this.ledDeviceHasFan(device))' in panel
+    assert "!resolved.some((device) => this.ledDeviceHasFan(device))" in panel
     assert 'label: "VIVID III Demo"' in panel
     assert 'address: "FA:CE:C0:00:00:04"' in panel
     assert "fan_demo: true" in panel

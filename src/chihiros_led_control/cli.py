@@ -53,8 +53,6 @@ def main(
         _enable_compact_debug_logging()
 
 
-
-
 def _is_ble_address(value: str) -> bool:
     """Return whether a value is a complete colon-separated BLE address."""
     parts = value.strip().split(":")
@@ -77,32 +75,6 @@ def _run_device_func(device_address: str, command: DeviceCommand) -> None:
 
 def _weekday_mask(weekdays: list[WeekdaySelect]) -> int:
     return encode_selected_weekdays(weekdays)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def _format_brightness(values: list[int]) -> str:
@@ -145,16 +117,6 @@ def _print_compare_log(dev: ChihirosDevice) -> None:
         print(output)
 
 
-
-
-
-
-
-
-
-
-
-
 def _clear_debug_frames(dev: ChihirosDevice) -> None:
     if hasattr(dev, "clear_debug_buffers"):
         dev.clear_debug_buffers()
@@ -176,29 +138,11 @@ def _print_led_protocol_debug(dev: ChihirosDevice) -> None:
     _print_raw_tx_frames(dev)
 
 
-
-
-
-
-
-
-
-
-
-
 def _legacy_kind(kind: str) -> str:
     normalized = kind.strip().lower()
     if normalized != "led":
         raise typer.BadParameter("Dieser Export unterstützt ausschließlich LED-Geräte")
     return "led"
-
-
-
-
-
-
-
-
 
 
 @config_app.command("path")
@@ -334,12 +278,6 @@ def _config_delete_indexed_device(kind: str, index: int) -> None:
     print("OK: deleted" if store.delete_device(kind, str(index)) else "Not found")
 
 
-
-
-
-
-
-
 @config_app.command("set-led")
 def config_set_led(index: Annotated[int, typer.Argument(min=1, max=4)], address: str) -> None:
     """Compatibility alias for storing an LED device."""
@@ -356,36 +294,6 @@ def config_show_led(index: Annotated[int, typer.Argument(min=1, max=4)] = 1) -> 
 def config_delete_led(index: Annotated[int, typer.Argument(min=1, max=4)] = 1) -> None:
     """Compatibility alias for deleting an LED device."""
     _config_delete_indexed_device("led", index)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @config_app.command("db-info")
@@ -795,76 +703,6 @@ def reset_settings(device_address: str) -> None:
             _print_led_protocol_debug(dev)
 
     _run_device_func(device_address, command)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 @led_app.command("enable-auto-mode")

@@ -241,11 +241,7 @@ def _ctl_example_lines(service: str, data: dict[str, Any]) -> list[str]:
         return [" ".join(parts)]
 
     if service.endswith(".set_schedule"):
-        return [
-            "python -m chihirosctl led set-schedule "
-            + (f"--address {address} " if address else "")
-            + "--debug"
-        ]
+        return ["python -m chihirosctl led set-schedule " + (f"--address {address} " if address else "") + "--debug"]
 
     if service.endswith(".reset_schedule"):
         command = "python -m chihirosctl --debug led reset-settings"

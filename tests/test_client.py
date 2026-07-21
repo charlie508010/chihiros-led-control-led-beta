@@ -1339,6 +1339,7 @@ def test_dyu1000_reset_settings_does_not_query_snapshot() -> None:
             (SchedulePoint(22, 15, {"red": 100}), SchedulePoint(23, 15, {"red": 0})),
         )
         empty_snapshot = ScheduleSnapshotNotification(21, ())
+
         async def keep_snapshot(notification_wait: float = 3.0) -> None:
             nonlocal query_count
             del notification_wait

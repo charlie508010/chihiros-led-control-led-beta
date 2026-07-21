@@ -13,10 +13,10 @@ ADDON_CONFIGS = {
 CORE_CACHE_VERSION_FILES = {
     ROOT / "custom_components/chihiros/manifest.json": r'("version"\s*:\s*")\d+\.\d+\.\d+("\s*,?)',
     ROOT / "custom_components/chihiros/plugins/led/dashboard/chihiros-panel.js": (
-        r'(chihiros-led-core-card\.js\?v=)\d+\.\d+\.\d+'
+        r"(chihiros-led-core-card\.js\?v=)\d+\.\d+\.\d+"
     ),
     ROOT / "custom_components/chihiros/plugins/led/dashboard/chihiros-led-core-card.js": (
-        r'(chihiros-led-panel\.js\?v=)\d+\.\d+\.\d+'
+        r"(chihiros-led-panel\.js\?v=)\d+\.\d+\.\d+"
     ),
 }
 

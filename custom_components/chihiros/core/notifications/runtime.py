@@ -76,13 +76,9 @@ async def async_poll_device_notifications(
         finally:
             hass.data[NOTIFICATION_POLL_LAST_FINISHED] = loop.time()
 
-    matching_frames = tuple(
-        frame for frame in payload.raw_frames if not expected or _frame_mode(frame) in expected
-    )
+    matching_frames = tuple(frame for frame in payload.raw_frames if not expected or _frame_mode(frame) in expected)
     notifications = (
-        max(0, int(payload.notification_count))
-        if payload.notification_count is not None
-        else len(matching_frames)
+        max(0, int(payload.notification_count)) if payload.notification_count is not None else len(matching_frames)
     )
     success = bool(payload.success)
     status = "ok" if success else "error"

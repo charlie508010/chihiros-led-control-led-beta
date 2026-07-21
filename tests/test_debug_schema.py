@@ -2,12 +2,7 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 MODULE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "custom_components"
-    / "chihiros"
-    / "core"
-    / "diagnostics"
-    / "schema.py"
+    Path(__file__).resolve().parents[1] / "custom_components" / "chihiros" / "core" / "diagnostics" / "schema.py"
 )
 SPEC = spec_from_file_location("debug_schema_test_module", MODULE_PATH)
 assert SPEC and SPEC.loader
@@ -41,10 +36,7 @@ def test_make_debug_data_builds_shared_sections() -> None:
     assert sections[1]["title"] == "Doku / Kopieren"
     assert "action: chihiros_led_core.reset_schedule" in sections[1]["value"]
     assert "debug: true" in sections[1]["value"]
-    assert (
-        'python -m chihirosctl --debug led reset-settings "AA:BB:CC:DD:EE:FF"'
-        in sections[1]["value"]
-    )
+    assert 'python -m chihirosctl --debug led reset-settings "AA:BB:CC:DD:EE:FF"' in sections[1]["value"]
     assert "reset-schedule" not in sections[1]["value"]
     assert sections[2]["title"] == "Raw Debug"
     assert sections[3]["title"] == "Details JSON"
@@ -75,7 +67,7 @@ def test_build_debug_sections_adds_copyable_led_schedule_examples() -> None:
     doc = sections[1]["value"]
     assert sections[1]["title"] == "Doku / Kopieren"
     assert "action: chihiros_led_core.add_schedule" in doc
-    assert "address: \"AA:BB:CC:DD:EE:FF\"" in doc
+    assert 'address: "AA:BB:CC:DD:EE:FF"' in doc
     assert "debug: true" in doc
     assert "python -m chihirosctl led add-schedule" in doc
     assert "--red 65 --green 40 --blue 65 --white 50" in doc

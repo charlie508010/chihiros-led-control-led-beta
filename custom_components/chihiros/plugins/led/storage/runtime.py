@@ -147,8 +147,7 @@ def ensure_led_schedule_table(conn: sqlite3.Connection) -> None:
     if "verified_at" not in columns:
         conn.execute("ALTER TABLE led_schedules ADD COLUMN verified_at TEXT NOT NULL DEFAULT ''")
     job_columns = {
-        str(row[1]).lower(): row
-        for row in conn.execute("PRAGMA table_info(led_schedule_verification_jobs)").fetchall()
+        str(row[1]).lower(): row for row in conn.execute("PRAGMA table_info(led_schedule_verification_jobs)").fetchall()
     }
     legacy_jobs: list[tuple[Any, ...]] = []
     if job_columns and "schedule_signature" not in job_columns:

@@ -868,11 +868,7 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
         )
 
     snapshot_channels = sorted(
-        {
-            str(channel).lower()
-            for point in snapshot.points
-            for channel in getattr(point, "levels", {}).keys()
-        }
+        {str(channel).lower() for point in snapshot.points for channel in getattr(point, "levels", {}).keys()}
     )
     for channel in snapshot_channels:
         if channel not in expected_by_channel:

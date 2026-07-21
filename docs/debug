@@ -42,7 +42,7 @@ python -m chihirosctl led add-schedule --address FF:D2:2C:EB:9A:E2 --start 09:00
 
 Summary: LED schedule period sent
 
-box neu 
+box neu
 
 Raw Debug
 DEBUG    FF:D2:2C:EB:9A:E2: Sending commands ['5a0106005e04015c']
@@ -97,7 +97,7 @@ DEBUG    FF:D2:2C:EB:9A:E2: Sending commands ['a5011300611909001100017f05050505f
   Checksum         : 12
   Bedeutung        : LED-Zeitplan schreiben 09:00-17:00, Ramp=1 min, Wochentage=taeglich
 ------------------------------------------------------------------------
-box neu 
+box neu
 
 VERGLEICH APP-LOG
 ------------------------------------------------------------------------
@@ -111,7 +111,7 @@ VERGLEICH APP-LOG
 ------------------------------------------------------------------------
 
 bottom zum kopueren vergleich  rechts
-box neu 
+box neu
 
 GERÄTEANTWORT
 ------------------------------------------------------------------------
@@ -143,4 +143,3 @@ RX: 5B 15 30 00 01 FE 01 15 2D 00 00 00 00 00 00 00 00 00 00 00 00 00 01 15 2D 1
   Details          : Punkt 1: 22:15 Level=100%
   Details          : Punkt 2: 23:15 Level=0%
 ------------------------------------------------------------------------
-

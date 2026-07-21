@@ -40,8 +40,6 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-
-
 def _db_connect() -> sqlite3.Connection:
     path = state_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,20 +125,6 @@ def state_db_info() -> dict[str, Any]:
     return {"path": str(state_db_path()), "tables": tables}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def _state_key(device: str) -> str:
     """Return the normalized key used by device-scoped LED settings."""
     return resolve_device_address(device).upper()
@@ -160,12 +144,6 @@ def list_channel_names(kind: str, device: str) -> dict[int, str]:
         if suffix.isdigit():
             names[int(suffix)] = value
     return names
-
-
-
-
-
-
 
 
 def _empty_store() -> dict[str, Any]:
