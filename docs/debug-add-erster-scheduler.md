@@ -498,6 +498,72 @@ OK: Keine Unterschiede gefunden.
 ```
 
 ---
+# Wireshark Debug: Delete Scheduler einen
+
+## Übersicht
+
+| Feld | Wert |
+| --- | --- |
+| Bezeichnung | Delete Scheduler einen |
+| Quelle | Wireshark Vergleich App-Log |
+| Datei | `btsnoop_hci_2026-07-21-03-08-52.frames.jsonl` |
+| Aktueller Mitschnitt | 4 Frames |
+| App-Log | 4 Frames |
+| Ergebnis | OK - keine Unterschiede gefunden |
+
+## Vergleich
+
+| # | Capture Cmd | Capture Mode | Capture Parameter | Status |
+| ---: | ---: | ---: | --- | --- |
+| 1 | `90` | `4` | `[1]` | OK |
+| 2 | `90` | `9` | `[26,7,2,3,8,41]` | OK |
+| 3 | `90` | `9` | `[26,7,2,3,8,41]` | OK |
+| 4 | `165` | `25` | `[12,0,18,0,1,84,255,255,255,255,255,255,255,255]` | OK |
+
+Frame `#4` enthält den vollständigen Scheduler-Payload. Die kompletten Bytes
+stehen in den Rohdaten unten.
+
+## Markierte Frames aus aktuellem Mitschnitt
+
+```text
+Aktueller Mitschnitt: btsnoop_hci_2026-07-21-03-08-52.frames.jsonl
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 05:08:41.422"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 3, 8, 41], "time": "21.07.2026 05:08:41.734"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 3, 8, 41], "time": "21.07.2026 05:08:41.793"}
+[INFO APP]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 05:08:50.287"}
+```
+
+## App-Log Frames
+
+```text
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 03:26:07"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 3, 26, 7], "time": "21.07.2026 03:26:07"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 3, 26, 7], "time": "21.07.2026 03:26:07"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [12, 0, 18, 0, 1, 84, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 03:26:11"}
+```
+
+## Rohes Vergleichsergebnis
+
+```text
+VERGLEICH
+Aktueller Mitschnitt: 4 Frames
+App-Log: 4 Frames
+#1
+  Aktueller Mitschnitt  90|4|[1]
+  Vergleich App-Log   : 90|4|[1] ok
+#2
+  Aktueller Mitschnitt  90|9|[26,7,2,3,8,41]
+  Vergleich App-Log   : 90|9|[26,7,2,3,26,7] ok
+#3
+  Aktueller Mitschnitt  90|9|[26,7,2,3,8,41]
+  Vergleich App-Log   : 90|9|[26,7,2,3,26,7] ok
+#4
+  Aktueller Mitschnitt  165|25|[12,0,18,0,1,84,255,255,255,255,255,255,255,255]
+  Vergleich App-Log   : 165|25|[12,0,18,0,1,84,255,255,255,255,255,255,255,255] ok
+OK: Keine Unterschiede gefunden.
+```
+
+---
 # Wireshark Debug: Delete Scheduler letzten
 
 ## Übersicht
