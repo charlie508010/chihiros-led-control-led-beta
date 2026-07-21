@@ -101,10 +101,10 @@ Zusammenfassung, TX/RX-Daten und Fehlerart.
   Befehl bei vielen Abläufen zweimal.
 - Zeitplan schreiben: `0xA5`, Mode `0x19` (`25`).
   Beim Anlegen wird kein implizites `0x5A`, Mode `0x05`,
-  `[18, 255, 255]` gesendet. Das gilt auch für Bearbeiten und vollständiges
+  `[18, 255]` gesendet. Das gilt auch für Bearbeiten und vollständiges
   Ersetzen. Vollständiges Schreiben sendet ebenfalls keinen Reset-Finalizer
   `[40, 255, 255]`. Der Auto-Modus ist eine separate Aktion.
-- Auto-Modus aktivieren: `[18, 255, 255]`, danach `[5, 255, 255]` und
+- Auto-Modus aktivieren: `[18, 255]`, danach `[5, 255, 255]` und
   anschließend alle aktiven, für das Gerät gespeicherten Zeitpläne. Ohne
   gespeicherte Zeitpläne endet der Ablauf nach `[5, 255, 255]`.
   Dashboard und Home-Assistant-Switch verwenden dafür dieselbe zentrale
