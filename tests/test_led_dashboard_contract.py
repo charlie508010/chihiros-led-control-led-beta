@@ -370,6 +370,10 @@ def test_scheduler_share_uses_config_debug_dialog() -> None:
     assert "dialog: debug" in implementation
     assert "debug," in implementation
     assert "saved && debug && sendOutput" in implementation
+    assert "const localPayload =" in implementation
+    assert "const localDebugOutput =" in implementation
+    assert "JSON.stringify(localPayload, null, 2)" in implementation
+    assert "debug ? localDebugOutput" in implementation
 
 
 def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -> None:

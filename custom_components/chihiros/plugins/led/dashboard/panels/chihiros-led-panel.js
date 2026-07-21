@@ -3167,17 +3167,30 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     }
     const address = String(target.address || "");
     const deviceKey = String(target.address || target.id || "").trim().toUpperCase();
+    const localPayload = { periods: localPeriods, send, device_key: deviceKey, ...(address ? { address } : {}) };
     const saved = await this.saveLedScheduleLocal(
-      { periods: localPeriods, send, device_key: deviceKey, ...(address ? { address } : {}) },
+      localPayload,
       this.tr("share_schedule"),
       true,
     );
+    const localDebugOutput = [
+      saved ? "OK" : "FAIL",
+      this.tr(saved ? "schedule_shared" : "share_schedule"),
+      target.label || target.name || target.address,
+      "",
+      "Debug",
+      `Service: ${this.tr("share_schedule")}`,
+      `Target: ${target.label || target.name || target.address}`,
+      `Send: ${send ? "true" : "false"}`,
+      "Payload:",
+      JSON.stringify(localPayload, null, 2),
+    ].join("\n");
     this.dialogState = {
       type: "debug",
       channel: 1,
       output: saved && debug && sendOutput
         ? sendOutput
-        : `${saved ? "OK" : "FAIL"}\n${this.tr(saved ? "schedule_shared" : "share_schedule")}\n${target.label || target.name || target.address}`,
+        : (debug ? localDebugOutput : `${saved ? "OK" : "FAIL"}\n${this.tr(saved ? "schedule_shared" : "share_schedule")}\n${target.label || target.name || target.address}`),
       running: false,
       debug,
       noChannel: true,
