@@ -2880,6 +2880,15 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     root.querySelectorAll(`[data-led-template-control="${name}"]`).forEach((el) => {
       el.value = String(next);
     });
+    const keys = this.ledSupportedScheduleKeys();
+    const index = keys.indexOf(String(name || ""));
+    if (index >= 0) {
+      const values = Array.isArray(this.dialogState && this.dialogState.values)
+        ? [...this.dialogState.values]
+        : this.currentLedChannelTemplateValues();
+      values[index] = next;
+      this.dialogState = { ...(this.dialogState || {}), values };
+    }
   }
 
   ledTemplateLivePreviewEnabled() {
