@@ -522,8 +522,11 @@ def test_inactive_schedule_delete_only_removes_selected_row() -> None:
     assert "active = bool(call.data.get(ATTR_ACTIVE, True))" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
     assert 'ATTR_DELETE_ONLY = "delete_only"' in constants
-    delete_only_brightness = (
-        "max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) else brightness_from_service_data(data)"
+    delete_only_brightness = "".join(
+        (
+            "max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) ",
+            "else brightness_from_service_data(data)",
+        )
     )
     assert delete_only_brightness in services
 
