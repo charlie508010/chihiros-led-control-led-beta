@@ -651,11 +651,6 @@ def _verification_row(period: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _verification_requires_snapshot(target: dict[str, Any]) -> bool:
-    """Return whether the device can confirm this row as an active brightness range."""
-    return any(int(value) > 0 for value in target["levels"].values())
-
-
 async def _record_or_schedule_led_verification(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
@@ -663,10 +658,7 @@ async def _record_or_schedule_led_verification(
     target: dict[str, Any],
     restore_rows: list[dict[str, Any]],
 ) -> None:
-    """Persist immediate zero-row verification or schedule a delayed device check."""
-    if not _verification_requires_snapshot(target):
-        await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, "verified")
-        return
+    """Persist a pending verification job and schedule a delayed device check."""
     await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
     _schedule_led_verification(hass, chihiros_data, target, restore_rows)
 
@@ -677,16 +669,11 @@ async def _record_or_schedule_led_verifications(
     device_key: str,
     targets: list[dict[str, Any]],
 ) -> None:
-    """Persist zero rows immediately and check positive rows with one device query."""
-    positive_targets = []
+    """Persist all rows as pending and check them with one device query."""
     for target in targets:
-        if not _verification_requires_snapshot(target):
-            await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, "verified")
-            continue
         await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
-        positive_targets.append(target)
-    if positive_targets:
-        _schedule_led_verification_batch(hass, chihiros_data, positive_targets)
+    if targets:
+        _schedule_led_verification_batch(hass, chihiros_data, targets)
 
 
 def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:

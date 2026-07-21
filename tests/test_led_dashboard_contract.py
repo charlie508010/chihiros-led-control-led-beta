@@ -523,7 +523,7 @@ def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> No
     assert "await _remove_stored_schedule_rows(chihiros_data.device, stored_rows[:2])" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
     assert "_record_or_schedule_led_verification(hass, chihiros_data, device_key, target, restore_rows)" in services
-    assert "if not _verification_requires_snapshot(target):" in services
+    assert "save_led_schedule_verification_job, device_key, target, restore_rows" in services
     assert "chihiros_data.device.replace_settings(settings)," in services
     assert "timeout=LED_VERIFICATION_RESTORE_TIMEOUT" in services
 
@@ -554,6 +554,9 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert 'task_key = f"{device_key}|batch"' in services
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
+    assert '"verified" if _schedule_snapshot_matches' in services
+    assert 'finish_led_schedule_verification, device_key, target, "verified"' not in services
+    assert "if not _verification_requires_snapshot" not in services
     assert "PRIMARY KEY (device_key, schedule_signature)" in storage
     assert "WHERE UPPER(device_key)=UPPER(?) AND schedule_signature=?" in storage
     assert 'old_target.get("start") == target["start"]' in storage
