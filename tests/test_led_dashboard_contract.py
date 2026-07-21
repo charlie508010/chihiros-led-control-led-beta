@@ -392,20 +392,21 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
     assert '"dashboard_debug": bool(data.get("dashboard_debug", False))' in server
 
 
-def test_debug_sections_render_copy_buttons_without_inner_titles() -> None:
-    """Structured debug output keeps per-section copy buttons without title headers."""
+def test_debug_sections_restore_headers_after_running_dialog() -> None:
+    """Running debug is plain, completed structured debug keeps headers and copy buttons."""
     dashboard = source(DASHBOARD)
     start = dashboard.index("debugOutputMarkup(output = \"\"")
     end = dashboard.index("\n  async copyText", start)
     implementation = dashboard[start:end]
 
     assert "<pre>${this.escapeHtml(section.value)}</pre>" in implementation
-    assert "<header>" not in implementation
+    assert "<header>" in implementation
     assert "copy-debug:${index}" in implementation
-    assert 'class="debug-section-copy"' in implementation
+    assert "const title = section.title || this.tr(\"debug_output\");" in implementation
+    assert "options.debug && !options.running" in dashboard
+    assert "...(options.running ? [] : [" in dashboard
     assert '{ action: "copy-debug:all", label: this.tr("copy_all")' in dashboard
-    assert ".debug-section-box header" not in dashboard
-    assert ".debug-section-copy {" in dashboard
+    assert ".debug-section-box header" in dashboard
 
 
 def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -> None:

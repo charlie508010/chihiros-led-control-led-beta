@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1124";
+import "./panels/chihiros-led-panel.js?v=0.2.1125";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1249,11 +1249,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     return this.sharedModalDialog({
       title,
       sectionClass: `modal card debug-modal${levelClass}`,
-      bodyHtml: options.debug
+      bodyHtml: options.debug && !options.running
         ? this.debugOutputMarkup(output, levelClass)
         : `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`,
       actions: [
-        { action: "copy-debug:all", label: this.tr("copy_all"), className: "secondary", type: "button" },
+        ...(options.running ? [] : [{ action: "copy-debug:all", label: this.tr("copy_all"), className: "secondary", type: "button" }]),
         { action: "close-dialog", label: this.tr("close"), className: "link", type: "button", attrs: "data-close-dialog" },
       ],
     });
@@ -1292,11 +1292,17 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   debugOutputMarkup(output = "", levelClass = "") {
     const sections = this.debugOutputSections(output);
     if (!sections.length) return `<div class="debug-output${levelClass}">${this.escapeHtml(output)}</div>`;
-    return `<div class="debug-section-list${levelClass}">${sections.map((section, index) => `
+    return `<div class="debug-section-list${levelClass}">${sections.map((section, index) => {
+      const title = section.title || this.tr("debug_output");
+      return `
         <section class="debug-section-box">
-          <button class="debug-section-copy" type="button" data-action="copy-debug:${index}">${this.escapeHtml(this.tr("copy"))}</button>
+          <header>
+            <span>${this.escapeHtml(title)}</span>
+            <button type="button" data-action="copy-debug:${index}">${this.escapeHtml(this.tr("copy"))}</button>
+          </header>
           <pre>${this.escapeHtml(section.value)}</pre>
-        </section>`).join("")}</div>`;
+        </section>`;
+    }).join("")}</div>`;
   }
 
   async copyText(text = "") {
@@ -2075,6 +2081,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       title: this.dialogState.title || (this.dialogState.debug ? this.tr("debug_output") : this.tr("result_output")),
       output: this.dialogState.output || "",
       debug: Boolean(this.dialogState.debug),
+      running: Boolean(this.dialogState.running),
       level: this.dialogState.level || "",
     });
     if (this.dialogState?.type === "confirm") return this.sharedModalDialog({
@@ -3264,9 +3271,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .debug-modal { width:min(760px, calc(100vw - 40px)); }
         .debug-output { max-height:min(62vh, 620px); overflow:auto; white-space:pre-wrap; word-break:break-word; border:1px solid rgba(255,255,255,.12); border-radius:7px; background:rgba(0,0,0,.42); color:var(--primary-text-color); padding:12px; font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
         .debug-section-list { display:grid; gap:10px; max-height:min(66vh, 680px); overflow:auto; padding-right:4px; }
-        .debug-section-box { position:relative; min-width:0; border:1px solid rgba(81,154,190,.28); border-radius:7px; background:rgba(0,0,0,.22); overflow:hidden; }
-        .debug-section-copy { position:absolute; top:8px; right:8px; z-index:1; min-height:28px; border:1px solid rgba(81,154,190,.42); border-radius:5px; background:rgba(0,0,0,.42); color:var(--primary-text-color); font:12px/1.2 inherit; padding:0 10px; cursor:pointer; }
-        .debug-section-box pre { margin:0; max-height:min(34vh, 360px); overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:44px 12px 12px; color:var(--primary-text-color); font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+        .debug-section-box { min-width:0; border:1px solid rgba(81,154,190,.28); border-radius:7px; background:rgba(0,0,0,.22); overflow:hidden; }
+        .debug-section-box header { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid rgba(81,154,190,.20); background:rgba(3,201,255,.07); color:#7be6ff; font-size:12px; font-weight:800; text-transform:uppercase; }
+        .debug-section-box header button { min-height:28px; border:1px solid rgba(81,154,190,.42); border-radius:5px; background:rgba(0,0,0,.20); color:var(--primary-text-color); font:12px/1.2 inherit; padding:0 10px; cursor:pointer; text-transform:none; }
+        .debug-section-box pre { margin:0; max-height:min(34vh, 360px); overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; color:var(--primary-text-color); font:12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
         .debug-modal.error { border-color:rgba(255,77,79,.75); box-shadow:0 0 0 1px rgba(255,77,79,.32), 0 18px 60px rgba(0,0,0,.45); }
         .debug-modal.error h2 { color:#ff8a8a; }
         .debug-output.error { border-color:rgba(255,77,79,.78); background:rgba(75,0,0,.46); color:#ffd8d8; }
