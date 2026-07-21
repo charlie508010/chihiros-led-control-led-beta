@@ -213,10 +213,41 @@ python scripts/bump_core_version.py --include-worktree --commit "fix: centralize
 
 Der Befehl darf entsprechend den Git-Regeln nur ausgegeben und nicht ohne ausdrückliche Freigabe ausgeführt werden.
 
+## 13. Git-Identität vor Commit und Push
+
+Vor jedem Commit, Push oder History-Rewrite muss die lokale Repository-Git-Identität geprüft werden.
+
+Erlaubt ist ausschließlich:
+
+```text
+user.name = charlie508010
+user.email = 285831950+charlie508010@users.noreply.github.com
+```
+
+Vor jedem Commit oder Push müssen diese Befehle geprüft werden:
+
+```bash
+git config --show-origin user.name
+git config --show-origin user.email
+```
+
+Wenn eine andere Identität aktiv ist, muss sie vor dem Commit ausschließlich lokal für dieses Repository korrigiert werden:
+
+```bash
+git config user.name "charlie508010"
+git config user.email "285831950+charlie508010@users.noreply.github.com"
+```
+
+Globale Git-Konfiguration darf dafür nicht geändert werden.
+
+Commits mit Namen, E-Mail oder GitHub-Zuordnung von `Martin11180`, `martin-oberst@arcor.de` oder anderen privaten Accounts sind verboten.
+
+Nach einem Push muss bei Bedarf geprüft werden, dass GitHub die Commits nicht einem falschen Account zuordnet. Wenn ein falscher Autor sichtbar wird, sofort stoppen und keine weiteren Commits oder Pushes ausführen.
+
 lesen und schreiben auf \\172.20.48.110\config\.chihiros\chihiros_state.sqlite3 erlaube ich mache aber immer ein backup
 löschen ist nicht erlaubt
 
-## 13. LED-Core-Abgrenzung
+## 14. LED-Core-Abgrenzung
 
 - Dieses Repository ist die eigenständige Arbeitskopie für die LED-Steuerung.
 - Änderungen dürfen sich ausschließlich auf LED-Funktionen oder ausdrücklich gemeinsame Core-Schnittstellen beziehen.

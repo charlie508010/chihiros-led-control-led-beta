@@ -36,6 +36,14 @@ def test_addon_icon_fallback_renders_real_svg_symbols() -> None:
     assert 'ha-icon::after' not in index
 
 
+def test_hacs_brand_icon_is_packaged() -> None:
+    """HACS validation expects a local brand icon fallback."""
+    icon = ROOT / "custom_components" / "chihiros" / "brand" / "icon.png"
+
+    assert icon.is_file()
+    assert icon.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def test_private_addon_update_installs_the_supervisor_release_or_refreshes_the_runtime() -> None:
     """The update endpoint must install a release and retain the token-backed runtime fallback."""
     dashboard = source(DASHBOARD)
