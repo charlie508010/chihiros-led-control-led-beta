@@ -845,13 +845,36 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
     positive_expected_levels = {level for level in expected_by_channel.values() if level > 0}
     fallback_expected_levels = positive_expected_levels or {0}
 
+    def _minutes(hour: int, minute: int) -> int:
+        return (hour * 60) + minute
+
+    target_start = _minutes(start_hour, start_minute)
+    target_end = _minutes(end_hour, end_minute)
+
+    def _overlaps_target(start: int, end: int) -> bool:
+        return start < target_end and end > target_start
+
+    def _implicit_zero_range_matches(points: list[tuple[int, int, int]]) -> bool:
+        if positive_expected_levels:
+            return False
+        ranges = device._schedule_curve_ranges(sorted(points))  # noqa: SLF001
+        has_left_boundary = False
+        for sh, sm, eh, em, level, _ramp in ranges:
+            range_start = _minutes(sh, sm)
+            range_end = _minutes(eh, em)
+            if range_end == target_start:
+                has_left_boundary = True
+            if level > 0 and _overlaps_target(range_start, range_end):
+                return False
+        return has_left_boundary
+
     def _ranges_match(points: list[tuple[int, int, int]], expected_levels: set[int]) -> bool:
         ranges = device._schedule_curve_ranges(sorted(points))  # noqa: SLF001
         return any(
             (sh, sm, eh, em, ramp) == (start_hour, start_minute, end_hour, end_minute, expected_ramp)
             and level in expected_levels
             for sh, sm, eh, em, level, ramp in ranges
-        )
+        ) or _implicit_zero_range_matches(points)
 
     snapshot_channels = sorted(
         {str(channel).lower() for point in snapshot.points for channel in getattr(point, "levels", {}).keys()}

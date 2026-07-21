@@ -476,6 +476,10 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert "device._schedule_curve_ranges(sorted(points))" in services
     assert "if not positive_expected_levels:" not in services
     assert "fallback_expected_levels = positive_expected_levels or {0}" in services
+    assert "def _implicit_zero_range_matches" in services
+    assert "if positive_expected_levels:" in services
+    assert "range_end == target_start" in services
+    assert "level > 0 and _overlaps_target" in services
     assert "verification_status TEXT NOT NULL DEFAULT 'pending'" in server
     assert 'verification_status, verified_at = ("pending", "")' in server
     assert 'verification_status, verified_at = ("pending", "") if sent else previous.get' in source(
