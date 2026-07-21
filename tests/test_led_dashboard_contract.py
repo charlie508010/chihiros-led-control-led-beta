@@ -820,6 +820,8 @@ def test_template_dialog_has_live_device_preview() -> None:
     assert "sendLedTemplateLivePreview" in panel
     assert 'service: "set_brightness"' in panel
     assert "data: { brightness, ...this.ledServiceSelector() }" in panel
+    assert 'class="led-template-live-preview-row"' in panel
+    assert ".led-template-live-preview-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto;" in dashboard
     assert 'template_live_preview: "Live-Vorschau"' in dashboard
     assert 'template_live_preview: "Live preview"' in dashboard
     assert "rawLabel.slice(localPrefix.length)" in panel

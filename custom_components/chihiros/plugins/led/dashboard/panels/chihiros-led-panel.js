@@ -3322,10 +3322,12 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
                 <label><span>${this.tr("name")}</span></label>
                 <input type="text" data-led-template-name value="${this.escapeHtml(state.name || "")}">
               </div>
-              <label class="led-schedule-color-control color-toggle led-template-live-preview-row">
-                <span>${this.tr("template_live_preview")}</span>
+              <label class="led-template-live-preview-row">
                 <input type="checkbox" data-led-template-live-preview>
-                <small>${this.tr("template_live_preview_hint")}</small>
+                <span class="led-template-live-preview-text">
+                  <strong>${this.tr("template_live_preview")}</strong>
+                  <small>${this.tr("template_live_preview_hint")}</small>
+                </span>
                 <em data-led-template-live-preview-status></em>
               </label>
               ${keys.map((key, index) => colorControl(
