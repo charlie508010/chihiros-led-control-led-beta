@@ -2669,12 +2669,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   ledScheduleRowVerification(row) {
     const storedStatus = String(row && row.verification_status ? row.verification_status : "").toLowerCase();
-    if (storedStatus === "verified") return { level: "ok", text: this.tr("verified") };
     const ranges = this.ledScheduleSnapshotRanges();
     if (!ranges.length) {
-      return storedStatus === "failed"
-        ? { level: "fail", text: this.tr("mismatch") }
-        : { level: "pending", text: this.tr("not_checked") };
+      if (storedStatus === "verified") return { level: "ok", text: this.tr("verified") };
+      if (storedStatus === "failed") return { level: "fail", text: this.tr("mismatch") };
+      return { level: "pending", text: this.tr("not_checked") };
     }
     const levels = this.normalizeLedScheduleLevels(row && row.levels ? row.levels : {});
     const supportedLevels = this.ledSupportedScheduleKeys(this.activeLedDevice || {}).map((key) => Number(levels[key] || 0));

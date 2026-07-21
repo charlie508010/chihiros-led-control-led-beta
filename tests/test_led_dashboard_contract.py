@@ -463,7 +463,13 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert 'storedStatus === "verified"' in panel
     assert 'storedStatus === "failed"' in panel
     assert 'if (storedStatus === "verified") return' in verification
-    assert 'if (storedStatus === "failed") return' not in verification
+    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
+        'if (storedStatus === "verified") return'
+    )
+    assert 'if (storedStatus === "failed") return' in verification
+    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
+        'if (storedStatus === "failed") return'
+    )
     assert 'if (storedStatus === "pending") return' not in verification
     assert "const ranges = this.ledScheduleSnapshotRanges();" in verification
     services = source(LED_SERVICES)
