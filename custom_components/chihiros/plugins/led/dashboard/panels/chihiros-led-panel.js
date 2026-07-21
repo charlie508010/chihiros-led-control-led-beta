@@ -3703,7 +3703,21 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   ledLayoutDefaultOrder() {
-    return ["channels", "middle", "templates", "connection", "control", "presets"];
+    return ["channels", "schedule", "history", "templates", "connection", "control", "presets"];
+  }
+
+  normalizeLedLayoutOrder(order) {
+    const defaults = this.ledLayoutDefaultOrder();
+    const migrated = [];
+    (Array.isArray(order) ? order : []).forEach((item) => {
+      if (item === "middle") {
+        migrated.push("schedule", "history");
+      } else {
+        migrated.push(item);
+      }
+    });
+    const filtered = migrated.filter((item, index) => defaults.includes(item) && migrated.indexOf(item) === index);
+    return [...filtered, ...defaults.filter((item) => !filtered.includes(item))];
   }
 
   ledLayoutUserKey() {
@@ -3716,14 +3730,12 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   ledLayoutOrder() {
-    const defaults = this.ledLayoutDefaultOrder();
     try {
       const raw = window.localStorage.getItem(this.ledLayoutUserKey());
       const saved = raw ? JSON.parse(raw) : [];
-      const filtered = Array.isArray(saved) ? saved.filter((item) => defaults.includes(item)) : [];
-      return [...filtered, ...defaults.filter((item) => !filtered.includes(item))];
+      return this.normalizeLedLayoutOrder(saved);
     } catch (_err) {
-      return defaults;
+      return this.ledLayoutDefaultOrder();
     }
   }
 
@@ -3736,12 +3748,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   saveLedLayoutOrder(order) {
-    const defaults = this.ledLayoutDefaultOrder();
-    const filtered = Array.isArray(order) ? order.filter((item) => defaults.includes(item)) : defaults;
     try {
       window.localStorage.setItem(
         this.ledLayoutUserKey(),
-        JSON.stringify([...filtered, ...defaults.filter((item) => !filtered.includes(item))]),
+        JSON.stringify(this.normalizeLedLayoutOrder(order)),
       );
     } catch (_err) {
       // Local storage can be unavailable in restricted browser modes.
@@ -3805,8 +3815,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
             </button>
             <span>${this.tr(`layout_item_${itemId}`)}</span>
             <div>
+              <button type="button" data-action="led-layout-move:${itemId}:-1" ${disabledUp} title="${this.tr("move_left")}">←</button>
               <button type="button" data-action="led-layout-move:${itemId}:-1" ${disabledUp} title="${this.tr("move_up")}">↑</button>
               <button type="button" data-action="led-layout-move:${itemId}:1" ${disabledDown} title="${this.tr("move_down")}">↓</button>
+              <button type="button" data-action="led-layout-move:${itemId}:1" ${disabledDown} title="${this.tr("move_right")}">→</button>
             </div>
           </div>` : ""}
         ${content}
@@ -3901,15 +3913,13 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
           : `<h2>${this.tr("color_channels")}</h2>`}
         ${channelContent}
       </section>`;
-    const middleCard = `
-      <div class="middle wide-middle led-middle">
-        ${this.ledScheduleSummaryPanel()}
-        ${this.ledHistoryPanel()}
-      </div>`;
+    const scheduleCard = this.ledScheduleSummaryPanel();
+    const historyCard = this.ledHistoryPanel();
     const templateCard = this.ledTemplatePanel();
     const layoutItems = {
       channels: channelsCard,
-      middle: middleCard,
+      schedule: scheduleCard,
+      history: historyCard,
       templates: templateCard,
       connection: connectionCard,
       control: controlCard,

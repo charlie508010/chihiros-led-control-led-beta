@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1147";
+import "./panels/chihiros-led-panel.js?v=0.2.1148";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1536,13 +1536,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         layout_hint: "Box am Griff anfassen und verschieben. Die Reihenfolge wird automatisch gespeichert.",
         layout_drag: "Verschieben",
         layout_item_channels: "Farbkanäle",
-        layout_item_middle: "Zeitplan und Historie",
+        layout_item_schedule: "Zeitplan",
+        layout_item_history: "Historie gesamt",
         layout_item_templates: "Vorlagen",
         layout_item_connection: "Verbindung",
         layout_item_control: "Steuerung",
         layout_item_presets: "Voreinstellungen",
+        move_left: "Nach links",
         move_up: "Nach oben",
         move_down: "Nach unten",
+        move_right: "Nach rechts",
         details: "Details",
         close: "Schließen",
         cancel: "Abbrechen",
@@ -1831,13 +1834,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         layout_hint: "Grab a box by the handle and move it. The order is saved automatically.",
         layout_drag: "Move",
         layout_item_channels: "Color channels",
-        layout_item_middle: "Schedule and history",
+        layout_item_schedule: "Schedule",
+        layout_item_history: "History total",
         layout_item_templates: "Templates",
         layout_item_connection: "Connection",
         layout_item_control: "Control",
         layout_item_presets: "Presets",
+        move_left: "Move left",
         move_up: "Move up",
         move_down: "Move down",
+        move_right: "Move right",
         details: "Details",
         close: "Close",
         cancel: "Cancel",
@@ -2670,11 +2676,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         container.classList.add("is-dragging");
         const move = (moveEvent) => {
           moveEvent.preventDefault();
+          const x = Number(moveEvent.clientX || 0);
           const y = Number(moveEvent.clientY || 0);
           const siblings = [...container.querySelectorAll("[data-led-layout-item]")].filter((entry) => entry !== item);
           const before = siblings.find((entry) => {
             const rect = entry.getBoundingClientRect();
-            return y < rect.top + rect.height / 2;
+            const middleX = rect.left + rect.width / 2;
+            const middleY = rect.top + rect.height / 2;
+            const sameRow = y >= rect.top && y <= rect.bottom;
+            if (sameRow) return x < middleX;
+            return y < middleY;
           });
           if (before) {
             container.insertBefore(item, before);
@@ -2736,12 +2747,14 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-toolbar small { color:rgba(255,255,255,.62); line-height:1.35; }
         .led-layout-page > .led-layout-item { display:block; min-width:0; }
         .led-layout-page > [data-led-layout-item="channels"] { grid-column:1 / -1; grid-row:1; }
-        .led-layout-page > [data-led-layout-item="middle"] { grid-column:1 / -1; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="history"] { grid-column:2; grid-row:2; }
         .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:3; }
         .led-layout-page > [data-led-layout-item="connection"] { grid-column:2; grid-row:3; }
         .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:4; }
         .led-layout-page > [data-led-layout-item="presets"] { grid-column:2; grid-row:4; }
-        .led-layout-page.has-custom-layout > .led-layout-item { grid-row:auto !important; order:var(--led-layout-order,0); }
+        .led-layout-page.has-custom-layout > .led-layout-item,
+        .led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }
         .led-layout-page > .led-layout-item > .card,
         .led-layout-page > .led-layout-item > .middle { width:100%; height:100%; box-sizing:border-box; }
         .led-layout-page.is-editing > .led-layout-item { position:relative; border:1px dashed rgba(3,201,255,.38); border-radius:10px; padding:8px; background:rgba(3,201,255,.045); }
@@ -3370,11 +3383,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         @media (max-width:700px) {
           .led-page { grid-template-columns:minmax(0,1fr); }
           .led-layout-page > [data-led-layout-item="channels"] { grid-column:1; grid-row:1; }
-          .led-layout-page > [data-led-layout-item="middle"] { grid-column:1; grid-row:2; }
-          .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:3; }
-          .led-layout-page > [data-led-layout-item="connection"] { grid-column:1; grid-row:4; }
-          .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:5; }
-          .led-layout-page > [data-led-layout-item="presets"] { grid-column:1; grid-row:6; }
+          .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:2; }
+          .led-layout-page > [data-led-layout-item="history"] { grid-column:1; grid-row:3; }
+          .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:4; }
+          .led-layout-page > [data-led-layout-item="connection"] { grid-column:1; grid-row:5; }
+          .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:6; }
+          .led-layout-page > [data-led-layout-item="presets"] { grid-column:1; grid-row:7; }
           .led-channels-card { grid-column:1; grid-row:1; }
           .led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }
           .led-template-card { grid-column:1; grid-row:3; }

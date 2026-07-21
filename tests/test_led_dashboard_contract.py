@@ -548,13 +548,21 @@ def test_led_layout_editor_contract_remains_available() -> None:
     core = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "dashboard" / "chihiros-led-core-card.js")
 
     assert "ledLayoutUserKey()" in panel
+    assert 'return ["channels", "schedule", "history", "templates", "connection", "control", "presets"];' in panel
+    assert 'if (item === "middle")' in panel
     assert "chihiros-led-core-layout:${user}:${deviceKey}" in panel
     assert "ledLayoutHasCustomOrder()" in panel
     assert "has-custom-layout" in panel
-    assert ".led-layout-page.has-custom-layout > .led-layout-item { grid-row:auto !important; order:var(--led-layout-order,0); }" in core
+    assert ".led-layout-page.has-custom-layout > .led-layout-item," in core
+    assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
     assert 'data-led-layout-handle' in panel
+    assert "clientX" in core
+    assert "move_left" in core
+    assert "move_right" in core
+    assert "layout_item_schedule" in core
+    assert "layout_item_history" in core
     assert 'kind === "led-layout-toggle"' in core
     assert 'kind === "led-layout-reset"' in core
     assert 'kind === "led-layout-move"' in core
