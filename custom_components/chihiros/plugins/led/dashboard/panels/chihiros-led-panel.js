@@ -3926,9 +3926,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       presets: presetsCard,
     };
     return `
-      ${this.ledDeviceTabs()}
+      <div class="led-device-topline">
+        ${this.ledDeviceTabs()}
+        ${this.ledLayoutToolbar()}
+      </div>
       ${this.ledManualScheduleWarning()}
-      ${this.ledLayoutToolbar()}
       <div class="led-page led-layout-page ${this.ledLayoutEditing ? "is-editing" : ""} ${this.ledLayoutHasCustomOrder() ? "has-custom-layout" : ""}">
         ${layoutOrder.map((itemId) => this.ledLayoutItem(itemId, layoutItems[itemId] || "", layoutOrder)).join("")}
       </div>`;

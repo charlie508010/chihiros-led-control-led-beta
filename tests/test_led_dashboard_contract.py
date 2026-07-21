@@ -553,6 +553,8 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert "chihiros-led-core-layout:${user}:${deviceKey}" in panel
     assert "ledLayoutHasCustomOrder()" in panel
     assert "has-custom-layout" in panel
+    assert "led-device-topline" in panel
+    assert ".led-device-topline .led-layout-toolbar { justify-content:flex-end; margin:0; }" in core
     assert ".led-layout-page.has-custom-layout > .led-layout-item," in core
     assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
