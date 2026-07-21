@@ -411,15 +411,25 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
 def test_scheduler_delete_keeps_verification_for_remaining_rows() -> None:
     """An optimistic delete render must retain the persisted green row markers."""
     panel = source(LED_PANEL)
-    override_branch = panel.split("if (Array.isArray(this._ledScheduleRowsOverride)) {", 1)[1].split(
+    override_branch = panel.split("Array.isArray(this._ledScheduleRowsOverride)", 1)[1].split(
         "const storageKeys = this.ledScheduleStorageKeys();", 1
     )[0]
 
+    assert 'String(this._ledScheduleRowsOverrideKey || "") === this.ledScheduleDeviceKey()' in override_branch
     verification_mapping = (
         'verification_status: String(row && row.verification_status ? row.verification_status : "pending")'
     )
     assert verification_mapping in override_branch
     assert 'verified_at: String(row && row.verified_at ? row.verified_at : "")' in override_branch
+
+
+def test_schedule_rows_override_is_scoped_to_selected_device() -> None:
+    """Optimistic schedule rows from one LED must not leak into another LED tab."""
+    panel = source(LED_PANEL)
+
+    assert 'String(this._ledScheduleRowsOverrideKey || "") === this.ledScheduleDeviceKey()' in panel
+    assert "this._ledScheduleRowsOverrideKey = deviceKey" in panel
+    assert 'this._ledScheduleRowsOverrideKey = ""' in panel
 
 
 def test_new_scheduler_dialog_keeps_entered_times_while_sending() -> None:

@@ -1222,7 +1222,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   ledScheduleRows() {
-    if (Array.isArray(this._ledScheduleRowsOverride)) {
+    if (
+      Array.isArray(this._ledScheduleRowsOverride)
+      && String(this._ledScheduleRowsOverrideKey || "") === this.ledScheduleDeviceKey()
+    ) {
       return this._ledScheduleRowsOverride.map((row) => ({
         start: String(row && row.start ? row.start : "08:00"),
         end: String(row && row.end ? row.end : "20:00"),
@@ -1448,6 +1451,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const sendFlat = editIndex !== null || isNewDialog;
     const title = send ? this.tr("led_schedule_save_send") : this.tr("led_schedule_save_local");
     this._ledScheduleRowsOverride = mergedValues;
+    this._ledScheduleRowsOverrideKey = deviceKey;
     this._ledScheduleSubmitting = true;
     this.setLedScheduleDialogMessage(send ? this.tr("sending") : this.tr("saving"), "pending");
     this.render();
@@ -1457,6 +1461,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       this.setLedScheduleDialogMessage(`${title}\n${this.tr("local_save_failed")}`);
       this._ledScheduleSubmitting = false;
       this._ledScheduleRowsOverride = null;
+      this._ledScheduleRowsOverrideKey = "";
       this.render();
       return;
     }
@@ -1468,6 +1473,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       this._ledScheduleSubmitting = false;
       this.render();
       this._ledScheduleRowsOverride = null;
+      this._ledScheduleRowsOverrideKey = "";
       return;
     }
     const sendResult = await this.runLedScheduleService({
@@ -1504,6 +1510,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     this._ledScheduleSubmitting = false;
     this.render();
     this._ledScheduleRowsOverride = null;
+    this._ledScheduleRowsOverrideKey = "";
   }
 
   async resetLedSchedule(debugOverride = null) {
@@ -1519,6 +1526,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     if (ok) {
       await this.saveLedScheduleLocal(address ? { address, periods: [], send: false, device_key: deviceKey } : { periods: [], send: false, device_key: deviceKey }, resetTitle, true);
       this._ledScheduleRowsOverride = [];
+      this._ledScheduleRowsOverrideKey = deviceKey;
       this.ledScheduleEditorOpen = false;
       await this.addLedHistory(`${this.tr("led_schedule_sent_action")} ok`, this.tr("schedule_deleted"), null, { status: "ok" });
       await this.persistLedDeviceStatus({
@@ -1773,6 +1781,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       this._ledScheduleSubmitting = true;
     } else {
       this._ledScheduleRowsOverride = remainingRows;
+      this._ledScheduleRowsOverrideKey = deviceKey;
       this.ledScheduleEditorOpen = false;
       this.ledScheduleEditIndex = null;
     }
@@ -1821,6 +1830,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         if (address) localData.address = address;
         await this.saveLedScheduleLocal(localData, title, true);
         this._ledScheduleRowsOverride = remainingRows;
+        this._ledScheduleRowsOverrideKey = deviceKey;
       }
       await this.addLedHistory(
         send ? `${this.tr("led_schedule_sent_action")} ok` : this.tr("schedule_local_deleted"),
@@ -1858,6 +1868,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         };
       }
       this._ledScheduleRowsOverride = null;
+      this._ledScheduleRowsOverrideKey = "";
       this.render();
     }
     this._ledScheduleSubmitting = false;
