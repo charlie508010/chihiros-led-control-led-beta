@@ -225,7 +225,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 chihiros_data.device,
                 settings,
             )
-            await _finish_led_schedule_verifications(hass, device_key, verification_rows, "verified")
+            _cancel_led_schedule_verification_tasks(hass, device_key, verification_rows)
             return {"schedules_restored": schedule_count, "verification_scheduled": False}
 
         return await _async_led_send_service(
@@ -690,6 +690,19 @@ async def _finish_led_schedule_verifications(
             previous.cancel()
     for target in targets:
         await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, status)
+
+
+def _cancel_led_schedule_verification_tasks(
+    hass: HomeAssistant,
+    device_key: str,
+    targets: list[dict[str, Any]],
+) -> None:
+    """Cancel delayed in-memory checks without changing stored schedule verification state."""
+    tasks = hass.data.setdefault(LED_VERIFICATION_TASKS, {})
+    for key in [f"{device_key}|batch", *[_led_verification_task_key(device_key, target) for target in targets]]:
+        previous = tasks.pop(key, None)
+        if previous is not None and not previous.done():
+            previous.cancel()
 
 
 def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:
