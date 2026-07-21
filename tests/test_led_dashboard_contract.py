@@ -455,7 +455,7 @@ def test_scheduler_reset_debug_keeps_delete_and_verification_operations() -> Non
 
 
 def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
-    """The dashboard marker lets a fresh matching snapshot recover a stored failed result."""
+    """The dashboard marker uses only the persisted verification result."""
     panel = source(LED_PANEL)
     server = source(ROOT / "chihiros_beta" / "ui" / "server.py")
     verification = panel.split("ledScheduleRowVerification(row)", 1)[1].split("ledScheduleDialog()", 1)[0]
@@ -463,15 +463,9 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert 'storedStatus === "verified"' in panel
     assert 'storedStatus === "failed"' in panel
     assert 'if (storedStatus === "verified") return' in verification
-    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
-        'if (storedStatus === "verified") return'
-    )
     assert 'if (storedStatus === "failed") return' in verification
-    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
-        'if (storedStatus === "failed") return'
-    )
-    assert 'if (storedStatus === "pending") return' not in verification
-    assert "const ranges = this.ledScheduleSnapshotRanges();" in verification
+    assert 'return { level: "pending", text: this.tr("not_checked") };' in verification
+    assert "const ranges = this.ledScheduleSnapshotRanges();" not in verification
     services = source(LED_SERVICES)
     assert "device._schedule_curve_ranges(sorted(points))" in services
     assert "if not positive_expected_levels:" not in services
@@ -842,13 +836,11 @@ def test_connection_panel_shows_runtime_sensor() -> None:
     assert "startsZeroRange" in panel
     assert "sharesBoundary || startsZeroRange ? zeroIndex : followingIndex" in panel
     assert "candidateRamp >= 1 && candidateRamp <= 150" in panel
-    assert "const expectedRamp = configuredRamp;" in panel
     assert "if (minutes <= 1) return 1;" in panel
     assert "if (!Number.isFinite(minutes)) return 1;" in panel
     assert 'ramp: Math.max(1, Math.min(150, Math.round(Number(get("ramp", "1")))))' in panel
     assert "rampControl(row.ramp ?? 1)" in panel
     assert "if (addonMode) {" in panel
-    assert "range.ramp === expectedRamp" in panel
     assert "ledScheduleRowVerification(row)" in panel
     assert "const existingBoundary = normalized" in panel
     assert "ranges.push({ start, end: existingBoundary.time, level, ramp });" in panel
