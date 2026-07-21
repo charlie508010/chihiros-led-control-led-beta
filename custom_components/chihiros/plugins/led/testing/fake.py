@@ -218,9 +218,10 @@ class FakeChihirosDevice:
         ramp_up_in_minutes: int = 1,
         weekdays: list[object] | None = None,
         enable_auto_mode: bool = True,
+        prepare_existing_setting: bool = False,
     ) -> None:
         """Accept fake schedule writes."""
-        del sunrise, sunset, max_brightness, ramp_up_in_minutes, weekdays, enable_auto_mode
+        del sunrise, sunset, max_brightness, ramp_up_in_minutes, weekdays, enable_auto_mode, prepare_existing_setting
         await self.query_status()
 
     async def remove_setting(

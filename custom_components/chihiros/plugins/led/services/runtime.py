@@ -158,7 +158,11 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 )
                 _replaced = True
             else:
-                await async_add_schedule_period(chihiros_data, call.data)
+                await async_add_schedule_period(
+                    chihiros_data,
+                    call.data,
+                    prepare_existing_setting=active and bool(stored_rows),
+                )
                 _replaced = False
             verification_scheduled = active
             if verification_scheduled:
@@ -491,6 +495,7 @@ async def async_add_schedule_period(
     data: dict[str, Any],
     *,
     enable_auto_mode: bool | None = None,
+    prepare_existing_setting: bool = False,
 ) -> None:
     """Add or delete one auto schedule period."""
     start = parse_schedule_time(data[ATTR_START])
@@ -513,6 +518,7 @@ async def async_add_schedule_period(
         enable_auto_mode=(
             bool(data.get(ATTR_ENABLE_AUTO_MODE, True)) if enable_auto_mode is None else enable_auto_mode
         ),
+        prepare_existing_setting=prepare_existing_setting,
     )
 
 

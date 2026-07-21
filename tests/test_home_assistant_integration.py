@@ -198,6 +198,8 @@ class TrackingChihirosClient:
         max_brightness: int | Sequence[int] | Mapping[str | int, int] = 100,
         ramp_up_in_minutes: int = 0,
         weekdays: list[object] | None = None,
+        enable_auto_mode: bool = True,
+        prepare_existing_setting: bool = False,
     ) -> None:
         """Record a schedule write."""
         self.add_setting_calls.append(
@@ -207,6 +209,8 @@ class TrackingChihirosClient:
                 "max_brightness": max_brightness,
                 "ramp_up_in_minutes": ramp_up_in_minutes,
                 "weekdays": weekdays,
+                "enable_auto_mode": enable_auto_mode,
+                "prepare_existing_setting": prepare_existing_setting,
             }
         )
 

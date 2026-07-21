@@ -90,6 +90,7 @@ class ChihirosClient(Protocol):
         ramp_up_in_minutes: int = 1,
         weekdays: list[WeekdaySelect] | None = None,
         enable_auto_mode: bool = True,
+        prepare_existing_setting: bool = False,
     ) -> None:
         """Add a schedule setting."""
 

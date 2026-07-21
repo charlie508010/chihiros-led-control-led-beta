@@ -987,6 +987,47 @@ def test_add_setting_skips_auto_mode_even_when_legacy_flag_is_enabled() -> None:
     assert sent_commands[0][6:-1] == bytes([9, 0, 17, 0, 1, 127, 5, 5, 5, 5, 255, 255, 255, 255])
 
 
+def test_dyu1000_add_setting_prepares_existing_row_like_app() -> None:
+    """DYU1000 second add clears the target row twice before sending the active row."""
+    sent_commands: list[bytes] = []
+
+    async def run() -> None:
+        model = DeviceModel(
+            "Universal WRGB",
+            ("DYU1000",),
+            WRGB_CHANNELS,
+            max_brightness=100,
+            schedule_reset_parameter=40,
+        )
+        device = ChihirosDevice(FakeBLEDevice(), model)  # type: ignore[arg-type]
+
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray, retry: int | None = None, **kwargs: object
+        ) -> None:
+            del retry, kwargs
+            if isinstance(command, list):
+                sent_commands.extend(bytes(item) for item in command)
+            else:
+                sent_commands.append(bytes(command))
+
+        device._send_command = capture_command  # type: ignore[method-assign]
+        await device.add_setting(
+            sunrise=datetime(2026, 7, 1, 18, 0),
+            sunset=datetime(2026, 7, 1, 22, 0),
+            max_brightness=(100, 100, 100, 100),
+            ramp_up_in_minutes=1,
+            weekdays=[WeekdaySelect.tuesday, WeekdaySelect.thursday, WeekdaySelect.saturday],
+            prepare_existing_setting=True,
+        )
+
+    asyncio.run(run())
+
+    assert [command[5] for command in sent_commands] == [25, 25, 25]
+    assert sent_commands[0][6:-1] == bytes([18, 0, 22, 0, 1, 42, *([255] * 8)])
+    assert sent_commands[1][6:-1] == bytes([18, 0, 22, 0, 1, 42, *([255] * 8)])
+    assert sent_commands[2][6:-1] == bytes([18, 0, 22, 0, 1, 42, 100, 100, 100, 100, 255, 255, 255, 255])
+
+
 def test_replace_setting_does_not_enable_auto_mode() -> None:
     """Editing deletes and rewrites the row without implicitly enabling auto mode."""
     sent_commands: list[bytes] = []
