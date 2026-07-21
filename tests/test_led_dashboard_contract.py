@@ -146,6 +146,7 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     run = source(ADDON_RUN)
 
     assert '"domain": "chihiros_led_core"' in manifest
+    assert '"http"' in manifest
     assert 'DOMAIN = "chihiros_led_core"' in constants
     assert 'FRONTEND_STATIC_URL = "/chihiros_led_core_static"' in integration
     assert 'FRONTEND_PANEL_URL = "chihiros-led-core"' in integration
@@ -156,6 +157,17 @@ def test_led_core_uses_an_isolated_home_assistant_namespace() -> None:
     assert '/config/custom_components/chihiros_led_core' in run
     assert '/config/.chihiros_led_core/chihiros_led_core.sqlite3' in run
     assert 'rm -rf /config/custom_components/chihiros' not in run
+
+
+def test_hassfest_validates_the_manifest_domain_path() -> None:
+    """Hassfest requires the integration directory to match the manifest domain."""
+    workflow = source(ROOT / ".github" / "workflows" / "validation.yaml")
+
+    prepare_step = "mv custom_components/chihiros custom_components/chihiros_led_core"
+    hassfest_step = 'uses: "home-assistant/actions/hassfest@master"'
+
+    assert prepare_step in workflow
+    assert workflow.index(prepare_step) < workflow.index(hassfest_step)
 
 
 def test_led_core_update_button_uses_the_supervisor_update_flow() -> None:

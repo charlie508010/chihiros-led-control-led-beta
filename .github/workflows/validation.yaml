@@ -48,5 +48,7 @@ jobs:
         uses: "hacs/action@main"
         with:
           category: "integration"
+      - name: Prepare Hassfest integration path
+        run: mv custom_components/chihiros custom_components/chihiros_led_core
       - name: Hassfest validation
         uses: "home-assistant/actions/hassfest@master"
