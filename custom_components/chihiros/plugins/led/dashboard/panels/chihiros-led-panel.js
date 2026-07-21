@@ -3497,7 +3497,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const periods = this.ledSchedulePeriodsFromRows(this.ledScheduleRows(), this.activeLedDevice || {}, true);
       const result = await this.runDeviceService({
         service: "enable_auto_mode",
-        data: this.ledServiceSelector(),
+        data: { periods, ...this.ledServiceSelector() },
         title: this.tr("enable_auto_mode"),
         debug,
         dialog: debug,

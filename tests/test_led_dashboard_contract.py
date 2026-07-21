@@ -852,6 +852,7 @@ def test_enable_auto_mode_button_uses_response_service_instead_of_schedule_write
 
     assert 'service: "enable_auto_mode"' in implementation
     assert "this.runDeviceService({" in implementation
+    assert "data: { periods, ...this.ledServiceSelector() }" in implementation
     assert "dialog: debug" in implementation
     assert "output: debug && serviceOutput ? serviceOutput" in implementation
     assert 'service: "set_schedule"' not in implementation

@@ -197,13 +197,30 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "entity_id": call.data.get(ATTR_ENTITY_ID, ""),
             "address": call.data.get(ATTR_ADDRESS, ""),
             "debug": bool(call.data.get(ATTR_DEBUG, False)),
+            "periods": call.data.get(ATTR_PERIODS, []),
         }
 
         async def _operation(chihiros_data: ChihirosData) -> dict[str, Any]:
+            explicit_periods = call.data.get(ATTR_PERIODS)
+            settings = None
+            if explicit_periods is not None:
+                validate_schedule_periods(chihiros_data, explicit_periods)
+                settings = [
+                    (
+                        parse_schedule_time(period[ATTR_START]),
+                        parse_schedule_time(period[ATTR_END]),
+                        brightness_from_service_data(period),
+                        int(period[ATTR_RAMP_UP_MINUTES]),
+                        parse_weekdays(period.get(ATTR_WEEKDAYS)),
+                    )
+                    for period in explicit_periods
+                    if bool(period.get(ATTR_ACTIVE, True))
+                ]
             schedule_count = await async_enable_led_auto_mode(
                 hass,
                 chihiros_data.coordinator,
                 chihiros_data.device,
+                settings,
             )
             return {"schedules_restored": schedule_count}
 
@@ -468,12 +485,18 @@ async def _async_led_send_service(
         return result if response_requested(call) else None
 
 
-async def async_enable_led_auto_mode(hass: HomeAssistant, coordinator: Any, device: Any) -> int:
+async def async_enable_led_auto_mode(
+    hass: HomeAssistant,
+    coordinator: Any,
+    device: Any,
+    settings: list[tuple[Any, ...]] | None = None,
+) -> int:
     """Enable automatic mode and restore active schedules from the shared database."""
-    settings = await hass.async_add_executor_job(
-        load_active_led_schedule_settings,
-        str(device.address),
-    )
+    if settings is None:
+        settings = await hass.async_add_executor_job(
+            load_active_led_schedule_settings,
+            str(device.address),
+        )
     await device.enable_auto_mode(dt_util.now(), settings)
     coordinator.async_set_auto_mode(True)
     return len(settings)

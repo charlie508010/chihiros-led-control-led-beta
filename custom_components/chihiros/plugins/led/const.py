@@ -64,6 +64,7 @@ ADD_SCHEDULE_SCHEMA = vol.Schema(
 ENABLE_AUTO_MODE_SCHEMA = vol.Schema(
     {
         **SCHEDULE_SELECTOR_SCHEMA,
+        vol.Optional(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_DEBUG, default=False): bool,
     }
 )

@@ -784,7 +784,7 @@ class ChihirosDevice:
                 return "Alle LED-Zeitplaene loeschen"
             if params == [11, 255, 255]:
                 return "Schalter auf manuell setzen"
-            if params == [18, 255, 255]:
+            if params in ([18, 255], [18, 255, 255]):
                 return "Automatikmodus aktivieren"
         if cmd_id == 165 and mode == 25 and len(params) >= 6:
             start = f"{params[0]:02d}:{params[1]:02d}"

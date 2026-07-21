@@ -107,7 +107,7 @@ def create_auto_parameter_command(msg_id: tuple[int, int], first_parameter: int)
 
 def create_switch_to_auto_mode_command(msg_id: tuple[int, int]) -> bytearray:
     """Create a switch to auto mode command."""
-    return create_command_encoding(90, 5, msg_id, [18, 255, 255])
+    return create_switch_to_automatic_tab_command(msg_id)
 
 
 def create_switch_to_automatic_tab_command(msg_id: tuple[int, int]) -> bytearray:

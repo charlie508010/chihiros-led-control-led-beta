@@ -180,8 +180,13 @@ class TrackingChihirosClient:
         """Record a full-device turn-off."""
         await self.set_brightness(0)
 
-    async def enable_auto_mode(self, timestamp: datetime | None = None) -> None:
+    async def enable_auto_mode(
+        self,
+        timestamp: datetime | None = None,
+        settings: Sequence[tuple[object, ...]] | None = None,
+    ) -> None:
         """Record enabling auto mode."""
+        del settings
         self.auto_mode_calls.append(timestamp)
 
     async def set_manual_mode(self) -> None:

@@ -81,7 +81,7 @@ def test_enable_auto_mode_sends_switch_and_reset() -> None:
     asyncio.run(run())
 
     assert [command[5] for command in sent_commands] == [5, 5]
-    assert sent_commands[0][6:9] == bytes([18, 255, 255])
+    assert sent_commands[0][6:-1] == bytes([18, 255])
     assert sent_commands[1][6:9] == bytes([5, 255, 255])
 
 
@@ -117,6 +117,8 @@ def test_enable_auto_mode_restores_existing_schedules_after_switch() -> None:
     asyncio.run(run())
 
     assert [command[5] for command in sent_commands] == [5, 5, 25]
+    assert sent_commands[0][6:-1] == bytes([18, 255])
+    assert sent_commands[1][6:9] == bytes([5, 255, 255])
     assert sent_commands[2][6:-1] == bytes([12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255])
 
 
@@ -998,7 +1000,7 @@ def test_add_setting_uses_first_channel_when_model_has_no_white_channel() -> Non
 
 
 def test_add_setting_skips_auto_mode_even_when_legacy_flag_is_enabled() -> None:
-    """Schedule writes never implicitly send mode 5 [18, 255, 255]."""
+    """Schedule writes never implicitly send mode 5 [18, 255]."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
