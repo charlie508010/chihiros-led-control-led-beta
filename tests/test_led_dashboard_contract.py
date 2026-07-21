@@ -540,6 +540,26 @@ def test_scheduler_crud_and_debug_contracts_remain_available() -> None:
     assert "async addLedSchedule(send = true)" in panel
     assert "async deleteLedScheduleRow(rowIndex = null, send = true)" in panel
     assert "Boolean(this.uiSettings && this.uiSettings.dashboardDebug)" in panel
+
+
+def test_led_layout_editor_contract_remains_available() -> None:
+    """The LED dashboard layout editor must stay user-scoped and mobile-safe."""
+    panel = source(LED_PANEL)
+    core = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "dashboard" / "chihiros-led-core-card.js")
+
+    assert "ledLayoutUserKey()" in panel
+    assert "chihiros-led-core-layout:${user}:${deviceKey}" in panel
+    assert "ledLayoutHasCustomOrder()" in panel
+    assert "has-custom-layout" in panel
+    assert "toggleLedLayoutEditor()" in panel
+    assert "resetLedLayoutOrder()" in panel
+    assert 'data-led-layout-handle' in panel
+    assert 'kind === "led-layout-toggle"' in core
+    assert 'kind === "led-layout-reset"' in core
+    assert 'kind === "led-layout-move"' in core
+    assert "bindLedLayoutDrag()" in core
+    assert "pointerdown" in core
+    assert "touch-action:none" in core
     assert 'type: "debug"' in panel
 
 

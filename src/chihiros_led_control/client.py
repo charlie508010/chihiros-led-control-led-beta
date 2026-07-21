@@ -45,6 +45,7 @@ from .protocol import (
     calculate_checksum,
     next_message_id,
     parse_notification,
+    schedule_snapshot_points_start,
 )
 from .weekday_encoding import WeekdaySelect, encode_selected_weekdays
 
@@ -819,7 +820,8 @@ class ChihirosDevice:
     def _describe_schedule_curve_snapshot(payload: bytes) -> list[str]:
         """Decode schedule snapshot RX frames as time/level curve points for debug output."""
         points: list[tuple[int, int, int]] = []
-        for index in range(25, max(25, len(payload) - 1), 3):
+        points_start = schedule_snapshot_points_start(payload)
+        for index in range(points_start, max(points_start, len(payload) - 1), 3):
             chunk = payload[index : index + 3]
             if len(chunk) < 3:
                 break

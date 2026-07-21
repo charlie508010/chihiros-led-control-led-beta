@@ -3702,6 +3702,117 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     }
   }
 
+  ledLayoutDefaultOrder() {
+    return ["channels", "middle", "templates", "connection", "control", "presets"];
+  }
+
+  ledLayoutUserKey() {
+    const user = this._hass && this._hass.user
+      ? String(this._hass.user.id || this._hass.user.name || "user")
+      : "local";
+    const device = this.activeLedDevice || {};
+    const deviceKey = String(device.address || device.id || this.activeLedDeviceId || "default").toLowerCase();
+    return `chihiros-led-core-layout:${user}:${deviceKey}`;
+  }
+
+  ledLayoutOrder() {
+    const defaults = this.ledLayoutDefaultOrder();
+    try {
+      const raw = window.localStorage.getItem(this.ledLayoutUserKey());
+      const saved = raw ? JSON.parse(raw) : [];
+      const filtered = Array.isArray(saved) ? saved.filter((item) => defaults.includes(item)) : [];
+      return [...filtered, ...defaults.filter((item) => !filtered.includes(item))];
+    } catch (_err) {
+      return defaults;
+    }
+  }
+
+  ledLayoutHasCustomOrder() {
+    try {
+      return Boolean(window.localStorage.getItem(this.ledLayoutUserKey()));
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  saveLedLayoutOrder(order) {
+    const defaults = this.ledLayoutDefaultOrder();
+    const filtered = Array.isArray(order) ? order.filter((item) => defaults.includes(item)) : defaults;
+    try {
+      window.localStorage.setItem(
+        this.ledLayoutUserKey(),
+        JSON.stringify([...filtered, ...defaults.filter((item) => !filtered.includes(item))]),
+      );
+    } catch (_err) {
+      // Local storage can be unavailable in restricted browser modes.
+    }
+  }
+
+  resetLedLayoutOrder() {
+    try {
+      window.localStorage.removeItem(this.ledLayoutUserKey());
+    } catch (_err) {
+      // Local storage can be unavailable in restricted browser modes.
+    }
+    this.render();
+  }
+
+  toggleLedLayoutEditor() {
+    this.ledLayoutEditing = !Boolean(this.ledLayoutEditing);
+    this.render();
+  }
+
+  moveLedLayoutItem(itemId, direction) {
+    const order = this.ledLayoutOrder();
+    const index = order.indexOf(String(itemId || ""));
+    const target = index + Number(direction || 0);
+    if (index < 0 || target < 0 || target >= order.length) return;
+    const [item] = order.splice(index, 1);
+    order.splice(target, 0, item);
+    this.saveLedLayoutOrder(order);
+    this.render();
+  }
+
+  ledLayoutToolbar() {
+    const editing = Boolean(this.ledLayoutEditing);
+    return `
+      <div class="led-layout-toolbar ${editing ? "editing" : ""}">
+        <button type="button" class="${editing ? "active" : ""}" data-action="led-layout-toggle">
+          <ha-icon icon="mdi:gesture-tap-button"></ha-icon>
+          <span>${this.tr("layout_edit")}</span>
+        </button>
+        ${editing ? `
+          <button type="button" data-action="led-layout-reset">
+            <ha-icon icon="mdi:restore"></ha-icon>
+            <span>${this.tr("layout_reset")}</span>
+          </button>
+          <small>${this.tr("layout_hint")}</small>` : ""}
+      </div>`;
+  }
+
+  ledLayoutItem(itemId, content, order) {
+    const editing = Boolean(this.ledLayoutEditing);
+    const index = Math.max(0, order.indexOf(itemId));
+    const disabledUp = index <= 0 ? "disabled" : "";
+    const disabledDown = index >= order.length - 1 ? "disabled" : "";
+    return `
+      <div class="led-layout-item ${editing ? "is-editing" : ""}" data-led-layout-item="${itemId}" style="--led-layout-order:${index}">
+        ${editing ? `
+          <div class="led-layout-item-bar">
+            <button type="button" class="led-layout-handle" data-led-layout-handle aria-label="${this.tr("layout_drag")}">
+              <ha-icon icon="mdi:drag"></ha-icon>
+              <span>${this.tr("layout_drag")}</span>
+            </button>
+            <span>${this.tr(`layout_item_${itemId}`)}</span>
+            <div>
+              <button type="button" data-action="led-layout-move:${itemId}:-1" ${disabledUp} title="${this.tr("move_up")}">↑</button>
+              <button type="button" data-action="led-layout-move:${itemId}:1" ${disabledDown} title="${this.tr("move_down")}">↓</button>
+            </div>
+          </div>` : ""}
+        ${content}
+      </div>`;
+  }
+
   ledPanel() {
     const device = this.activeLedDevice || {};
     const channels = this.ledChannels || [];
@@ -3728,73 +3839,88 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
             ${channels.map((channel) => this.ledChannelCard(channel)).join("")}
           </div>`
       : `<div class="empty-state">${this.tr("no_led_channels")}.</div>`;
+    const layoutOrder = this.ledLayoutOrder();
+    const connectionCard = `
+      <section class="card small led-connection-card">
+        <h2>${this.tr("connection")}</h2>
+        <p><b>${this.tr("device")}</b><span>${this.escapeHtml(device.name || device.id || device.label || "LED")}</span></p>
+        <p><b>${this.tr("model")}</b><span>${this.escapeHtml(device.model || "LED")}</span></p>
+        <p><b>${this.tr("channels")}</b><span>${channels.length}</span></p>
+        <p><b>MAC</b><span>${this.escapeHtml(device.address || "-")}</span></p>
+        <p><b>${this.tr("status")}</b><span class="${feedbackStatus.online ? "ok" : "is-offline"}">${feedbackStatus.online ? this.tr("online") : this.tr("offline")}</span></p>
+        <p><b>${this.tr("runtime")}</b><span>${this.escapeHtml(this.formatLedRuntime(runtime))}</span></p>
+        <p><b>${this.tr("last_notification")}</b><span><button type="button" class="led-notification-open" data-action="led-notification-open" title="${this.tr("details")}" aria-label="${this.tr("details")}"><span aria-hidden="true">&#128065;</span></button></span></p>
+        <p><b>${this.tr("fetched_at")}</b><span>${this.escapeHtml(this.formatLedNotificationTime(device))}</span></p>
+        <p><b>${this.tr("firmware")}</b><span class="${firmwareUnknown ? "is-unknown" : ""}">${this.escapeHtml(firmware)}</span></p>
+      </section>`;
+    const controlCard = `
+      <section class="card led-device-control-card">
+        <section class="led-device-edit-box led-device-control-box">
+          <h2>${this.tr("control")}</h2>
+          <div class="led-device-edit-actions">
+            <div class="action-row led-device-power-row">
+              <ha-icon icon="mdi:power"></ha-icon>
+              <span>${this.tr("complete_lamp_toggle")}</span>
+              <button type="button" class="led-power-toggle ${this.ledDeviceIsOn() ? "active" : ""}" data-action="led-device-power-toggle" role="switch" aria-checked="${this.ledDeviceIsOn() ? "true" : "false"}" title="${this.ledDeviceIsOn() ? this.tr("complete_lamp_off") : this.tr("complete_lamp_on")}">
+                <span class="led-power-toggle-track"><span></span></span>
+                <b>${this.ledDeviceIsOn() ? this.tr("on") : this.tr("off")}</b>
+              </button>
+            </div>
+            ${device.auto_entity ? `
+            <div class="action-row led-auto-mode-row">
+              <ha-icon icon="mdi:toggle-switch"></ha-icon>
+              <span>${this.tr("auto_mode")}</span>
+              <b>${this.ledAutoModeState(device)}</b>
+            </div>` : ""}
+            ${this.databaseDiagnosticsEnabled() ? `
+            <div class="action-row led-database-status-row">
+              <ha-icon icon="mdi:database-search"></ha-icon>
+              <span>${this.tr("database_status")}</span>
+              <button type="button" class="led-notification-open" data-action="led-database-status-open" title="${this.tr("details")}" aria-label="${this.tr("details")}"><ha-icon icon="mdi:eye"></ha-icon></button>
+            </div>` : ""}
+            <div class="action-row led-device-name-edit-row">
+              <ha-icon icon="mdi:pencil"></ha-icon>
+              <span>${this.tr("change_device_name")}</span>
+              <button type="button" class="led-notification-open" data-action="led-device-name-edit" title="${this.tr("change_device_name")}" aria-label="${this.tr("change_device_name")}"><ha-icon icon="mdi:pencil"></ha-icon></button>
+            </div>
+          </div>
+        </section>
+      </section>`;
+    const presetsCard = this.ledDeviceHasFan(device) ? this.ledFanControlCard(device) : `<section class="card led-device-presets-card">
+      <h2>${this.tr("presets")}</h2>
+      <div class="led-preset-grid">
+        <button type="button" data-action="led-preset:low"><ha-icon icon="mdi:weather-sunset"></ha-icon><span>${this.ledPresetValue("low")}</span></button>
+        <button type="button" data-action="led-preset:medium"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>${this.ledPresetValue("medium")}</span></button>
+        <button type="button" data-action="led-preset:high"><ha-icon icon="mdi:brightness-7"></ha-icon><span>${this.ledPresetValue("high")}</span></button>
+      </div>
+    </section>`;
+    const channelsCard = `
+      <section class="card led-channels-card">
+        ${showWatts
+          ? `<div class="led-channels-title-row"><h2>${this.tr("color_channels")}</h2><span class="led-total-watt" title="${this.escapeHtml(this.tr("estimated_power"))}"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-total-watts>${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(initialWattValues))} W / ${this.ledWattFormat(this.ledMaxPowerWatts(device))} W</span></span></div>`
+          : `<h2>${this.tr("color_channels")}</h2>`}
+        ${channelContent}
+      </section>`;
+    const middleCard = `
+      <div class="middle wide-middle led-middle">
+        ${this.ledScheduleSummaryPanel()}
+        ${this.ledHistoryPanel()}
+      </div>`;
+    const templateCard = this.ledTemplatePanel();
+    const layoutItems = {
+      channels: channelsCard,
+      middle: middleCard,
+      templates: templateCard,
+      connection: connectionCard,
+      control: controlCard,
+      presets: presetsCard,
+    };
     return `
       ${this.ledDeviceTabs()}
       ${this.ledManualScheduleWarning()}
-      <div class="led-page">
-        <section class="card small led-connection-card">
-          <h2>${this.tr("connection")}</h2>
-          <p><b>${this.tr("device")}</b><span>${this.escapeHtml(device.name || device.id || device.label || "LED")}</span></p>
-          <p><b>${this.tr("model")}</b><span>${this.escapeHtml(device.model || "LED")}</span></p>
-          <p><b>${this.tr("channels")}</b><span>${channels.length}</span></p>
-          <p><b>MAC</b><span>${this.escapeHtml(device.address || "-")}</span></p>
-          <p><b>${this.tr("status")}</b><span class="${feedbackStatus.online ? "ok" : "is-offline"}">${feedbackStatus.online ? this.tr("online") : this.tr("offline")}</span></p>
-          <p><b>${this.tr("runtime")}</b><span>${this.escapeHtml(this.formatLedRuntime(runtime))}</span></p>
-          <p><b>${this.tr("last_notification")}</b><span><button type="button" class="led-notification-open" data-action="led-notification-open" title="${this.tr("details")}" aria-label="${this.tr("details")}"><span aria-hidden="true">&#128065;</span></button></span></p>
-          <p><b>${this.tr("fetched_at")}</b><span>${this.escapeHtml(this.formatLedNotificationTime(device))}</span></p>
-          <p><b>${this.tr("firmware")}</b><span class="${firmwareUnknown ? "is-unknown" : ""}">${this.escapeHtml(firmware)}</span></p>
-        </section>
-        <section class="card led-device-control-card">
-          <section class="led-device-edit-box led-device-control-box">
-            <h2>${this.tr("control")}</h2>
-            <div class="led-device-edit-actions">
-              <div class="action-row led-device-power-row">
-                <ha-icon icon="mdi:power"></ha-icon>
-                <span>${this.tr("complete_lamp_toggle")}</span>
-                <button type="button" class="led-power-toggle ${this.ledDeviceIsOn() ? "active" : ""}" data-action="led-device-power-toggle" role="switch" aria-checked="${this.ledDeviceIsOn() ? "true" : "false"}" title="${this.ledDeviceIsOn() ? this.tr("complete_lamp_off") : this.tr("complete_lamp_on")}">
-                  <span class="led-power-toggle-track"><span></span></span>
-                  <b>${this.ledDeviceIsOn() ? this.tr("on") : this.tr("off")}</b>
-                </button>
-              </div>
-              ${device.auto_entity ? `
-              <div class="action-row led-auto-mode-row">
-                <ha-icon icon="mdi:toggle-switch"></ha-icon>
-                <span>${this.tr("auto_mode")}</span>
-                <b>${this.ledAutoModeState(device)}</b>
-              </div>` : ""}
-              ${this.databaseDiagnosticsEnabled() ? `
-              <div class="action-row led-database-status-row">
-                <ha-icon icon="mdi:database-search"></ha-icon>
-                <span>${this.tr("database_status")}</span>
-                <button type="button" class="led-notification-open" data-action="led-database-status-open" title="${this.tr("details")}" aria-label="${this.tr("details")}"><ha-icon icon="mdi:eye"></ha-icon></button>
-              </div>` : ""}
-              <div class="action-row led-device-name-edit-row">
-                <ha-icon icon="mdi:pencil"></ha-icon>
-                <span>${this.tr("change_device_name")}</span>
-                <button type="button" class="led-notification-open" data-action="led-device-name-edit" title="${this.tr("change_device_name")}" aria-label="${this.tr("change_device_name")}"><ha-icon icon="mdi:pencil"></ha-icon></button>
-              </div>
-            </div>
-          </section>
-        </section>
-        ${this.ledDeviceHasFan(device) ? this.ledFanControlCard(device) : `<section class="card led-device-presets-card">
-          <h2>${this.tr("presets")}</h2>
-          <div class="led-preset-grid">
-            <button type="button" data-action="led-preset:low"><ha-icon icon="mdi:weather-sunset"></ha-icon><span>${this.ledPresetValue("low")}</span></button>
-            <button type="button" data-action="led-preset:medium"><ha-icon icon="mdi:white-balance-sunny"></ha-icon><span>${this.ledPresetValue("medium")}</span></button>
-            <button type="button" data-action="led-preset:high"><ha-icon icon="mdi:brightness-7"></ha-icon><span>${this.ledPresetValue("high")}</span></button>
-          </div>
-        </section>`}
-        <section class="card led-channels-card">
-          ${showWatts
-            ? `<div class="led-channels-title-row"><h2>${this.tr("color_channels")}</h2><span class="led-total-watt" title="${this.escapeHtml(this.tr("estimated_power"))}"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-total-watts>${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(initialWattValues))} W / ${this.ledWattFormat(this.ledMaxPowerWatts(device))} W</span></span></div>`
-            : `<h2>${this.tr("color_channels")}</h2>`}
-          ${channelContent}
-        </section>
-        <div class="middle wide-middle led-middle">
-          ${this.ledScheduleSummaryPanel()}
-          ${this.ledHistoryPanel()}
-        </div>
-        ${this.ledTemplatePanel()}
+      ${this.ledLayoutToolbar()}
+      <div class="led-page led-layout-page ${this.ledLayoutEditing ? "is-editing" : ""} ${this.ledLayoutHasCustomOrder() ? "has-custom-layout" : ""}">
+        ${layoutOrder.map((itemId) => this.ledLayoutItem(itemId, layoutItems[itemId] || "", layoutOrder)).join("")}
       </div>`;
   }
 };

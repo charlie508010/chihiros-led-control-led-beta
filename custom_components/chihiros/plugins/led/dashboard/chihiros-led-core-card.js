@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1144";
+import "./panels/chihiros-led-panel.js?v=0.2.1145";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1531,6 +1531,18 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         add: "Hinzufügen",
         show: "Anzeigen",
         edit: "Bearbeiten",
+        layout_edit: "Layout bearbeiten",
+        layout_reset: "Standardlayout wiederherstellen",
+        layout_hint: "Box am Griff anfassen und verschieben. Die Reihenfolge wird automatisch gespeichert.",
+        layout_drag: "Verschieben",
+        layout_item_channels: "Farbkanäle",
+        layout_item_middle: "Zeitplan und Historie",
+        layout_item_templates: "Vorlagen",
+        layout_item_connection: "Verbindung",
+        layout_item_control: "Steuerung",
+        layout_item_presets: "Voreinstellungen",
+        move_up: "Nach oben",
+        move_down: "Nach unten",
         details: "Details",
         close: "Schließen",
         cancel: "Abbrechen",
@@ -1814,6 +1826,18 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         add: "Add",
         show: "Show",
         edit: "Edit",
+        layout_edit: "Edit layout",
+        layout_reset: "Restore default layout",
+        layout_hint: "Grab a box by the handle and move it. The order is saved automatically.",
+        layout_drag: "Move",
+        layout_item_channels: "Color channels",
+        layout_item_middle: "Schedule and history",
+        layout_item_templates: "Templates",
+        layout_item_connection: "Connection",
+        layout_item_control: "Control",
+        layout_item_presets: "Presets",
+        move_up: "Move up",
+        move_down: "Move down",
         details: "Details",
         close: "Close",
         cancel: "Cancel",
@@ -2350,6 +2374,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           if (kind === "led-device-power-edit" && typeof this.openLedDevicePowerDialog === "function") this.openLedDevicePowerDialog();
           if (kind === "led-device-power-send" && typeof this.saveLedDevicePowerDialog === "function") await this.saveLedDevicePowerDialog();
           if (kind === "led-device-power-toggle" && typeof this.toggleLedDevicePower === "function") await this.toggleLedDevicePower();
+          if (kind === "led-layout-toggle" && typeof this.toggleLedLayoutEditor === "function") this.toggleLedLayoutEditor();
+          if (kind === "led-layout-reset" && typeof this.resetLedLayoutOrder === "function") this.resetLedLayoutOrder();
+          if (kind === "led-layout-move" && typeof this.moveLedLayoutItem === "function") this.moveLedLayoutItem(entity, Number(extra));
           if (kind === "led-notification-open" && typeof this.openLedNotificationDialog === "function") this.openLedNotificationDialog();
           if (kind === "led-database-status-open" && typeof this.openDatabaseStatusDialog === "function") await this.openDatabaseStatusDialog();
           if (kind === "led-device-name-edit" && typeof this.openLedDeviceNameDialog === "function") this.openLedDeviceNameDialog();
@@ -2390,6 +2417,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         }
       });
     });
+    this.bindLedLayoutDrag();
     this.querySelectorAll("[data-close-dialog]").forEach((el) => {
       el.addEventListener("click", (ev) => {
         ev.preventDefault();
@@ -2617,6 +2645,60 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       });
     });  }
 
+  bindLedLayoutDrag() {
+    const container = this.querySelector(".led-layout-page.is-editing");
+    if (!container) return;
+    const saveOrder = () => {
+      const order = [...container.querySelectorAll("[data-led-layout-item]")]
+        .map((item) => String(item.getAttribute("data-led-layout-item") || ""))
+        .filter(Boolean);
+      if (typeof this.saveLedLayoutOrder === "function") this.saveLedLayoutOrder(order);
+    };
+    const refreshOrderStyles = () => {
+      [...container.querySelectorAll("[data-led-layout-item]")].forEach((item, index) => {
+        item.style.setProperty("--led-layout-order", String(index));
+      });
+    };
+    container.querySelectorAll("[data-led-layout-handle]").forEach((handle) => {
+      handle.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== undefined && ev.button !== 0) return;
+        const item = handle.closest("[data-led-layout-item]");
+        if (!item) return;
+        ev.preventDefault();
+        handle.setPointerCapture?.(ev.pointerId);
+        item.classList.add("dragging");
+        container.classList.add("is-dragging");
+        const move = (moveEvent) => {
+          moveEvent.preventDefault();
+          const y = Number(moveEvent.clientY || 0);
+          const siblings = [...container.querySelectorAll("[data-led-layout-item]")].filter((entry) => entry !== item);
+          const before = siblings.find((entry) => {
+            const rect = entry.getBoundingClientRect();
+            return y < rect.top + rect.height / 2;
+          });
+          if (before) {
+            container.insertBefore(item, before);
+          } else {
+            container.appendChild(item);
+          }
+          refreshOrderStyles();
+        };
+        const up = () => {
+          item.classList.remove("dragging");
+          container.classList.remove("is-dragging");
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", up);
+          handle.removeEventListener("pointercancel", up);
+          saveOrder();
+          this.render();
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", up);
+        handle.addEventListener("pointercancel", up);
+      });
+    });
+  }
+
   render() {
     if (!this._hass) return;
     this.innerHTML = `
@@ -2647,6 +2729,32 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .ha-entities-card { min-height:220px; }
         .entity-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:8px 14px; }
         .led-page { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); gap:12px; align-items:start; }
+        .led-layout-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; }
+        .led-layout-toolbar button { min-height:34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(81,154,190,.35); border-radius:8px; background:rgba(0,0,0,.16); color:var(--primary-text-color); font:inherit; font-weight:800; cursor:pointer; }
+        .led-layout-toolbar button.active { border-color:#03c9ff; background:rgba(0,122,166,.22); color:#7dd3fc; }
+        .led-layout-toolbar ha-icon { --mdc-icon-size:18px; }
+        .led-layout-toolbar small { color:rgba(255,255,255,.62); line-height:1.35; }
+        .led-layout-page > .led-layout-item { display:block; min-width:0; }
+        .led-layout-page > [data-led-layout-item="channels"] { grid-column:1 / -1; grid-row:1; }
+        .led-layout-page > [data-led-layout-item="middle"] { grid-column:1 / -1; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="connection"] { grid-column:2; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="presets"] { grid-column:2; grid-row:4; }
+        .led-layout-page.has-custom-layout > .led-layout-item { grid-column:1 / -1 !important; grid-row:auto !important; order:var(--led-layout-order,0); }
+        .led-layout-page > .led-layout-item > .card,
+        .led-layout-page > .led-layout-item > .middle { width:100%; height:100%; box-sizing:border-box; }
+        .led-layout-page.is-editing > .led-layout-item { position:relative; grid-column:1 / -1 !important; grid-row:auto !important; border:1px dashed rgba(3,201,255,.38); border-radius:10px; padding:8px; background:rgba(3,201,255,.045); }
+        .led-layout-page.is-editing > .led-layout-item.dragging { opacity:.72; border-color:#03c9ff; background:rgba(3,201,255,.12); }
+        .led-layout-page.is-dragging { user-select:none; }
+        .led-layout-item-bar { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:8px; margin:0 0 8px; }
+        .led-layout-item-bar > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#7dd3fc; font-weight:800; }
+        .led-layout-item-bar button { min-height:30px; border:1px solid rgba(81,154,190,.35); border-radius:7px; background:rgba(0,0,0,.18); color:var(--primary-text-color); font:inherit; font-weight:800; cursor:pointer; }
+        .led-layout-item-bar button:disabled { opacity:.38; cursor:not-allowed; }
+        .led-layout-item-bar > div { display:flex; gap:5px; }
+        .led-layout-handle { min-width:96px; display:inline-flex; align-items:center; justify-content:center; gap:6px; touch-action:none; color:#03c9ff !important; cursor:grab; }
+        .led-layout-handle:active { cursor:grabbing; }
+        .led-layout-handle ha-icon { --mdc-icon-size:18px; }
         .led-connection-card { grid-column:2; grid-row:3; min-height:150px; width:100%; height:100%; align-self:stretch; display:flex; flex-direction:column; gap:3px; padding-top:11px; padding-bottom:11px; }
         .led-connection-card h2 { margin:0 0 3px; }
         .card.led-connection-card p { flex:0 0 auto; min-height:24px; align-items:center; margin:0; line-height:1.2; }
@@ -3261,6 +3369,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         }
         @media (max-width:700px) {
           .led-page { grid-template-columns:minmax(0,1fr); }
+          .led-layout-page > [data-led-layout-item="channels"] { grid-column:1; grid-row:1; }
+          .led-layout-page > [data-led-layout-item="middle"] { grid-column:1; grid-row:2; }
+          .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:3; }
+          .led-layout-page > [data-led-layout-item="connection"] { grid-column:1; grid-row:4; }
+          .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:5; }
+          .led-layout-page > [data-led-layout-item="presets"] { grid-column:1; grid-row:6; }
           .led-channels-card { grid-column:1; grid-row:1; }
           .led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }
           .led-template-card { grid-column:1; grid-row:3; }

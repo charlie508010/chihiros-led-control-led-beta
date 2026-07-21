@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 RESERVED_BYTE = 0x5A
 SCHEDULE_SNAPSHOT_POINTS_START = 25
+SCHEDULE_SNAPSHOT_PARAMETER_POINTS_START = 19
 SCHEDULE_SNAPSHOT_POINT_SIZE = 3
 
 
@@ -49,6 +50,13 @@ class ScheduleSnapshotNotification:
 
 
 ParsedNotification = RuntimeNotification | FanStatusNotification | ScheduleSnapshotNotification
+
+
+def schedule_snapshot_points_start(data: bytes | bytearray) -> int:
+    """Return the first hour/minute/level point offset for a schedule snapshot payload."""
+    if len(data) >= 7 and data[0] == 0x5B and data[5] == 0xFE:
+        return SCHEDULE_SNAPSHOT_POINTS_START
+    return SCHEDULE_SNAPSHOT_PARAMETER_POINTS_START
 
 
 def next_message_id(current_msg_id: tuple[int, int] = (0, 0)) -> tuple[int, int]:
@@ -156,7 +164,8 @@ def parse_notification(
             return None
         channels = _notification_channels(color_channels)
         points: list[SchedulePoint] = []
-        for index in range(SCHEDULE_SNAPSHOT_POINTS_START, len(data), SCHEDULE_SNAPSHOT_POINT_SIZE):
+        points_start = schedule_snapshot_points_start(data)
+        for index in range(points_start, len(data), SCHEDULE_SNAPSHOT_POINT_SIZE):
             point = data[index : index + SCHEDULE_SNAPSHOT_POINT_SIZE]
             if len(point) < SCHEDULE_SNAPSHOT_POINT_SIZE:
                 break

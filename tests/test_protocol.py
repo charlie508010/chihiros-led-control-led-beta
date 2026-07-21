@@ -18,6 +18,7 @@ from chihiros_led_control.protocol import (
     encode_timestamp,
     next_message_id,
     parse_notification,
+    schedule_snapshot_points_start,
 )
 
 SCHEDULE_SNAPSHOT_PREFIX = [
@@ -339,3 +340,34 @@ def test_parse_schedule_snapshot_notification_skips_metadata_prefix() -> None:
             SchedulePoint(hour=21, minute=45, levels={"white": 0}),
         ),
     )
+
+
+def test_schedule_snapshot_parameter_payload_starts_after_parameter_metadata() -> None:
+    """Displayed schedule snapshot parameters start before the full BLE-frame point offset."""
+    parameter = bytes.fromhex(
+        "02 0C 08 0C 07 00 00 00 00 00 00 00 00 00 00 00 "
+        "02 0C 08 09 00 00 09 01 05 10 3B 05 11 00 00 "
+        "11 01 41 15 3B 41 16 00 00 16 01 00"
+    )
+
+    points_start = schedule_snapshot_points_start(parameter)
+    points = []
+    for index in range(points_start, len(parameter), 3):
+        chunk = parameter[index : index + 3]
+        if len(chunk) < 3:
+            break
+        hour, minute, level = chunk
+        if hour <= 23 and minute <= 59 and level <= 100 and (hour, minute, level) != (0, 0, 0):
+            points.append((hour, minute, level))
+
+    assert points_start == 19
+    assert points[:8] == [
+        (9, 0, 0),
+        (9, 1, 5),
+        (16, 59, 5),
+        (17, 0, 0),
+        (17, 1, 65),
+        (21, 59, 65),
+        (22, 0, 0),
+        (22, 1, 0),
+    ]
