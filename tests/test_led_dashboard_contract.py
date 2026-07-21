@@ -555,10 +555,12 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert "has-custom-layout" in panel
     assert ".led-layout-page.has-custom-layout > .led-layout-item," in core
     assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
+    assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
     assert 'data-led-layout-handle' in panel
     assert "clientX" in core
+    assert 'document.createComment("led-layout-swap")' in core
     assert "move_left" in core
     assert "move_right" in core
     assert "layout_item_schedule" in core

@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1148";
+import "./panels/chihiros-led-panel.js?v=0.2.1149";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2679,19 +2679,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           const x = Number(moveEvent.clientX || 0);
           const y = Number(moveEvent.clientY || 0);
           const siblings = [...container.querySelectorAll("[data-led-layout-item]")].filter((entry) => entry !== item);
-          const before = siblings.find((entry) => {
+          const target = siblings.find((entry) => {
             const rect = entry.getBoundingClientRect();
-            const middleX = rect.left + rect.width / 2;
-            const middleY = rect.top + rect.height / 2;
-            const sameRow = y >= rect.top && y <= rect.bottom;
-            if (sameRow) return x < middleX;
-            return y < middleY;
+            return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
           });
-          if (before) {
-            container.insertBefore(item, before);
-          } else {
-            container.appendChild(item);
-          }
+          if (!target) return;
+          const marker = document.createComment("led-layout-swap");
+          container.insertBefore(marker, item);
+          container.insertBefore(item, target);
+          container.insertBefore(target, marker);
+          marker.remove();
           refreshOrderStyles();
         };
         const up = () => {
@@ -2755,6 +2752,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-page > [data-led-layout-item="presets"] { grid-column:2; grid-row:4; }
         .led-layout-page.has-custom-layout > .led-layout-item,
         .led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }
+        .led-layout-page.has-custom-layout > [data-led-layout-item="channels"],
+        .led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }
         .led-layout-page > .led-layout-item > .card,
         .led-layout-page > .led-layout-item > .middle { width:100%; height:100%; box-sizing:border-box; }
         .led-layout-page.is-editing > .led-layout-item { position:relative; border:1px dashed rgba(3,201,255,.38); border-radius:10px; padding:8px; background:rgba(3,201,255,.045); }
