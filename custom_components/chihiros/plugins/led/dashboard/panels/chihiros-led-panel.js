@@ -2566,6 +2566,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   ledScheduleRangesFromPoints(normalized = []) {
     const ranges = [];
+    normalized = [...normalized].sort((left, right) => String(left.time).localeCompare(String(right.time)));
     const minuteDistance = (start, end) => {
       const [startHour, startMinute] = String(start).split(":").map(Number);
       const [endHour, endMinute] = String(end).split(":").map(Number);
@@ -2582,6 +2583,19 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     }
     for (let index = 0; index < normalized.length;) {
       const first = normalized[index];
+      if (first.level === 0 && index + 1 < normalized.length && normalized[index + 1].level === 0) {
+        let endIndex = index + 1;
+        while (endIndex + 1 < normalized.length && normalized[endIndex + 1].level === 0) endIndex += 1;
+        const ramp = minuteDistance(first.time, normalized[index + 1].time);
+        ranges.push({
+          start: first.time,
+          end: normalized[endIndex].time,
+          level: 0,
+          ramp: ramp >= 1 && ramp <= 150 ? ramp : 1,
+        });
+        index = endIndex + 1;
+        continue;
+      }
       let valueIndex = index;
       if (first.level === 0) valueIndex += 1;
       if (valueIndex >= normalized.length || normalized[valueIndex].level === 0) {
@@ -2611,7 +2625,8 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         const sharesBoundary = followingIndex < normalized.length
           && normalized[followingIndex].level !== 0
           && followingMinutes === (zeroHour * 60 + zeroMinute + 1) % 1440;
-        index = sharesBoundary ? zeroIndex : followingIndex;
+        const startsZeroRange = followingIndex < normalized.length && normalized[followingIndex].level === 0;
+        index = sharesBoundary || startsZeroRange ? zeroIndex : followingIndex;
         continue;
       }
       if (endIndex + 1 >= normalized.length) {

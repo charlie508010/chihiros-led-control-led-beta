@@ -832,6 +832,30 @@ def test_render_protocol_debug_decodes_zero_level_schedule_snapshot() -> None:
     assert ranges == [(22, 0, 23, 59, 0, 1)]
 
 
+def test_render_protocol_debug_sorts_auto_mode_schedule_snapshot_points() -> None:
+    """Auto-mode snapshots may report the 0% tail before earlier active schedules."""
+    points = [
+        (22, 0, 0),
+        (22, 1, 0),
+        (23, 58, 0),
+        (23, 59, 0),
+        (9, 0, 0),
+        (9, 1, 5),
+        (16, 59, 5),
+        (17, 0, 0),
+        (17, 1, 65),
+        (21, 59, 65),
+    ]
+
+    ranges = ChihirosDevice._schedule_curve_ranges(points)
+
+    assert sorted(ranges) == [
+        (9, 0, 17, 0, 5, 1),
+        (17, 0, 22, 0, 65, 1),
+        (22, 0, 23, 59, 0, 1),
+    ]
+
+
 def test_set_brightness_sends_all_true_wrgb_channels() -> None:
     """Brightness commands can set red, green, blue, and white in one call."""
     sent_commands: list[bytes] = []

@@ -850,6 +850,10 @@ class ChihirosDevice:
     def _schedule_curve_ranges(points: list[tuple[int, int, int]]) -> list[tuple[int, int, int, int, int, int]]:
         """Group zero/non-zero curve points into schedule ranges for debug output."""
         ranges: list[tuple[int, int, int, int, int, int]] = []
+
+        def same_day_forward(left_hour: int, left_minute: int, right_hour: int, right_minute: int) -> bool:
+            return (right_hour * 60 + right_minute) > (left_hour * 60 + left_minute)
+
         if len(points) >= 2 and all(level == 0 for _hour, _minute, level in points):
             start_hour, start_minute, _start_level = points[0]
             ramp_hour, ramp_minute, _ramp_level = points[1]
@@ -861,6 +865,32 @@ class ChihirosDevice:
         index = 0
         while index < len(points):
             start_hour, start_minute, start_level = points[index]
+            if (
+                start_level == 0
+                and index + 1 < len(points)
+                and points[index + 1][2] == 0
+                and same_day_forward(start_hour, start_minute, points[index + 1][0], points[index + 1][1])
+            ):
+                end_index = index + 1
+                while (
+                    end_index + 1 < len(points)
+                    and points[end_index + 1][2] == 0
+                    and same_day_forward(
+                        points[end_index][0],
+                        points[end_index][1],
+                        points[end_index + 1][0],
+                        points[end_index + 1][1],
+                    )
+                ):
+                    end_index += 1
+                ramp_hour, ramp_minute, _ramp_level = points[index + 1]
+                end_hour, end_minute, _end_level = points[end_index]
+                ramp = ChihirosDevice._minute_distance(start_hour, start_minute, ramp_hour, ramp_minute)
+                if not 1 <= ramp <= 150:
+                    ramp = 1
+                ranges.append((start_hour, start_minute, end_hour, end_minute, 0, ramp))
+                index = end_index + 1
+                continue
             if start_level != 0:
                 ramp = 1
                 if index > 0 and points[index - 1][2] == 0:
@@ -884,7 +914,8 @@ class ChihirosDevice:
                         and (points[following_index][0], points[following_index][1])
                         == ChihirosDevice._next_minute(end_hour, end_minute)
                     )
-                    index = zero_index if shares_boundary else following_index
+                    starts_zero_range = following_index < len(points) and points[following_index][2] == 0
+                    index = zero_index if shares_boundary or starts_zero_range else following_index
                 elif end_index + 1 < len(points):
                     end_hour, end_minute = ChihirosDevice._active_point_default_range(start_hour, start_minute)
                     index = end_index + 1
@@ -913,7 +944,8 @@ class ChihirosDevice:
                     and (points[following_index][0], points[following_index][1])
                     == ChihirosDevice._next_minute(end_hour, end_minute)
                 )
-                index = zero_index if shares_boundary else following_index
+                starts_zero_range = following_index < len(points) and points[following_index][2] == 0
+                index = zero_index if shares_boundary or starts_zero_range else following_index
             else:
                 end_hour, end_minute = ChihirosDevice._next_minute(points[end_index][0], points[end_index][1])
                 index = end_index + 1
