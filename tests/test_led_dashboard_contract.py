@@ -849,6 +849,22 @@ def test_template_dialog_live_preview_debugs_without_dashboard_refresh() -> None
     assert 'template_live_preview: "Live preview"' in dashboard
 
 
+def test_template_live_preview_restores_auto_mode_on_dialog_close() -> None:
+    """Closing the template dialog silently restores automatic mode after live changes."""
+    panel = source(LED_PANEL)
+    dashboard = source(DASHBOARD)
+
+    assert 'state.type === "led-template-editor"' in dashboard
+    assert "state.templateLivePreviewChanged" in dashboard
+    assert "restoreLedAutoModeAfterTemplatePreview" in dashboard
+    assert "templateLivePreviewChanged: true" in panel
+    assert "async restoreLedAutoModeAfterTemplatePreview()" in panel
+    assert 'service: "enable_auto_mode"' in panel
+    assert "template_live_preview_close" in panel
+    assert "data: { periods, __skip_dashboard_refresh: true, ...this.ledServiceSelector() }" in panel
+    assert "dialog: false" in panel
+
+
 def test_channel_power_uses_single_toggle() -> None:
     """Each LED channel exposes one stateful on/off toggle."""
     panel = source(LED_PANEL)

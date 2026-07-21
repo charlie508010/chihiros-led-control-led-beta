@@ -2981,6 +2981,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       noChannel: true,
     });
     this.setLedManualScheduleWarning(true);
+    if (result && result.ok) {
+      this.dialogState = { ...(this.dialogState || {}), templateLivePreviewChanged: true };
+    }
     this.setLedTemplateLivePreviewStatus(
       result && result.ok ? this.tr("template_live_preview_sent") : this.tr("template_live_preview_failed"),
       result && result.ok ? "ok" : "error",
@@ -2989,6 +2992,34 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       this.setLedTemplateLivePreviewLog(
         `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true\n\n${result && result.output ? result.output : ""}`
       );
+    }
+  }
+
+  async restoreLedAutoModeAfterTemplatePreview() {
+    if (!this._hass) return false;
+    try {
+      const periods = this.ledSchedulePeriodsFromRows(this.ledScheduleRows(), this.activeLedDevice || {}, true);
+      const result = await this.runDeviceService({
+        service: "enable_auto_mode",
+        data: { periods, __skip_dashboard_refresh: true, ...this.ledServiceSelector() },
+        title: this.tr("enable_auto_mode"),
+        debug: false,
+        dialog: false,
+        channel: 1,
+        noChannel: true,
+      });
+      if (!result || !result.ok) return false;
+      this.setLedManualScheduleWarning(false);
+      await this.persistLedDeviceStatus({
+        mode: "automatic",
+        scheduleState: periods.length ? "active" : "empty",
+        scheduleCount: periods.filter((period) => period && period.active !== false).length,
+        source: "template_live_preview_close",
+        action: this.tr("enable_auto_mode"),
+      });
+      return true;
+    } catch (_err) {
+      return false;
     }
   }
 
