@@ -71,6 +71,144 @@ OK: Keine Unterschiede gefunden.
 
 ---
 
+# Wireshark Debug: Rot auf 100% manuell
+
+## Übersicht
+
+| Feld | Wert |
+| --- | --- |
+| Bezeichnung | Rot auf 100% manuell |
+| Quelle | Wireshark Vergleich App-Log |
+| Datei | `btsnoop_hci_2026-07-21-06-20-43.frames.jsonl` |
+| Aktueller Mitschnitt | 5 Frames |
+| App-Log | 5 Frames |
+| Ergebnis | OK - keine Unterschiede gefunden |
+
+## Vergleich
+
+| # | Capture Cmd | Capture Mode | Capture Parameter | Status |
+| ---: | ---: | ---: | --- | --- |
+| 1 | `90` | `4` | `[1]` | OK |
+| 2 | `90` | `9` | `[26,7,2,6,20,25]` | OK |
+| 3 | `90` | `9` | `[26,7,2,6,20,25]` | OK |
+| 4 | `90` | `5` | `[11,255,255]` | OK |
+| 5 | `90` | `7` | `[0,100]` | OK |
+
+Frame `#4` schaltet auf manuellen Modus. Frame `#5` setzt Kanal Rot auf `100`.
+
+## Markierte Frames aus aktuellem Mitschnitt
+
+```text
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 08:20:25.263"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 20, 25], "time": "21.07.2026 08:20:25.571"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 20, 25], "time": "21.07.2026 08:20:25.629"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [11, 255, 255], "time": "21.07.2026 08:20:27.748"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 7, "parm": [0, 100], "time": "21.07.2026 08:20:40.600"}
+```
+
+## App-Log Frames
+
+```text
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 06:22:33"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 22, 33], "time": "21.07.2026 06:22:33"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 22, 33], "time": "21.07.2026 06:22:33"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [11, 255, 255], "time": "21.07.2026 06:22:33"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 7, "parm": [0, 100], "time": "21.07.2026 06:22:33"}
+```
+
+## Rohes Vergleichsergebnis
+
+```text
+VERGLEICH
+Aktueller Mitschnitt: 5 Frames
+App-Log: 5 Frames
+#1
+  Aktueller Mitschnitt  90|4|[1]
+  Vergleich App-Log   : 90|4|[1] ok
+#2
+  Aktueller Mitschnitt  90|9|[26,7,2,6,20,25]
+  Vergleich App-Log   : 90|9|[26,7,2,6,22,33] ok
+#3
+  Aktueller Mitschnitt  90|9|[26,7,2,6,20,25]
+  Vergleich App-Log   : 90|9|[26,7,2,6,22,33] ok
+#4
+  Aktueller Mitschnitt  90|5|[11,255,255]
+  Vergleich App-Log   : 90|5|[11,255,255] ok
+#5
+  Aktueller Mitschnitt  90|7|[0,100]
+  Vergleich App-Log   : 90|7|[0,100] ok
+OK: Keine Unterschiede gefunden.
+```
+
+# Wireshark Debug: Grün auf 100% manuell
+
+## Übersicht
+
+| Feld | Wert |
+| --- | --- |
+| Bezeichnung | Grün auf 100% manuell |
+| Quelle | Wireshark Vergleich App-Log |
+| Datei | `btsnoop_hci_2026-07-21-06-26-40.frames.jsonl` |
+| Aktueller Mitschnitt | 5 Frames |
+| App-Log | 5 Frames |
+| Ergebnis | OK - keine Unterschiede gefunden |
+
+## Vergleich
+
+| # | Capture Cmd | Capture Mode | Capture Parameter | Status |
+| ---: | ---: | ---: | --- | --- |
+| 1 | `90` | `4` | `[1]` | OK |
+| 2 | `90` | `9` | `[26,7,2,6,26,27]` | OK |
+| 3 | `90` | `9` | `[26,7,2,6,26,27]` | OK |
+| 4 | `90` | `5` | `[11,255,255]` | OK |
+| 5 | `90` | `7` | `[1,100]` | OK |
+
+Frame `#4` schaltet auf manuellen Modus. Frame `#5` setzt Kanal Grün auf `100`.
+
+## Markierte Frames aus aktuellem Mitschnitt
+
+```text
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 08:26:27.168"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 26, 27], "time": "21.07.2026 08:26:27.473"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 26, 27], "time": "21.07.2026 08:26:27.542"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [11, 255, 255], "time": "21.07.2026 08:26:27.661"}
+[INFO APP]  {"dir": "tx", "cmd": 90, "mode": 7, "parm": [1, 100], "time": "21.07.2026 08:26:36.224"}
+```
+
+## App-Log Frames
+
+```text
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 06:28:01"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 28, 1], "time": "21.07.2026 06:28:01"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 6, 28, 1], "time": "21.07.2026 06:28:01"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 5, "parm": [11, 255, 255], "time": "21.07.2026 06:28:01"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 7, "parm": [1, 100], "time": "21.07.2026 06:28:01"}
+```
+
+## Rohes Vergleichsergebnis
+
+```text
+VERGLEICH
+Aktueller Mitschnitt: 5 Frames
+App-Log: 5 Frames
+#1
+  Aktueller Mitschnitt  90|4|[1]
+  Vergleich App-Log   : 90|4|[1] ok
+#2
+  Aktueller Mitschnitt  90|9|[26,7,2,6,26,27]
+  Vergleich App-Log   : 90|9|[26,7,2,6,28,1] ok
+#3
+  Aktueller Mitschnitt  90|9|[26,7,2,6,26,27]
+  Vergleich App-Log   : 90|9|[26,7,2,6,28,1] ok
+#4
+  Aktueller Mitschnitt  90|5|[11,255,255]
+  Vergleich App-Log   : 90|5|[11,255,255] ok
+#5
+  Aktueller Mitschnitt  90|7|[1,100]
+  Vergleich App-Log   : 90|7|[1,100] ok
+OK: Keine Unterschiede gefunden.
+```
+
 # Wireshark Debug: Auto-Modus aktivieren
 
 ## Übersicht
