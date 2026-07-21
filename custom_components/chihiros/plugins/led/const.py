@@ -25,6 +25,7 @@ ATTR_LEVELS = "levels"
 ATTR_PERIODS = "periods"
 ATTR_PRESERVE_LOCAL = "preserve_local"
 ATTR_PREVIOUS_PERIOD = "previous_period"
+ATTR_PREVIOUS_INDEX = "previous_index"
 ATTR_RAMP_UP_MINUTES = "ramp_up_minutes"
 ATTR_SEND = "send"
 ATTR_START = "start"
@@ -54,6 +55,7 @@ ADD_SCHEDULE_SCHEMA = vol.Schema(
         **SCHEDULE_SELECTOR_SCHEMA,
         **SCHEDULE_PERIOD_SCHEMA,
         vol.Optional(ATTR_PREVIOUS_PERIOD): vol.Schema(SCHEDULE_PERIOD_SCHEMA),
+        vol.Optional(ATTR_PREVIOUS_INDEX): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Optional(ATTR_DEBUG, default=False): bool,
     }
 )

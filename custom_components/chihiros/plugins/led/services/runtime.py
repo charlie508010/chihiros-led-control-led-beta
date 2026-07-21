@@ -27,6 +27,7 @@ from ..const import (
     ATTR_LEVELS,
     ATTR_PERIODS,
     ATTR_PRESERVE_LOCAL,
+    ATTR_PREVIOUS_INDEX,
     ATTR_PREVIOUS_PERIOD,
     ATTR_RAMP_UP_MINUTES,
     ATTR_SEND,
@@ -145,7 +146,12 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             previous_period = call.data.get(ATTR_PREVIOUS_PERIOD)
             if isinstance(previous_period, dict) and not restore_rows:
                 validate_schedule_period(chihiros_data, previous_period)
-                prepare_existing_setting = _stored_row_index(stored_rows, previous_period) > 0
+                previous_index = call.data.get(ATTR_PREVIOUS_INDEX)
+                prepare_existing_setting = (
+                    int(previous_index) > 0
+                    if previous_index is not None
+                    else _stored_row_index(stored_rows, previous_period) > 0
+                )
                 await chihiros_data.device.replace_setting(
                     parse_schedule_time(previous_period[ATTR_START]),
                     parse_schedule_time(previous_period[ATTR_END]),

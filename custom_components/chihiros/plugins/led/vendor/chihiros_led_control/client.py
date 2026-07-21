@@ -510,18 +510,18 @@ class ChihirosDevice:
             if prepare_existing_setting:
                 clear_command = commands.create_delete_auto_setting_command(
                     self.get_next_msg_id(),
-                    sunrise.time(),
-                    sunset.time(),
-                    ramp_up_in_minutes,
-                    encode_selected_weekdays(weekdays),
+                    previous_sunrise.time(),
+                    previous_sunset.time(),
+                    previous_ramp_up_in_minutes,
+                    encode_selected_weekdays(previous_weekdays),
                     brightness_channels=self._channel_count(),
                 )
                 second_clear_command = commands.create_delete_auto_setting_command(
                     self.get_next_msg_id(),
-                    sunrise.time(),
-                    sunset.time(),
-                    ramp_up_in_minutes,
-                    encode_selected_weekdays(weekdays),
+                    previous_sunrise.time(),
+                    previous_sunset.time(),
+                    previous_ramp_up_in_minutes,
+                    encode_selected_weekdays(previous_weekdays),
                     brightness_channels=self._channel_count(),
                 )
                 commands_to_send = [clear_command, second_clear_command, add_command]

@@ -1477,6 +1477,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
             ...(sendPeriods[0] || {}),
             enable_auto_mode: isNewDialog,
             ...(previousPeriod ? { previous_period: previousPeriod } : {}),
+            ...(previousPeriod && editIndex !== null ? { previous_index: editIndex } : {}),
             ...serviceSelector,
           }
         : { periods: sendPeriods, send: true, ...serviceSelector },
