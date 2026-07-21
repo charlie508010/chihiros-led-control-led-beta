@@ -850,6 +850,14 @@ class ChihirosDevice:
     def _schedule_curve_ranges(points: list[tuple[int, int, int]]) -> list[tuple[int, int, int, int, int, int]]:
         """Group zero/non-zero curve points into schedule ranges for debug output."""
         ranges: list[tuple[int, int, int, int, int, int]] = []
+        if len(points) >= 2 and all(level == 0 for _hour, _minute, level in points):
+            start_hour, start_minute, _start_level = points[0]
+            ramp_hour, ramp_minute, _ramp_level = points[1]
+            end_hour, end_minute, _end_level = points[-1]
+            ramp = ChihirosDevice._minute_distance(start_hour, start_minute, ramp_hour, ramp_minute)
+            if not 1 <= ramp <= 150:
+                ramp = 1
+            return [(start_hour, start_minute, end_hour, end_minute, 0, ramp)]
         index = 0
         while index < len(points):
             start_hour, start_minute, start_level = points[index]

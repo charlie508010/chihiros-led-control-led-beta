@@ -800,6 +800,8 @@ def test_connection_panel_shows_runtime_sensor() -> None:
     assert "value.hex || value.parm || value.att_hex" in notification_ui
     assert "Array.isArray(attrs.notifications)" in panel
     assert "ledScheduleRangesFromPoints(normalized = [])" in panel
+    assert "normalized.every((point) => point.level === 0)" in panel
+    assert "end: normalized[normalized.length - 1].time" in panel
     assert "candidateRamp >= 1 && candidateRamp <= 150" in panel
     assert "const expectedRamp = configuredRamp;" in panel
     assert "if (minutes <= 1) return 1;" in panel

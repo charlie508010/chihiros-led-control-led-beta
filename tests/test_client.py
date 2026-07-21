@@ -823,6 +823,15 @@ def test_render_protocol_debug_decodes_thirty_minute_schedule_ramp() -> None:
     assert ranges == [(9, 0, 17, 0, 5, 1), (17, 0, 22, 0, 65, 30)]
 
 
+def test_render_protocol_debug_decodes_zero_level_schedule_snapshot() -> None:
+    """A schedule with only 0% points is still a valid stored schedule."""
+    points = [(22, 0, 0), (22, 1, 0), (23, 58, 0), (23, 59, 0)]
+
+    ranges = ChihirosDevice._schedule_curve_ranges(points)
+
+    assert ranges == [(22, 0, 23, 59, 0, 1)]
+
+
 def test_set_brightness_sends_all_true_wrgb_channels() -> None:
     """Brightness commands can set red, green, blue, and white in one call."""
     sent_commands: list[bytes] = []

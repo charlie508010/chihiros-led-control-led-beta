@@ -2571,6 +2571,15 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const [endHour, endMinute] = String(end).split(":").map(Number);
       return ((endHour * 60 + endMinute) - (startHour * 60 + startMinute) + 1440) % 1440;
     };
+    if (normalized.length >= 2 && normalized.every((point) => point.level === 0)) {
+      const ramp = minuteDistance(normalized[0].time, normalized[1].time);
+      return [{
+        start: normalized[0].time,
+        end: normalized[normalized.length - 1].time,
+        level: 0,
+        ramp: ramp >= 1 && ramp <= 150 ? ramp : 1,
+      }];
+    }
     for (let index = 0; index < normalized.length;) {
       const first = normalized[index];
       let valueIndex = index;
