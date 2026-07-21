@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1153";
+import "./panels/chihiros-led-panel.js?v=0.2.1154";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2747,7 +2747,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .ha-tab-page { display:grid; grid-template-columns:1fr; gap:12px; }
         .ha-entities-card { min-height:220px; }
         .entity-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:8px 14px; }
-        .led-page { display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); gap:12px; align-items:start; }
+        .led-page { --led-layout-large-box-height:300px; display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); gap:12px; align-items:start; }
         .led-layout-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; }
         .led-layout-toolbar button { min-height:34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(81,154,190,.35); border-radius:8px; background:rgba(0,0,0,.16); color:var(--primary-text-color); font:inherit; font-weight:800; cursor:pointer; }
         .led-layout-toolbar button.active { border-color:#03c9ff; background:rgba(0,122,166,.22); color:#7dd3fc; }
@@ -2770,7 +2770,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-page > [data-led-layout-item="channels"] > .card,
         .led-layout-page > [data-led-layout-item="schedule"] > .card,
         .led-layout-page > [data-led-layout-item="history"] > .card,
-        .led-layout-page > [data-led-layout-item="templates"] > .card { height:300px; max-height:300px; overflow:auto; }
+        .led-layout-page > [data-led-layout-item="templates"] > .card,
+        .led-layout-page > [data-led-layout-item="connection"] > .card { height:var(--led-layout-large-box-height); max-height:var(--led-layout-large-box-height); overflow:auto; }
         .led-layout-page.is-editing > .led-layout-item { position:relative; border:1px dashed rgba(3,201,255,.38); border-radius:10px; padding:8px; background:rgba(3,201,255,.045); }
         .led-layout-page.is-editing > .led-layout-item.dragging { opacity:.72; border-color:#03c9ff; background:rgba(3,201,255,.12); }
         .led-layout-page.is-dragging { user-select:none; }
@@ -3406,7 +3407,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           .led-layout-page > [data-led-layout-item="channels"] > .card,
           .led-layout-page > [data-led-layout-item="schedule"] > .card,
           .led-layout-page > [data-led-layout-item="history"] > .card,
-          .led-layout-page > [data-led-layout-item="templates"] > .card { height:auto; max-height:none; }
+          .led-layout-page > [data-led-layout-item="templates"] > .card,
+          .led-layout-page > [data-led-layout-item="connection"] > .card { height:auto; max-height:none; }
           .led-channels-card { grid-column:1; grid-row:1; }
           .led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }
           .led-template-card { grid-column:1; grid-row:3; }

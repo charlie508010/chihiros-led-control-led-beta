@@ -557,12 +557,13 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert "has-custom-layout" in panel
     assert "led-device-topline" in panel
     assert ".led-device-topline .led-layout-toolbar { justify-content:flex-end; margin:0; }" in core
+    assert "--led-layout-large-box-height:300px" in core
     assert ".led-layout-page.has-custom-layout > .led-layout-item," in core
     assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
     assert '.led-layout-page > [data-led-layout-item="schedule"] > .card,' in core
-    assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:300px; max-height:300px; overflow:auto; }' in core
-    assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:auto; max-height:none; }' in core
+    assert '.led-layout-page > [data-led-layout-item="connection"] > .card { height:var(--led-layout-large-box-height); max-height:var(--led-layout-large-box-height); overflow:auto; }' in core
+    assert '.led-layout-page > [data-led-layout-item="connection"] > .card { height:auto; max-height:none; }' in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
     assert 'data-led-layout-handle' in panel
