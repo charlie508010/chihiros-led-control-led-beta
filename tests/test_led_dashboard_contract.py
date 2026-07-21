@@ -839,8 +839,10 @@ def test_template_dialog_live_preview_debugs_without_dashboard_refresh() -> None
     assert "async sendLedTemplateLivePreview(channelKey = \"\")" in panel
     assert 'const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__"' in panel
     assert "data-led-template-live-preview-log" in panel
+    assert "const showDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);" in panel
+    assert "if (showDebug) {" in panel
+    assert "debug: showDebug" in panel
     assert "__skip_dashboard_refresh: true" in panel
-    assert "debug: true" in panel
     assert "skip_dashboard_refresh: skipDashboardRefresh" in dashboard
     assert "if (!skipDashboardRefresh) await refreshDashboard();" in index
     assert 'template_live_preview: "Live-Vorschau"' in dashboard

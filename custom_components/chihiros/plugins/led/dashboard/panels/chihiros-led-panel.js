@@ -2918,6 +2918,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   setLedTemplateLivePreviewLog(output) {
+    if (!Boolean(this.uiSettings && this.uiSettings.dashboardDebug)) return;
     const text = String(output || "").trim();
     const root = this.shadowRoot || this;
     const log = root.querySelector("[data-led-template-live-preview-log]");
@@ -2963,15 +2964,18 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       if (Object.prototype.hasOwnProperty.call(brightness, key)) channel.value = brightness[key];
     });
     const payload = { brightness, __skip_dashboard_refresh: true, ...this.ledServiceSelector() };
+    const showDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
     this.setLedTemplateLivePreviewStatus(`${this.tr("template_live_preview")}…`, "pending");
-    this.setLedTemplateLivePreviewLog(
-      `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true`
-    );
+    if (showDebug) {
+      this.setLedTemplateLivePreviewLog(
+        `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true`
+      );
+    }
     const result = await this.runDeviceService({
       service: "set_brightness",
       data: payload,
       title: this.tr("template_live_preview"),
-      debug: true,
+      debug: showDebug,
       dialog: false,
       channel: 1,
       noChannel: true,
@@ -2981,9 +2985,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       result && result.ok ? this.tr("template_live_preview_sent") : this.tr("template_live_preview_failed"),
       result && result.ok ? "ok" : "error",
     );
-    this.setLedTemplateLivePreviewLog(
-      `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true\n\n${result && result.output ? result.output : ""}`
-    );
+    if (showDebug) {
+      this.setLedTemplateLivePreviewLog(
+        `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true\n\n${result && result.output ? result.output : ""}`
+      );
+    }
   }
 
   applyLedFrontTemplate(value) {
@@ -3352,6 +3358,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const max = this.ledMaxBrightness();
     const values = Array.isArray(state.values) ? state.values : this.currentLedChannelTemplateValues();
     const keys = this.ledSupportedScheduleKeys();
+    const showDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
     const colorControl = (key, label, value, accentClass = "") => `
             <div class="led-schedule-color-control ${accentClass}">
               <label><span>${label}</span></label>
@@ -3377,7 +3384,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
                 </span>
                 <input type="checkbox" data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}>
               </label>
-              <pre class="led-template-live-preview-log" data-led-template-live-preview-log>${this.escapeHtml(state.templateLivePreviewLog || "")}</pre>
+              ${showDebug ? `<pre class="led-template-live-preview-log" data-led-template-live-preview-log>${this.escapeHtml(state.templateLivePreviewLog || "")}</pre>` : ""}
               ${keys.map((key, index) => colorControl(
                 key,
                 `CH${index + 1} ${this.ledScheduleChannelLabel(key)}`,
