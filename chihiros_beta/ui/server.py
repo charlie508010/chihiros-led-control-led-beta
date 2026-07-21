@@ -1809,6 +1809,7 @@ def normalize_dashboard_settings(data: dict[str, object]) -> dict[str, object]:
         "mode": "integration",
         "state_db_path": str(DEFAULT_STATE_DB_PATH),
         "database_diagnostics_enabled": bool(data.get("database_diagnostics_enabled", False)),
+        "dashboard_debug": bool(data.get("dashboard_debug", False)),
         "diagnostic_retention_days": max(0, min(3650, retention_days)),
     }
 

@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1115";
+import "./panels/chihiros-led-panel.js?v=0.2.1116";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -55,7 +55,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const defaults = {
       language: String(this.config?.language || "").toLowerCase().startsWith("en") ? "en" : "de",
       showMac: this.config?.show_mac !== false,
-      dashboardDebug: false,
+      dashboardDebug: Boolean(this.config?.dashboard_debug),
       activeTab: "led",
       channelNames: {},
       deviceNames: {},
@@ -63,7 +63,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     };
     try {
       const raw = window.localStorage.getItem(this.uiSettingsKey());
-      return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+      const settings = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
+      if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "dashboard_debug")) {
+        settings.dashboardDebug = Boolean(this.config.dashboard_debug);
+      }
+      return settings;
     } catch (_err) {
       return defaults;
     }
@@ -353,12 +357,28 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       });
     });
     this.querySelectorAll("[data-ui-setting]").forEach((input) => {
-      input.addEventListener("change", () => {
+      input.addEventListener("change", async () => {
         const key = String(input.getAttribute("data-ui-setting") || "");
         if (!key) return;
         const value = input.type === "checkbox" ? Boolean(input.checked) : String(input.value || "");
         this.uiSettings = { ...(this.uiSettings || {}), [key]: value };
         this.saveUiSettings();
+        if (key === "dashboardDebug") {
+          const api = window.ChihirosAddonApi;
+          const addonDatabase = { ...((this.config && this.config.addon_database) || {}) };
+          this.config = {
+            ...(this.config || {}),
+            dashboard_debug: value,
+            addon_database: { ...addonDatabase, dashboard_debug: value },
+          };
+          if (api && typeof api.saveDatabaseConfig === "function") {
+            try {
+              await api.saveDatabaseConfig({ ...addonDatabase, dashboard_debug: value });
+            } catch (_err) {
+              // Keep the local setting even if the add-on endpoint is temporarily unavailable.
+            }
+          }
+        }
         this.render();
       });
     });
@@ -372,6 +392,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           await api.saveDatabaseConfig({
             database_diagnostics_enabled: data.get("database_diagnostics_enabled") === "on",
             diagnostic_retention_days: Number(data.get("diagnostic_retention_days") || 0),
+            dashboard_debug: Boolean(this.uiSettings && this.uiSettings.dashboardDebug),
           });
         } catch (error) {
           this.dialogState = {

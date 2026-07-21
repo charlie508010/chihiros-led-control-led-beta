@@ -376,6 +376,22 @@ def test_scheduler_share_uses_config_debug_dialog() -> None:
     assert "debug ? localDebugOutput" in implementation
 
 
+def test_config_debug_setting_is_persisted_by_addon() -> None:
+    """The dashboard debug toggle survives reloads through add-on settings."""
+    dashboard = source(DASHBOARD)
+    index = source(ADDON_INDEX)
+    server = source(ADDON_SERVER)
+
+    assert "dashboardDebug: Boolean(this.config?.dashboard_debug)" in dashboard
+    assert 'Object.prototype.hasOwnProperty.call(this.config, "dashboard_debug")' in dashboard
+    assert 'key === "dashboardDebug"' in dashboard
+    assert "dashboard_debug: value" in dashboard
+    assert "database_diagnostics_enabled: data.get" in dashboard
+    assert "dashboard_debug: Boolean(this.uiSettings && this.uiSettings.dashboardDebug)" in dashboard
+    assert "dashboard_debug: Boolean(addonDatabase && addonDatabase.dashboard_debug)" in index
+    assert '"dashboard_debug": bool(data.get("dashboard_debug", False))' in server
+
+
 def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -> None:
     """The row send button resets stale device slots and writes only the selected period."""
     panel = source(LED_PANEL)
