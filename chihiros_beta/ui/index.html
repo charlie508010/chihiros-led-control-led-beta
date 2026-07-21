@@ -163,10 +163,14 @@
           throw new Error(`Nicht unterstuetzter HA API Aufruf: ${normalizedMethod} ${normalizedPath}`);
         },
         callService: async (domain, service, serviceData = {}, target = {}, returnResponse = false) => {
+          const skipDashboardRefresh = Boolean(serviceData && serviceData.__skip_dashboard_refresh);
+          const cleanServiceData = Object.fromEntries(
+            Object.entries(serviceData || {}).filter(([key]) => key !== "__skip_dashboard_refresh")
+          );
           const response = await fetch("./api/ha-service", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ domain, service, service_data: serviceData, target, return_response: returnResponse }),
+            body: JSON.stringify({ domain, service, service_data: cleanServiceData, target, return_response: returnResponse }),
           });
           const data = await response.json().catch(() => ({}));
           if (!response.ok) {
@@ -179,7 +183,7 @@
               },
             };
           }
-          await refreshDashboard();
+          if (!skipDashboardRefresh) await refreshDashboard();
           if (
             domain === "chihiros_led_core" &&
             (service === "add_schedule" || service === "set_schedule" || service === "enable_auto_mode")
@@ -191,13 +195,17 @@
         connection: {
           sendMessagePromise: async (message) => {
             if (!message || message.type !== "call_service") return {};
+            const skipDashboardRefresh = Boolean(message.skip_dashboard_refresh);
+            const cleanServiceData = Object.fromEntries(
+              Object.entries(message.service_data || {}).filter(([key]) => key !== "__skip_dashboard_refresh")
+            );
             const response = await fetch("./api/ha-service", {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
                 domain: message.domain,
                 service: message.service,
-                service_data: message.service_data || {},
+                service_data: cleanServiceData,
                 target: message.target || {},
                 return_response: Boolean(message.return_response),
               }),
@@ -213,7 +221,7 @@
                 },
               };
             }
-            await refreshDashboard();
+            if (!skipDashboardRefresh) await refreshDashboard();
             if (
               message.domain === "chihiros_led_core" &&
               (message.service === "add_schedule" || message.service === "set_schedule" || message.service === "enable_auto_mode")

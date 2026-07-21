@@ -810,36 +810,41 @@ def test_template_panel_shows_filtered_template_count() -> None:
     assert 'const localPrefix = `${this.tr("template_local")}: `;' in panel
 
 
-def test_template_dialog_has_live_device_preview() -> None:
-    """Template editing can live-send brightness values without opening the debug dialog."""
+def test_template_panel_shows_local_schedule_count() -> None:
+    """The template panel keeps schedule counts and local labels visible."""
     panel = source(LED_PANEL)
     dashboard = source(DASHBOARD)
+
+    assert "this.dialogState = { ...(this.dialogState || {}), values };" in panel
+    assert "rawLabel.slice(localPrefix.length)" in panel
+    assert '${scheduleRows.length} ${this.tr("schedule_count")}' in panel
+    assert 'schedule_count: "Zeitpläne"' in dashboard
+    assert 'schedule_count: "schedules"' in dashboard
+    assert ".led-schedule-count {" in dashboard
+
+
+def test_template_dialog_live_preview_debugs_without_dashboard_refresh() -> None:
+    """Template live preview shows the service payload and does not reload the dialog."""
+    panel = source(LED_PANEL)
+    dashboard = source(DASHBOARD)
+    index = source(ROOT / "chihiros_beta" / "ui" / "index.html")
 
     assert "data-led-template-live-preview" in panel
     assert "queueLedTemplateLivePreview" in panel
     assert "sendLedTemplateLivePreview" in panel
     assert "setLedTemplateLivePreviewEnabled(Boolean(el.checked))" in dashboard
     assert "templateLivePreview: Boolean(enabled)" in panel
-    assert "if (this.dialogState && this.dialogState.templateLivePreview) return true;" in panel
-    assert "this.dialogState = { ...(this.dialogState || {}), values };" in panel
     assert 'data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}' in panel
     assert "this.queueLedTemplateLivePreview(false, name)" in dashboard
     assert "async sendLedTemplateLivePreview(channelKey = \"\")" in panel
     assert 'const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__"' in panel
-    assert 'const clearAll = channelKey === "__clear_all__";' in panel
-    assert 'if (channelKey && !clearAll && String(key).toLowerCase() !== String(channelKey).toLowerCase()) return;' in panel
-    assert 'service: "set_brightness"' in panel
-    assert "data: { brightness, ...this.ledServiceSelector() }" in panel
-    assert 'class="led-template-live-preview-row"' in panel
-    assert ".led-template-live-preview-row { display:grid; grid-template-columns:minmax(84px, 120px) minmax(0,1fr) auto;" in dashboard
-    assert '<span class="led-template-live-preview-title">${this.tr("template_live_preview")}</span>' in panel
+    assert "data-led-template-live-preview-log" in panel
+    assert "__skip_dashboard_refresh: true" in panel
+    assert "debug: true" in panel
+    assert "skip_dashboard_refresh: skipDashboardRefresh" in dashboard
+    assert "if (!skipDashboardRefresh) await refreshDashboard();" in index
     assert 'template_live_preview: "Live-Vorschau"' in dashboard
     assert 'template_live_preview: "Live preview"' in dashboard
-    assert "rawLabel.slice(localPrefix.length)" in panel
-    assert '${scheduleRows.length} ${this.tr("schedule_count")}' in panel
-    assert 'schedule_count: "Zeitpläne"' in dashboard
-    assert 'schedule_count: "schedules"' in dashboard
-    assert ".led-schedule-count {" in dashboard
 
 
 def test_channel_power_uses_single_toggle() -> None:

@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1136";
+import "./panels/chihiros-led-panel.js?v=0.2.1137";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -541,6 +541,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       address: this.deviceAddress,
       ...data,
     };
+    const skipDashboardRefresh = Boolean(serviceData.__skip_dashboard_refresh);
+    const cleanServiceData = Object.fromEntries(
+      Object.entries(serviceData).filter(([key]) => key !== "__skip_dashboard_refresh")
+    );
     const isMissingResponseSupport = (err) => {
       const message = String(err && err.message ? err.message : err || "");
       const body = String(err && err.body ? err.body : "");
@@ -567,16 +571,17 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           type: "call_service",
           domain: "chihiros_led_core",
           service,
-          service_data: serviceData,
+          service_data: cleanServiceData,
           return_response: true,
+          skip_dashboard_refresh: skipDashboardRefresh,
         });
       }
       return await this._hass.callService("chihiros_led_core", service, {
-        ...serviceData,
+        ...cleanServiceData,
       }, undefined, true, returnResponse);
     } catch (err) {
       if (!returnResponse || !isMissingResponseSupport(err)) throw err;
-      await this._hass.callService("chihiros_led_core", service, { ...serviceData });
+      await this._hass.callService("chihiros_led_core", service, { ...cleanServiceData });
       return fallbackResponse(err);
     }
   }
@@ -1542,7 +1547,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         template_not_found: "Template nicht gefunden",
         template_live_preview: "Live-Vorschau",
         template_live_preview_hint: "Änderungen sofort an das Gerät senden",
-        template_live_preview_ready: "Live-Vorschau bereit",
         template_live_preview_sent: "Live-Vorschau gesendet",
         template_live_preview_failed: "Live-Vorschau fehlgeschlagen",
         template_list: "Vorlagenliste",
@@ -1826,7 +1830,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         template_not_found: "Template not found",
         template_live_preview: "Live preview",
         template_live_preview_hint: "Send changes directly to the device",
-        template_live_preview_ready: "Live preview ready",
         template_live_preview_sent: "Live preview sent",
         template_live_preview_failed: "Live preview failed",
         template_list: "Template list",
@@ -2872,10 +2875,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-template-live-preview-title { color:rgba(255,255,255,.90); font-size:12px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; padding-left:6px; }
         .led-template-live-preview-text { display:grid; gap:2px; min-width:0; }
         .led-template-live-preview-text small { color:rgba(255,255,255,.64); font-size:11px; line-height:1.25; }
-        .led-template-live-preview-row em { color:#7dd3fc; font-size:11px; font-style:normal; }
-        .led-template-live-preview-row em[data-level="ok"] { color:#39d353; }
-        .led-template-live-preview-row em[data-level="error"] { color:#ff6b6b; }
-        .led-template-live-preview-row em[data-level="pending"] { color:#f6ad2f; }
+        .led-template-live-preview-text em { color:#7dd3fc; font-size:11px; font-style:normal; }
+        .led-template-live-preview-text em[data-level="ok"] { color:#39d353; }
+        .led-template-live-preview-text em[data-level="error"] { color:#ff6b6b; }
+        .led-template-live-preview-text em[data-level="pending"] { color:#f6ad2f; }
+        .led-template-live-preview-log { max-height:132px; overflow:auto; margin:0; padding:9px 10px; border:1px solid rgba(3,201,255,.24); border-radius:10px; background:rgba(0,0,0,.22); color:#b8f7ff; font:11px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
         .led-schedule-template-control select {
           min-height:36px;
           border:1px solid rgba(125,211,252,.32);

@@ -2906,14 +2906,29 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   setLedTemplateLivePreviewStatus(message, level = "") {
     const root = this.shadowRoot || this;
     const status = root.querySelector("[data-led-template-live-preview-status]");
-    if (!status) return;
-    status.textContent = String(message || "");
-    status.setAttribute("data-level", String(level || ""));
+    if (status) {
+      status.textContent = String(message || "");
+      status.setAttribute("data-level", String(level || ""));
+    }
+    this.dialogState = {
+      ...(this.dialogState || {}),
+      templateLivePreviewStatus: String(message || ""),
+      templateLivePreviewStatusLevel: String(level || ""),
+    };
+  }
+
+  setLedTemplateLivePreviewLog(output) {
+    const text = String(output || "").trim();
+    const root = this.shadowRoot || this;
+    const log = root.querySelector("[data-led-template-live-preview-log]");
+    if (log) log.textContent = text;
+    this.dialogState = { ...(this.dialogState || {}), templateLivePreviewLog: text };
   }
 
   queueLedTemplateLivePreview(force = false, channelKey = "") {
     if (!this.ledTemplateLivePreviewEnabled()) {
       this.setLedTemplateLivePreviewStatus("", "");
+      this.setLedTemplateLivePreviewLog("");
       return;
     }
     this._ledTemplateLivePreviewChannel = channelKey ? String(channelKey).toLowerCase() : "";
@@ -2922,8 +2937,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       this._ledTemplateLivePreviewTimer = null;
       const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__" : this._ledTemplateLivePreviewChannel || "";
       this._ledTemplateLivePreviewChannel = "";
-      this.sendLedTemplateLivePreview(key).catch(() => {
+      this.sendLedTemplateLivePreview(key).catch((err) => {
         this.setLedTemplateLivePreviewStatus(this.tr("template_live_preview_failed"), "error");
+        this.setLedTemplateLivePreviewLog(`FAIL\n${err && err.message ? err.message : err}`);
       });
     }, force ? 0 : 350);
   }
@@ -2946,12 +2962,16 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const key = String(channel && channel.key || "").toLowerCase();
       if (Object.prototype.hasOwnProperty.call(brightness, key)) channel.value = brightness[key];
     });
+    const payload = { brightness, __skip_dashboard_refresh: true, ...this.ledServiceSelector() };
     this.setLedTemplateLivePreviewStatus(`${this.tr("template_live_preview")}…`, "pending");
+    this.setLedTemplateLivePreviewLog(
+      `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true`
+    );
     const result = await this.runDeviceService({
       service: "set_brightness",
-      data: { brightness, ...this.ledServiceSelector() },
+      data: payload,
       title: this.tr("template_live_preview"),
-      debug: false,
+      debug: true,
       dialog: false,
       channel: 1,
       noChannel: true,
@@ -2960,6 +2980,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     this.setLedTemplateLivePreviewStatus(
       result && result.ok ? this.tr("template_live_preview_sent") : this.tr("template_live_preview_failed"),
       result && result.ok ? "ok" : "error",
+    );
+    this.setLedTemplateLivePreviewLog(
+      `SEND\nservice: set_brightness\nbrightness: ${JSON.stringify(brightness)}\nskip_dashboard_refresh: true\n\n${result && result.output ? result.output : ""}`
     );
   }
 
@@ -3350,10 +3373,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
                 <span class="led-template-live-preview-title">${this.tr("template_live_preview")}</span>
                 <span class="led-template-live-preview-text">
                   <small>${this.tr("template_live_preview_hint")}</small>
-                  <em data-led-template-live-preview-status></em>
+                  <em data-led-template-live-preview-status data-level="${this.escapeHtml(state.templateLivePreviewStatusLevel || "")}">${this.escapeHtml(state.templateLivePreviewStatus || "")}</em>
                 </span>
                 <input type="checkbox" data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}>
               </label>
+              <pre class="led-template-live-preview-log" data-led-template-live-preview-log>${this.escapeHtml(state.templateLivePreviewLog || "")}</pre>
               ${keys.map((key, index) => colorControl(
                 key,
                 `CH${index + 1} ${this.ledScheduleChannelLabel(key)}`,
