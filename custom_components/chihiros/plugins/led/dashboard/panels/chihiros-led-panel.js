@@ -1792,7 +1792,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       true,
     )[0] || {};
     const serviceData = send
-      ? { ...deletePeriod, delete_only: true, device_key: deviceKey, ...this.ledServiceSelector() }
+      ? { ...deletePeriod, delete_only: remainingRows.length > 0, device_key: deviceKey, ...this.ledServiceSelector() }
       : { periods: this.ledSchedulePeriodsFromRows(remainingRows), send: false, device_key: deviceKey };
     if (!send && address) serviceData.address = address;
     const title = `${this.tr("delete_send")}\n1 ${this.tr("led_schedule_rows")}`;

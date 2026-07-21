@@ -516,6 +516,7 @@ async def async_add_schedule_period(
             max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) else brightness_from_service_data(data),
             ramp_up_in_minutes=data[ATTR_RAMP_UP_MINUTES],
             weekdays=parse_weekdays(data.get(ATTR_WEEKDAYS)),
+            delete_only=bool(data.get(ATTR_DELETE_ONLY, False)),
         )
         return
     await chihiros_data.device.add_setting(

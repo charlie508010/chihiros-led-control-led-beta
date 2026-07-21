@@ -428,6 +428,7 @@ class ChihirosDevice:
         max_brightness: int | Sequence[int] | Mapping[str | int, int] | None = None,
         ramp_up_in_minutes: int = 1,
         weekdays: list[WeekdaySelect] | None = None,
+        delete_only: bool = False,
     ) -> None:
         """Remove an automation setting from the light."""
         if weekdays is None:
@@ -441,7 +442,7 @@ class ChihirosDevice:
             brightness_channels=self._channel_count(),
         )
         commands_to_send = [delete_command]
-        if self.model.schedule_reset_parameter != 5:
+        if self.model.schedule_reset_parameter != 5 and not delete_only:
             first_finalize = commands.create_auto_parameter_command(
                 self.get_next_msg_id(),
                 self.model.schedule_reset_parameter,

@@ -101,6 +101,7 @@ class ChihirosClient(Protocol):
         max_brightness: int | Sequence[int] | Mapping[str | int, int] | None = None,
         ramp_up_in_minutes: int = 1,
         weekdays: list[WeekdaySelect] | None = None,
+        delete_only: bool = False,
     ) -> None:
         """Remove a schedule setting."""
 
