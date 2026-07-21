@@ -818,6 +818,11 @@ def test_template_dialog_has_live_device_preview() -> None:
     assert "data-led-template-live-preview" in panel
     assert "queueLedTemplateLivePreview" in panel
     assert "sendLedTemplateLivePreview" in panel
+    assert "this.queueLedTemplateLivePreview(false, name)" in dashboard
+    assert "async sendLedTemplateLivePreview(channelKey = \"\")" in panel
+    assert 'const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__"' in panel
+    assert 'const clearAll = channelKey === "__clear_all__";' in panel
+    assert 'if (channelKey && !clearAll && String(key).toLowerCase() !== String(channelKey).toLowerCase()) return;' in panel
     assert 'service: "set_brightness"' in panel
     assert "data: { brightness, ...this.ledServiceSelector() }" in panel
     assert 'class="led-template-live-preview-row"' in panel

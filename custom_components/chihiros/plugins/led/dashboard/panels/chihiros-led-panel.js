@@ -2895,27 +2895,34 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     status.setAttribute("data-level", String(level || ""));
   }
 
-  queueLedTemplateLivePreview(force = false) {
+  queueLedTemplateLivePreview(force = false, channelKey = "") {
     if (!this.ledTemplateLivePreviewEnabled()) {
       this.setLedTemplateLivePreviewStatus("", "");
       return;
     }
+    this._ledTemplateLivePreviewChannel = channelKey ? String(channelKey).toLowerCase() : "";
     if (this._ledTemplateLivePreviewTimer) window.clearTimeout(this._ledTemplateLivePreviewTimer);
     this._ledTemplateLivePreviewTimer = window.setTimeout(() => {
       this._ledTemplateLivePreviewTimer = null;
-      this.sendLedTemplateLivePreview().catch(() => {
+      const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__" : this._ledTemplateLivePreviewChannel || "";
+      this._ledTemplateLivePreviewChannel = "";
+      this.sendLedTemplateLivePreview(key).catch(() => {
         this.setLedTemplateLivePreviewStatus(this.tr("template_live_preview_failed"), "error");
       });
     }, force ? 0 : 350);
   }
 
-  async sendLedTemplateLivePreview() {
+  async sendLedTemplateLivePreview(channelKey = "") {
     if (!this.ledTemplateLivePreviewEnabled()) return;
     const data = this.ledTemplateDialogValues();
     const keys = this.ledSupportedScheduleKeys();
     const brightness = {};
+    const clearAll = channelKey === "__clear_all__";
     keys.forEach((key, index) => {
-      brightness[key] = Math.max(0, Math.min(this.ledMaxBrightness(), Math.round(Number(data.values[index] || 0))));
+      if (channelKey && !clearAll && String(key).toLowerCase() !== String(channelKey).toLowerCase()) return;
+      brightness[key] = clearAll
+        ? 0
+        : Math.max(0, Math.min(this.ledMaxBrightness(), Math.round(Number(data.values[index] || 0))));
     });
     if (!Object.keys(brightness).length) return;
     (this.ledChannels || []).forEach((channel) => {
