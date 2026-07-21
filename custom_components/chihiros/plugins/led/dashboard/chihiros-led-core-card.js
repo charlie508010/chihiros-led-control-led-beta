@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1130";
+import "./panels/chihiros-led-panel.js?v=0.2.1131";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2864,12 +2864,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-schedule-color-control.color-white input[type="range"] { accent-color:#f0f6fc; }
         .led-schedule-color-control.color-white input[type="number"] { border-color:rgba(240,246,252,.32); }
         .led-schedule-color-control.color-template { border-left-color:#7dd3fc; grid-template-columns:minmax(84px, 120px) minmax(0,1fr); }
-        .led-template-live-preview-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 12px; border:1px solid rgba(125,211,252,.28); border-left:4px solid #03c9ff; border-radius:12px; background:rgba(3,201,255,.06); }
+        .led-template-live-preview-row { display:grid; grid-template-columns:minmax(84px, 120px) minmax(0,1fr) auto; gap:10px; align-items:center; padding:10px 12px; border:1px solid rgba(125,211,252,.28); border-left:4px solid #03c9ff; border-radius:12px; background:rgba(3,201,255,.06); }
         .led-template-live-preview-row input[type="checkbox"] { width:18px; height:18px; accent-color:#03c9ff; }
+        .led-template-live-preview-title { color:rgba(255,255,255,.90); font-size:12px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; padding-left:6px; }
         .led-template-live-preview-text { display:grid; gap:2px; min-width:0; }
-        .led-template-live-preview-text strong { color:rgba(255,255,255,.90); font-size:12px; font-weight:800; letter-spacing:.02em; text-transform:uppercase; }
         .led-template-live-preview-text small { color:rgba(255,255,255,.64); font-size:11px; line-height:1.25; }
-        .led-template-live-preview-row em { min-width:120px; justify-self:end; color:#7dd3fc; font-size:11px; font-style:normal; text-align:right; }
+        .led-template-live-preview-row em { color:#7dd3fc; font-size:11px; font-style:normal; }
         .led-template-live-preview-row em[data-level="ok"] { color:#39d353; }
         .led-template-live-preview-row em[data-level="error"] { color:#ff6b6b; }
         .led-template-live-preview-row em[data-level="pending"] { color:#f6ad2f; }
@@ -3258,6 +3258,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           .led-schedule-row-grid > .led-schedule-color-control.led-schedule-time-control { grid-template-columns:minmax(0,1fr); }
           .led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }
           .led-schedule-row-grid > .led-schedule-color-control.led-schedule-debug-control { grid-template-columns:minmax(0,1fr) auto; }
+          .led-template-live-preview-row { grid-template-columns:minmax(0,1fr) auto; }
+          .led-template-live-preview-title { grid-column:1; }
+          .led-template-live-preview-text { grid-column:1; }
           .led-schedule-debug-control > label span { white-space:normal; overflow-wrap:anywhere; }
           .led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }
           .led-schedule-weekdays-control .weekday-chip { box-sizing:border-box; padding:4px; }
