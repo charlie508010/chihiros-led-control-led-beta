@@ -854,6 +854,11 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
     def _overlaps_target(start: int, end: int) -> bool:
         return start < target_end and end > target_start
 
+    def _range_window_matches(sh: int, sm: int, eh: int, em: int, ramp: int) -> bool:
+        range_start = _minutes(sh, sm)
+        range_end = _minutes(eh, em)
+        return abs(range_start - target_start) <= 1 and abs(range_end - target_end) <= 1 and ramp == expected_ramp
+
     def _implicit_zero_range_matches(points: list[tuple[int, int, int]]) -> bool:
         if positive_expected_levels:
             return False
@@ -871,8 +876,7 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
     def _ranges_match(points: list[tuple[int, int, int]], expected_levels: set[int]) -> bool:
         ranges = device._schedule_curve_ranges(sorted(points))  # noqa: SLF001
         return any(
-            (sh, sm, eh, em, ramp) == (start_hour, start_minute, end_hour, end_minute, expected_ramp)
-            and level in expected_levels
+            _range_window_matches(sh, sm, eh, em, ramp) and level in expected_levels
             for sh, sm, eh, em, level, ramp in ranges
         ) or _implicit_zero_range_matches(points)
 
