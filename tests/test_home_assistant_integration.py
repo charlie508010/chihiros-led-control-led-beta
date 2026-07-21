@@ -42,6 +42,7 @@ try:
     import custom_components.chihiros.plugins.led.integration as chihiros_integration
     from custom_components.chihiros import (
         ATTR_ADDRESS,
+        ATTR_DELETE_ONLY,
         ATTR_END,
         ATTR_ENTRY_ID,
         ATTR_LEVELS,
@@ -221,6 +222,7 @@ class TrackingChihirosClient:
         max_brightness: object | None = None,
         ramp_up_in_minutes: int = 0,
         weekdays: list[object] | None = None,
+        delete_only: bool = False,
     ) -> None:
         """Record a schedule delete."""
         self.remove_setting_calls.append(
@@ -230,6 +232,7 @@ class TrackingChihirosClient:
                 "max_brightness": max_brightness,
                 "ramp_up_in_minutes": ramp_up_in_minutes,
                 "weekdays": weekdays,
+                "delete_only": delete_only,
             }
         )
 
@@ -562,6 +565,7 @@ async def test_schedule_services_validate_and_drive_client(
             ATTR_END: "18:30",
             ATTR_RAMP_UP_MINUTES: 20,
             ATTR_WEEKDAYS: ["monday"],
+            ATTR_DELETE_ONLY: True,
         },
         blocking=True,
     )
@@ -570,6 +574,7 @@ async def test_schedule_services_validate_and_drive_client(
     assert remove_call["sunrise"].strftime("%H:%M") == "08:00"
     assert remove_call["sunset"].strftime("%H:%M") == "18:30"
     assert [weekday.value for weekday in remove_call["weekdays"]] == ["monday"]
+    assert remove_call["delete_only"] is True
 
     await hass.services.async_call(DOMAIN, SERVICE_RESET_SCHEDULE, {}, blocking=True)
     assert client.reset_settings_calls == 1

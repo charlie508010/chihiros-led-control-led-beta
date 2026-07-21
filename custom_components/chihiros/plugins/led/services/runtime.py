@@ -229,6 +229,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             end,
             ramp_up_in_minutes=call.data[ATTR_RAMP_UP_MINUTES],
             weekdays=parse_weekdays(call.data.get(ATTR_WEEKDAYS)),
+            delete_only=bool(call.data.get(ATTR_DELETE_ONLY, False)),
         )
         await async_refresh_status(chihiros_data)
 

@@ -74,6 +74,7 @@ REMOVE_SCHEDULE_SCHEMA = vol.Schema(
         vol.Required(ATTR_END): str,
         vol.Optional(ATTR_RAMP_UP_MINUTES, default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
         vol.Optional(ATTR_WEEKDAYS): vol.All(list, [vol.In(WEEKDAY_VALUES)]),
+        vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
     }
 )
 RESET_SCHEDULE_SCHEMA = vol.Schema(
