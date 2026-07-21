@@ -54,6 +54,7 @@ from ..storage import (
     load_active_led_schedule_settings,
     load_led_schedule_rows,
     record_led_schedule_rows,
+    reset_led_schedule_verifications,
     save_led_schedule_verification_job,
 )
 from ..types import ResolveDevice
@@ -226,6 +227,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 settings,
             )
             _cancel_led_schedule_verification_tasks(hass, device_key, verification_rows)
+            await hass.async_add_executor_job(reset_led_schedule_verifications, device_key, verification_rows)
             return {"schedules_restored": schedule_count, "verification_scheduled": False}
 
         return await _async_led_send_service(
