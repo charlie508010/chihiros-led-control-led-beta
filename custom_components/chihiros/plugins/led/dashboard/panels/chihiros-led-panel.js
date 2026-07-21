@@ -1744,7 +1744,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   async deleteLedScheduleRow(rowIndex = null, send = true) {
     if (this._ledScheduleSubmitting) return false;
-    const debug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
+    const debugControl = this.querySelector("[data-led-schedule-debug]");
+    const debug = debugControl
+      ? Boolean(debugControl.checked)
+      : Boolean(this.dialogState && this.dialogState.ledScheduleDebug) || Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
     const currentRows = this.ledScheduleRows();
     const index = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : (
       this.dialogState && this.dialogState.type === "led-schedule" && Number.isInteger(this.dialogState.ledScheduleEditIndex) && this.dialogState.ledScheduleEditIndex >= 0

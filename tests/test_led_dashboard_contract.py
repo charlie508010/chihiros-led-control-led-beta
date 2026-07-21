@@ -481,6 +481,8 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     implementation = panel[start:end]
 
     assert "if (this._ledScheduleSubmitting) return false;" in implementation
+    assert 'this.querySelector("[data-led-schedule-debug]")' in implementation
+    assert "this.dialogState && this.dialogState.ledScheduleDebug" in implementation
     assert 'output: this.tr("debug_sending")' in implementation
     assert 'running: true' in implementation
     assert "debug, dialog: true" in implementation
