@@ -558,6 +558,9 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert ".led-layout-page.has-custom-layout > .led-layout-item," in core
     assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
+    assert '.led-layout-page > [data-led-layout-item="schedule"] > .card,' in core
+    assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:220px; max-height:220px; overflow:auto; }' in core
+    assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:auto; max-height:none; }' in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
     assert 'data-led-layout-handle' in panel

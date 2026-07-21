@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1151";
+import "./panels/chihiros-led-panel.js?v=0.2.1152";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2767,6 +2767,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }
         .led-layout-page > .led-layout-item > .card,
         .led-layout-page > .led-layout-item > .middle { width:100%; height:100%; box-sizing:border-box; }
+        .led-layout-page > [data-led-layout-item="channels"] > .card,
+        .led-layout-page > [data-led-layout-item="schedule"] > .card,
+        .led-layout-page > [data-led-layout-item="history"] > .card,
+        .led-layout-page > [data-led-layout-item="templates"] > .card { height:220px; max-height:220px; overflow:auto; }
         .led-layout-page.is-editing > .led-layout-item { position:relative; border:1px dashed rgba(3,201,255,.38); border-radius:10px; padding:8px; background:rgba(3,201,255,.045); }
         .led-layout-page.is-editing > .led-layout-item.dragging { opacity:.72; border-color:#03c9ff; background:rgba(3,201,255,.12); }
         .led-layout-page.is-dragging { user-select:none; }
@@ -3399,6 +3403,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           .led-layout-page > [data-led-layout-item="connection"] { grid-column:1; grid-row:5; }
           .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:6; }
           .led-layout-page > [data-led-layout-item="presets"] { grid-column:1; grid-row:7; }
+          .led-layout-page > [data-led-layout-item="channels"] > .card,
+          .led-layout-page > [data-led-layout-item="schedule"] > .card,
+          .led-layout-page > [data-led-layout-item="history"] > .card,
+          .led-layout-page > [data-led-layout-item="templates"] > .card { height:auto; max-height:none; }
           .led-channels-card { grid-column:1; grid-row:1; }
           .led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }
           .led-template-card { grid-column:1; grid-row:3; }
