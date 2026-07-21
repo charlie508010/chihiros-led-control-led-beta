@@ -173,11 +173,9 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     prepare_existing_setting=active and bool(stored_rows),
                 )
                 _replaced = False
-            verification_scheduled = active
-            if verification_scheduled:
+            if active:
                 target = _verification_row(call.data)
-                await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
-                _schedule_led_verification(hass, chihiros_data, target, restore_rows)
+                await _record_or_schedule_led_verification(hass, chihiros_data, device_key, target, restore_rows)
             return {}
 
         return await _async_led_send_service(
@@ -228,8 +226,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 settings,
             )
             for target in verification_rows:
-                await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
-                _schedule_led_verification(hass, chihiros_data, target, [])
+                await _record_or_schedule_led_verification(hass, chihiros_data, device_key, target, [])
             return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}
 
         return await _async_led_send_service(
@@ -321,8 +318,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             if send and len(call.data[ATTR_PERIODS]) == 1:
                 target = _verification_row(call.data[ATTR_PERIODS][0])
                 restore_rows = stored_rows[:2] if len(stored_rows) > 2 else []
-                await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
-                _schedule_led_verification(hass, chihiros_data, target, restore_rows)
+                await _record_or_schedule_led_verification(hass, chihiros_data, device_key, target, restore_rows)
             return {
                 "rows": len(call.data[ATTR_PERIODS]),
                 "send": send,
@@ -656,6 +652,26 @@ def _verification_row(period: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _verification_requires_snapshot(target: dict[str, Any]) -> bool:
+    """Return whether the device can confirm this row as an active brightness range."""
+    return any(int(value) > 0 for value in target["levels"].values())
+
+
+async def _record_or_schedule_led_verification(
+    hass: HomeAssistant,
+    chihiros_data: ChihirosData,
+    device_key: str,
+    target: dict[str, Any],
+    restore_rows: list[dict[str, Any]],
+) -> None:
+    """Persist immediate zero-row verification or schedule a delayed device check."""
+    if not _verification_requires_snapshot(target):
+        await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, "verified")
+        return
+    await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
+    _schedule_led_verification(hass, chihiros_data, target, restore_rows)
+
+
 def _schedule_led_verification(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
@@ -760,14 +776,41 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
     """Compare one requested period with the schedule ranges returned by the device."""
     if snapshot is None:
         return False
-    points = [(point.hour, point.minute, next(iter(point.levels.values()), 0)) for point in snapshot.points]
-    ranges = device._schedule_curve_ranges(points)  # noqa: SLF001
     start_hour, start_minute = (int(value) for value in str(target["start"]).split(":"))
     end_hour, end_minute = (int(value) for value in str(target["end"]).split(":"))
     expected_ramp = max(1, int(target["ramp"]))
-    expected_levels = {int(value) for value in target["levels"].values()}
-    return any(
-        (sh, sm, eh, em, ramp) == (start_hour, start_minute, end_hour, end_minute, expected_ramp)
-        and level in expected_levels
-        for sh, sm, eh, em, level, ramp in ranges
+    expected_by_channel = {str(channel).lower(): int(value) for channel, value in target["levels"].items()}
+    positive_expected_levels = {level for level in expected_by_channel.values() if level > 0}
+    if not positive_expected_levels:
+        return True
+
+    def _ranges_match(points: list[tuple[int, int, int]], expected_levels: set[int]) -> bool:
+        ranges = device._schedule_curve_ranges(points)  # noqa: SLF001
+        return any(
+            (sh, sm, eh, em, ramp) == (start_hour, start_minute, end_hour, end_minute, expected_ramp)
+            and level in expected_levels
+            for sh, sm, eh, em, level, ramp in ranges
+        )
+
+    snapshot_channels = sorted(
+        {
+            str(channel).lower()
+            for point in snapshot.points
+            for channel in getattr(point, "levels", {}).keys()
+        }
     )
+    for channel in snapshot_channels:
+        if channel not in expected_by_channel:
+            continue
+        channel_points = [
+            (int(point.hour), int(point.minute), int(getattr(point, "levels", {}).get(channel, 0)))
+            for point in snapshot.points
+        ]
+        if _ranges_match(channel_points, {expected_by_channel[channel]}):
+            return True
+
+    first_value_points = [
+        (int(point.hour), int(point.minute), int(next(iter(getattr(point, "levels", {}).values()), 0)))
+        for point in snapshot.points
+    ]
+    return _ranges_match(first_value_points, positive_expected_levels)
