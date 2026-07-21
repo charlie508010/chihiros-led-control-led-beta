@@ -860,7 +860,7 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
         return True
 
     def _ranges_match(points: list[tuple[int, int, int]], expected_levels: set[int]) -> bool:
-        ranges = device._schedule_curve_ranges(points)  # noqa: SLF001
+        ranges = device._schedule_curve_ranges(sorted(points))  # noqa: SLF001
         return any(
             (sh, sm, eh, em, ramp) == (start_hour, start_minute, end_hour, end_minute, expected_ramp)
             and level in expected_levels

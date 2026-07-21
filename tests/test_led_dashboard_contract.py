@@ -455,13 +455,18 @@ def test_scheduler_reset_debug_keeps_delete_and_verification_operations() -> Non
 
 
 def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
-    """The dashboard marker uses the delayed DB result, not every runtime poll snapshot."""
+    """The dashboard marker lets a fresh matching snapshot recover a stored failed result."""
     panel = source(LED_PANEL)
     server = source(ROOT / "chihiros_beta" / "ui" / "server.py")
+    verification = panel.split("ledScheduleRowVerification(row)", 1)[1].split("ledScheduleDialog()", 1)[0]
 
     assert 'storedStatus === "verified"' in panel
     assert 'storedStatus === "failed"' in panel
-    assert 'storedStatus === "pending"' in panel
+    assert 'if (storedStatus === "verified") return' in verification
+    assert 'if (storedStatus === "failed") return' not in verification
+    assert 'if (storedStatus === "pending") return' not in verification
+    assert "const ranges = this.ledScheduleSnapshotRanges();" in verification
+    assert "device._schedule_curve_ranges(sorted(points))" in source(LED_SERVICES)
     assert "verification_status TEXT NOT NULL DEFAULT 'pending'" in server
     assert "previous.get(signature" in server
 
