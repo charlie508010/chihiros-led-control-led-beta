@@ -566,7 +566,8 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
     assert '"verified" if _schedule_snapshot_matches' in services
-    assert 'finish_led_schedule_verification, device_key, target, "verified"' not in services
+    assert 'await _finish_led_schedule_verifications(hass, device_key, verification_rows, "verified")' in services
+    assert 'return {"schedules_restored": schedule_count, "verification_scheduled": False}' in services
     assert "if not _verification_requires_snapshot" not in services
     assert "PRIMARY KEY (device_key, schedule_signature)" in storage
     assert "WHERE UPPER(device_key)=UPPER(?) AND schedule_signature=?" in storage
@@ -1078,7 +1079,9 @@ def test_enable_auto_mode_button_uses_response_service_instead_of_schedule_write
     assert "output: debug && serviceOutput ? serviceOutput" in implementation
     assert 'service: "set_schedule"' not in implementation
     assert "Auto-Mode-Entitaet nicht gefunden" not in implementation
-    assert '"verification_scheduled": bool(verification_rows)' in source(LED_SERVICES)
+    services = source(LED_SERVICES)
+    assert 'await _finish_led_schedule_verifications(hass, device_key, verification_rows, "verified")' in services
+    assert 'return {"schedules_restored": schedule_count, "verification_scheduled": False}' in services
 
 
 def test_vivid_iii_replaces_presets_with_fan_status_and_control() -> None:

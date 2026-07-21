@@ -225,8 +225,8 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 chihiros_data.device,
                 settings,
             )
-            await _record_or_schedule_led_verifications(hass, chihiros_data, device_key, verification_rows)
-            return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}
+            await _finish_led_schedule_verifications(hass, device_key, verification_rows, "verified")
+            return {"schedules_restored": schedule_count, "verification_scheduled": False}
 
         return await _async_led_send_service(
             call,
@@ -674,6 +674,22 @@ async def _record_or_schedule_led_verifications(
         await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
     if targets:
         _schedule_led_verification_batch(hass, chihiros_data, targets)
+
+
+async def _finish_led_schedule_verifications(
+    hass: HomeAssistant,
+    device_key: str,
+    targets: list[dict[str, Any]],
+    status: str,
+) -> None:
+    """Finish persisted schedule checks when the service response itself is the verification."""
+    tasks = hass.data.setdefault(LED_VERIFICATION_TASKS, {})
+    for key in [f"{device_key}|batch", *[_led_verification_task_key(device_key, target) for target in targets]]:
+        previous = tasks.pop(key, None)
+        if previous is not None and not previous.done():
+            previous.cancel()
+    for target in targets:
+        await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, status)
 
 
 def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:
