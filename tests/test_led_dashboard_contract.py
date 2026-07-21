@@ -818,6 +818,9 @@ def test_template_dialog_has_live_device_preview() -> None:
     assert "data-led-template-live-preview" in panel
     assert "queueLedTemplateLivePreview" in panel
     assert "sendLedTemplateLivePreview" in panel
+    assert "setLedTemplateLivePreviewEnabled(Boolean(el.checked))" in dashboard
+    assert "templateLivePreview: Boolean(enabled)" in panel
+    assert 'data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}' in panel
     assert "this.queueLedTemplateLivePreview(false, name)" in dashboard
     assert "async sendLedTemplateLivePreview(channelKey = \"\")" in panel
     assert 'const key = force && !this._ledTemplateLivePreviewChannel ? "__clear_all__"' in panel

@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1132";
+import "./panels/chihiros-led-panel.js?v=0.2.1133";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2514,6 +2514,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     });
     this.querySelectorAll("[data-led-template-live-preview]").forEach((el) => {
       el.addEventListener("change", () => {
+        if (typeof this.setLedTemplateLivePreviewEnabled === "function") {
+          this.setLedTemplateLivePreviewEnabled(Boolean(el.checked));
+        }
         if (typeof this.queueLedTemplateLivePreview === "function") this.queueLedTemplateLivePreview(true);
       });
     });

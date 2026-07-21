@@ -2884,7 +2884,13 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   ledTemplateLivePreviewEnabled() {
     const root = this.shadowRoot || this;
-    return Boolean(root.querySelector("[data-led-template-live-preview]")?.checked);
+    const checkbox = root.querySelector("[data-led-template-live-preview]");
+    if (checkbox) return Boolean(checkbox.checked);
+    return Boolean(this.dialogState && this.dialogState.templateLivePreview);
+  }
+
+  setLedTemplateLivePreviewEnabled(enabled) {
+    this.dialogState = { ...(this.dialogState || {}), templateLivePreview: Boolean(enabled) };
   }
 
   setLedTemplateLivePreviewStatus(message, level = "") {
@@ -2914,6 +2920,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   async sendLedTemplateLivePreview(channelKey = "") {
     if (!this.ledTemplateLivePreviewEnabled()) return;
+    this.setLedTemplateLivePreviewEnabled(true);
     const data = this.ledTemplateDialogValues();
     const keys = this.ledSupportedScheduleKeys();
     const brightness = {};
@@ -3335,7 +3342,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
                   <small>${this.tr("template_live_preview_hint")}</small>
                   <em data-led-template-live-preview-status></em>
                 </span>
-                <input type="checkbox" data-led-template-live-preview>
+                <input type="checkbox" data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}>
               </label>
               ${keys.map((key, index) => colorControl(
                 key,
