@@ -395,12 +395,17 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
 def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -> None:
     """The row send button resets stale device slots and writes only the selected period."""
     panel = source(LED_PANEL)
+    start = panel.index("async sendLedScheduleRowFromFront(rowIndex)")
+    end = panel.index("\n  async callLedService", start)
+    implementation = panel[start:end]
 
-    assert "async sendLedScheduleRowFromFront(rowIndex)" in panel
-    assert "const period = this.ledSchedulePeriodsFromRows([row]" in panel
-    assert 'service: "set_schedule"' in panel
-    assert "data: { periods: [period], send: true, ...this.ledServiceSelector() }" in panel
-    assert "const localPeriods = this.ledSchedulePeriodsFromRows(rows);" in panel
+    assert "async sendLedScheduleRowFromFront(rowIndex)" in implementation
+    assert "const period = this.ledSchedulePeriodsFromRows([row]" in implementation
+    assert 'service: "set_schedule"' in implementation
+    assert "data: { periods: [period], send: true, ...this.ledServiceSelector() }" in implementation
+    assert "debug && result && result.output" in implementation
+    assert "debug," in implementation
+    assert "const localPeriods = this.ledSchedulePeriodsFromRows(rows);" in implementation
     assert "sendCurrentLedScheduleFromFront" not in panel
 
 

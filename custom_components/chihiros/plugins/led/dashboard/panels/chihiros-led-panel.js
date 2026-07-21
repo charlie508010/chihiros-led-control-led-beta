@@ -1601,6 +1601,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         ? result.output
         : (ok ? this.ledScheduleSuccessDialogOutput(this.tr("led_schedule_save_send"), 1, true) : String(result && result.output ? result.output : `FAIL\n${title}`)),
       running: false,
+      debug,
       noChannel: true,
       level: ok ? "ok" : "error",
     };
