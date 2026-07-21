@@ -392,6 +392,20 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
     assert '"dashboard_debug": bool(data.get("dashboard_debug", False))' in server
 
 
+def test_debug_sections_do_not_render_inner_copy_headers() -> None:
+    """Structured debug output keeps one box without per-section copy headers."""
+    dashboard = source(DASHBOARD)
+    start = dashboard.index("debugOutputMarkup(output = \"\"")
+    end = dashboard.index("\n  async copyText", start)
+    implementation = dashboard[start:end]
+
+    assert "<pre>${this.escapeHtml(section.value)}</pre>" in implementation
+    assert "<header>" not in implementation
+    assert "copy-debug:${index}" not in implementation
+    assert '{ action: "copy-debug:all", label: this.tr("copy_all")' in dashboard
+    assert ".debug-section-box header" not in dashboard
+
+
 def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -> None:
     """The row send button resets stale device slots and writes only the selected period."""
     panel = source(LED_PANEL)
