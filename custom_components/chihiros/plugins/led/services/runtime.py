@@ -201,10 +201,13 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
         }
 
         async def _operation(chihiros_data: ChihirosData) -> dict[str, Any]:
+            device_key = str(chihiros_data.device.address or chihiros_data.title)
             explicit_periods = call.data.get(ATTR_PERIODS)
             settings = None
+            verification_rows: list[dict[str, Any]] = []
             if explicit_periods is not None:
                 validate_schedule_periods(chihiros_data, explicit_periods)
+                active_periods = [period for period in explicit_periods if bool(period.get(ATTR_ACTIVE, True))]
                 settings = [
                     (
                         parse_schedule_time(period[ATTR_START]),
@@ -213,16 +216,21 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                         int(period[ATTR_RAMP_UP_MINUTES]),
                         parse_weekdays(period.get(ATTR_WEEKDAYS)),
                     )
-                    for period in explicit_periods
-                    if bool(period.get(ATTR_ACTIVE, True))
+                    for period in active_periods
                 ]
+                verification_rows = [_verification_row(period) for period in active_periods]
+            else:
+                verification_rows = await hass.async_add_executor_job(load_led_schedule_rows, device_key)
             schedule_count = await async_enable_led_auto_mode(
                 hass,
                 chihiros_data.coordinator,
                 chihiros_data.device,
                 settings,
             )
-            return {"schedules_restored": schedule_count}
+            for target in verification_rows:
+                await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
+                _schedule_led_verification(hass, chihiros_data, target, [])
+            return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}
 
         return await _async_led_send_service(
             call,

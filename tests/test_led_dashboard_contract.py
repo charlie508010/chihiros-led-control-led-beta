@@ -525,7 +525,7 @@ def test_scheduler_verification_refreshes_without_page_reload() -> None:
 
     assert "scheduleVerificationDashboardRefresh()" in index
     assert "}, 70000);" in index
-    assert 'service === "add_schedule" || service === "set_schedule"' in index
+    assert 'service === "add_schedule" || service === "set_schedule" || service === "enable_auto_mode"' in index
     assert "await window.ChihirosAddonApi.refreshDashboard();" in panel
 
 
@@ -879,6 +879,7 @@ def test_enable_auto_mode_button_uses_response_service_instead_of_schedule_write
     assert "output: debug && serviceOutput ? serviceOutput" in implementation
     assert 'service: "set_schedule"' not in implementation
     assert "Auto-Mode-Entitaet nicht gefunden" not in implementation
+    assert '"verification_scheduled": bool(verification_rows)' in source(LED_SERVICES)
 
 
 def test_vivid_iii_replaces_presets_with_fan_status_and_control() -> None:

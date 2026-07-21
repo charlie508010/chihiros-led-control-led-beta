@@ -180,7 +180,10 @@
             };
           }
           await refreshDashboard();
-          if (domain === "chihiros_led_core" && (service === "add_schedule" || service === "set_schedule")) {
+          if (
+            domain === "chihiros_led_core" &&
+            (service === "add_schedule" || service === "set_schedule" || service === "enable_auto_mode")
+          ) {
             scheduleVerificationDashboardRefresh();
           }
           return data.result;
@@ -211,7 +214,10 @@
               };
             }
             await refreshDashboard();
-            if (message.domain === "chihiros_led_core" && (message.service === "add_schedule" || message.service === "set_schedule")) {
+            if (
+              message.domain === "chihiros_led_core" &&
+              (message.service === "add_schedule" || message.service === "set_schedule" || message.service === "enable_auto_mode")
+            ) {
               scheduleVerificationDashboardRefresh();
             }
             return data.result;
