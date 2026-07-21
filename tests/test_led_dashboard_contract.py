@@ -431,9 +431,12 @@ def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> No
 def test_inactive_schedule_delete_only_removes_selected_row() -> None:
     """Deleting a row must not temporarily remove other stored schedules."""
     services = source(LED_SERVICES)
+    constants = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "const.py")
 
     assert "active = bool(call.data.get(ATTR_ACTIVE, True))" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
+    assert 'ATTR_DELETE_ONLY = "delete_only"' in constants
+    assert "max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) else brightness_from_service_data(data)" in services
 
 
 def test_scheduler_verification_is_queued_per_schedule_row() -> None:
@@ -486,6 +489,7 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     assert 'output: this.tr("debug_sending")' in implementation
     assert 'running: true' in implementation
     assert "debug, dialog: true" in implementation
+    assert "delete_only: true" in implementation
     assert "output: sendResult && sendResult.output" in implementation
 
 

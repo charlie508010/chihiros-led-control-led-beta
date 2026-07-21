@@ -17,6 +17,7 @@ ATTR_ACTIVE = "active"
 ATTR_ADDRESS = "address"
 ATTR_BRIGHTNESS = "brightness"
 ATTR_DEBUG = "debug"
+ATTR_DELETE_ONLY = "delete_only"
 ATTR_END = "end"
 ATTR_ENABLE_AUTO_MODE = "enable_auto_mode"
 ATTR_ENTITY_ID = "entity_id"
@@ -56,6 +57,7 @@ ADD_SCHEDULE_SCHEMA = vol.Schema(
         **SCHEDULE_PERIOD_SCHEMA,
         vol.Optional(ATTR_PREVIOUS_PERIOD): vol.Schema(SCHEDULE_PERIOD_SCHEMA),
         vol.Optional(ATTR_PREVIOUS_INDEX): vol.All(vol.Coerce(int), vol.Range(min=0)),
+        vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
         vol.Optional(ATTR_DEBUG, default=False): bool,
     }
 )

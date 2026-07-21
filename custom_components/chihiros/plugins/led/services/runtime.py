@@ -20,6 +20,7 @@ from ..const import (
     ATTR_ADDRESS,
     ATTR_BRIGHTNESS,
     ATTR_DEBUG,
+    ATTR_DELETE_ONLY,
     ATTR_ENABLE_AUTO_MODE,
     ATTR_END,
     ATTR_ENTITY_ID,
@@ -512,7 +513,7 @@ async def async_add_schedule_period(
         await chihiros_data.device.remove_setting(
             start,
             end,
-            max_brightness=brightness_from_service_data(data),
+            max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) else brightness_from_service_data(data),
             ramp_up_in_minutes=data[ATTR_RAMP_UP_MINUTES],
             weekdays=parse_weekdays(data.get(ATTR_WEEKDAYS)),
         )
