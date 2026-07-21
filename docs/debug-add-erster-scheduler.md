@@ -419,13 +419,13 @@ OK: Keine Unterschiede gefunden.
 
 ---
 
-# Wireshark Debug: zweiter Scheduler edit Tage auf MI SO
+# Wireshark Debug: edit scheduler zwei Mi So
 
 ## Übersicht
 
 | Feld | Wert |
 | --- | --- |
-| Bezeichnung | zweiter Scheduler edit Tage auf MI SO |
+| Bezeichnung | edit scheduler zwei Mi So |
 | Quelle | Wireshark Vergleich App-Log |
 | Datei | `btsnoop_hci_2026-07-21-02-15-06.frames.jsonl` |
 | Aktueller Mitschnitt | 6 Frames |
@@ -464,12 +464,12 @@ Aktueller Mitschnitt: btsnoop_hci_2026-07-21-02-15-06.frames.jsonl
 ## App-Log Frames
 
 ```text
-[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 02:14:53"}
-[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 2, 14, 53], "time": "21.07.2026 02:14:53"}
-[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 2, 14, 53], "time": "21.07.2026 02:14:53"}
-[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [18, 0, 22, 0, 1, 42, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 02:14:55"}
-[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [18, 0, 22, 0, 1, 42, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 02:15:04"}
-[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [18, 0, 22, 0, 1, 17, 100, 100, 100, 100, 255, 255, 255, 255], "time": "21.07.2026 02:15:05"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 4, "parm": [1], "time": "21.07.2026 02:37:39"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 2, 37, 39], "time": "21.07.2026 02:37:39"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 90, "mode": 9, "parm": [26, 7, 2, 2, 37, 39], "time": "21.07.2026 02:37:39"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [18, 0, 22, 0, 1, 42, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 02:37:42"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [18, 0, 22, 0, 1, 42, 255, 255, 255, 255, 255, 255, 255, 255], "time": "21.07.2026 02:37:42"}
+[INFO SYSTEM]  {"dir": "tx", "cmd": 165, "mode": 25, "parm": [18, 0, 22, 0, 1, 17, 100, 100, 100, 100, 255, 255, 255, 255], "time": "21.07.2026 02:37:42"}
 ```
 
 ## Rohes Vergleichsergebnis
@@ -483,10 +483,10 @@ App-Log: 6 Frames
   Vergleich App-Log   : 90|4|[1] ok
 #2
   Aktueller Mitschnitt  90|9|[26,7,2,2,14,53]
-  Vergleich App-Log   : 90|9|[26,7,2,2,14,53] ok
+  Vergleich App-Log   : 90|9|[26,7,2,2,37,39] ok
 #3
   Aktueller Mitschnitt  90|9|[26,7,2,2,14,53]
-  Vergleich App-Log   : 90|9|[26,7,2,2,14,53] ok
+  Vergleich App-Log   : 90|9|[26,7,2,2,37,39] ok
 #4
   Aktueller Mitschnitt  165|25|[18,0,22,0,1,42,255,255,255,255,255,255,255,255]
   Vergleich App-Log   : 165|25|[18,0,22,0,1,42,255,255,255,255,255,255,255,255] ok
