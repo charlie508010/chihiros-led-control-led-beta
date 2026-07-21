@@ -481,7 +481,10 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     implementation = panel[start:end]
 
     assert "if (this._ledScheduleSubmitting) return false;" in implementation
+    assert 'output: this.tr("debug_sending")' in implementation
+    assert 'running: true' in implementation
     assert "debug, dialog: true" in implementation
+    assert "output: sendResult && sendResult.output" in implementation
 
 
 def test_led_database_diagnostics_is_configurable_and_opens_from_control() -> None:

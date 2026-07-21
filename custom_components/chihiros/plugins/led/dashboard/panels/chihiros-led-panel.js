@@ -1793,6 +1793,18 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       : { periods: this.ledSchedulePeriodsFromRows(remainingRows), send: false, device_key: deviceKey };
     if (!send && address) serviceData.address = address;
     const title = `${this.tr("delete_send")}\n1 ${this.tr("led_schedule_rows")}`;
+    if (send) {
+      this.dialogState = {
+        type: "debug",
+        channel: 1,
+        output: this.tr("debug_sending"),
+        running: true,
+        debug,
+        noChannel: true,
+        level: "pending",
+      };
+      this.render();
+    }
     const sendResult = send
       ? await this.runLedScheduleService({ service: "add_schedule", data: serviceData, title, debug, dialog: true })
       : null;
@@ -1818,10 +1830,11 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         this.dialogState = {
           type: "debug",
           channel: 1,
-          output: debug && sendResult && sendResult.output
+          output: sendResult && sendResult.output
             ? sendResult.output
             : `OK\n${title}\n${this.tr("status")}: ok\n${this.tr("reply")}: ${this.tr("reply_sent")}`,
           running: false,
+          debug,
           noChannel: true,
           level: "ok",
         };
