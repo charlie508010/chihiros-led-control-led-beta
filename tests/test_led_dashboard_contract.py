@@ -510,7 +510,8 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     services = source(LED_SERVICES)
     storage = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "storage" / "runtime.py")
 
-    assert "task_key = f\"{device_key}|{target['start']}|{target['end']}\"" in services
+    assert "return f\"{device_key}|{target['start']}|{target['end']}\"" in services
+    assert 'task_key = f"{device_key}|batch"' in services
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
     assert "PRIMARY KEY (device_key, schedule_signature)" in storage

@@ -225,8 +225,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 chihiros_data.device,
                 settings,
             )
-            for target in verification_rows:
-                await _record_or_schedule_led_verification(hass, chihiros_data, device_key, target, [])
+            await _record_or_schedule_led_verifications(hass, chihiros_data, device_key, verification_rows)
             return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}
 
         return await _async_led_send_service(
@@ -672,6 +671,29 @@ async def _record_or_schedule_led_verification(
     _schedule_led_verification(hass, chihiros_data, target, restore_rows)
 
 
+async def _record_or_schedule_led_verifications(
+    hass: HomeAssistant,
+    chihiros_data: ChihirosData,
+    device_key: str,
+    targets: list[dict[str, Any]],
+) -> None:
+    """Persist zero rows immediately and check positive rows with one device query."""
+    positive_targets = []
+    for target in targets:
+        if not _verification_requires_snapshot(target):
+            await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, "verified")
+            continue
+        await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
+        positive_targets.append(target)
+    if positive_targets:
+        _schedule_led_verification_batch(hass, chihiros_data, positive_targets)
+
+
+def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:
+    """Return the persisted one-row verification task key."""
+    return f"{device_key}|{target['start']}|{target['end']}"
+
+
 def _schedule_led_verification(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
@@ -680,7 +702,7 @@ def _schedule_led_verification(
 ) -> None:
     """Run one delayed check for each latest schedule-row write."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
-    task_key = f"{device_key}|{target['start']}|{target['end']}"
+    task_key = _led_verification_task_key(device_key, target)
     tasks = hass.data.setdefault(LED_VERIFICATION_TASKS, {})
     previous = tasks.pop(task_key, None)
     if previous is not None and not previous.done():
@@ -726,6 +748,59 @@ def _schedule_led_verification(
                 tasks.pop(task_key, None)
 
     tasks[task_key] = hass.async_create_task(_verify(), f"verify LED schedule {device_key} {target['start']}")
+
+
+def _schedule_led_verification_batch(
+    hass: HomeAssistant,
+    chihiros_data: ChihirosData,
+    targets: list[dict[str, Any]],
+) -> None:
+    """Run one delayed device query for multiple schedule-row checks."""
+    device_key = str(chihiros_data.device.address or chihiros_data.title)
+    task_key = f"{device_key}|batch"
+    tasks = hass.data.setdefault(LED_VERIFICATION_TASKS, {})
+    for key in [task_key, *[_led_verification_task_key(device_key, target) for target in targets]]:
+        previous = tasks.pop(key, None)
+        if previous is not None and not previous.done():
+            previous.cancel()
+
+    async def _verify() -> None:
+        statuses = {id(target): "failed" for target in targets}
+        cancelled = False
+        try:
+            await asyncio.sleep(60)
+            lock = hass.data.setdefault(LED_RUNTIME_POLL_LOCK, asyncio.Lock())
+            async with lock:
+                chihiros_data.device.last_schedule_snapshot_notification = None
+                await asyncio.wait_for(
+                    chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
+                )
+                snapshot = chihiros_data.device.last_schedule_snapshot_notification
+                statuses = {
+                    id(target): (
+                        "verified" if _schedule_snapshot_matches(chihiros_data.device, snapshot, target) else "failed"
+                    )
+                    for target in targets
+                }
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Delayed LED schedule batch verification failed for %s", device_key)
+        finally:
+            if not cancelled:
+                for target in targets:
+                    await hass.async_add_executor_job(
+                        finish_led_schedule_verification,
+                        device_key,
+                        target,
+                        statuses[id(target)],
+                    )
+                await async_refresh_status(chihiros_data)
+            if tasks.get(task_key) is asyncio.current_task():
+                tasks.pop(task_key, None)
+
+    tasks[task_key] = hass.async_create_task(_verify(), f"verify LED schedule batch {device_key}")
 
 
 def _stored_row_to_setting(row: dict[str, Any]) -> tuple[datetime, datetime, dict[str, int], int, list[Any]]:
