@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1116";
+import "./panels/chihiros-led-panel.js?v=0.2.1117";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2578,11 +2578,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         input.dispatchEvent(new Event("change", { bubbles: true }));
       });
     });
-    this.querySelectorAll("[data-led-schedule-active], [data-led-schedule-debug]").forEach((el) => {
+    this.querySelectorAll("[data-led-schedule-active]").forEach((el) => {
       el.addEventListener("change", () => {
-        if (el.hasAttribute("data-led-schedule-debug") && this.dialogState && this.dialogState.type === "led-schedule") {
-          this.dialogState.ledScheduleDebug = Boolean(el.checked);
-        }
         const label = el.closest(".led-schedule-switch");
         const text = label && label.querySelector("span");
         if (text) text.textContent = el.checked ? "An" : "Aus";

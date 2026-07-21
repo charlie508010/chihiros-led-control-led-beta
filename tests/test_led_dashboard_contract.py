@@ -520,15 +520,16 @@ def test_scheduler_crud_and_debug_contracts_remain_available() -> None:
 
 
 def test_scheduler_front_delete_opens_running_dialog() -> None:
-    """The front delete button immediately acknowledges the click while BLE is running."""
+    """The front delete button uses config debug and acknowledges BLE activity."""
     panel = source(LED_PANEL)
     start = panel.index("async deleteLedScheduleRow(rowIndex = null, send = true)")
     end = panel.index("\n  ledEntityState(", start)
     implementation = panel[start:end]
 
     assert "if (this._ledScheduleSubmitting) return false;" in implementation
-    assert 'this.querySelector("[data-led-schedule-debug]")' in implementation
-    assert "this.dialogState && this.dialogState.ledScheduleDebug" in implementation
+    assert "const debug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);" in implementation
+    assert "data-led-schedule-debug" not in implementation
+    assert "ledScheduleDebug" not in implementation
     assert 'output: this.tr("debug_sending")' in implementation
     assert 'running: true' in implementation
     assert "debug, dialog: true" in implementation
@@ -766,8 +767,7 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     assert ".led-device-power-row > span { white-space:normal; overflow-wrap:anywhere; }" in dashboard
     assert ".led-schedule-row-grid > .led-schedule-color-control.led-schedule-time-control" in dashboard
     assert ".led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }" in dashboard
-    assert ".led-schedule-row-grid > .led-schedule-color-control.led-schedule-debug-control" in dashboard
-    assert ".led-schedule-debug-control > label span { white-space:normal; overflow-wrap:anywhere; }" in dashboard
+    assert "data-led-schedule-debug" not in dashboard
     assert ".led-schedule-color-control.led-schedule-weekdays-control {" in dashboard
     assert "grid-template-columns:repeat(auto-fit, minmax(56px, 1fr));" in dashboard
     assert ".led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }" in dashboard

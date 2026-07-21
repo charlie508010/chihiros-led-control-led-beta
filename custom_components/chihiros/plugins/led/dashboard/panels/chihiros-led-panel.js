@@ -1409,10 +1409,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   async addLedSchedule(send = true) {
     if (!this._hass) return;
     if (this._ledScheduleSubmitting) return;
-    const root = this.shadowRoot || this;
-    const debugControl = root.querySelector("[data-led-schedule-debug]");
-    const showDebug = debugControl ? Boolean(debugControl.checked) : Boolean(this.dialogState && this.dialogState.ledScheduleDebug);
-    if (this.dialogState && this.dialogState.type === "led-schedule") this.dialogState.ledScheduleDebug = showDebug;
+    const showDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
     const values = this.ledScheduleValues();
     const currentRows = this.ledScheduleRows();
     const isNewDialog = Boolean(this.dialogState && this.dialogState.type === "led-schedule" && this.dialogState.ledScheduleNew);
@@ -1752,10 +1749,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   async deleteLedScheduleRow(rowIndex = null, send = true) {
     if (this._ledScheduleSubmitting) return false;
-    const debugControl = this.querySelector("[data-led-schedule-debug]");
-    const debug = debugControl
-      ? Boolean(debugControl.checked)
-      : Boolean(this.dialogState && this.dialogState.ledScheduleDebug) || Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
+    const debug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
     const currentRows = this.ledScheduleRows();
     const index = Number.isInteger(rowIndex) && rowIndex >= 0 ? rowIndex : (
       this.dialogState && this.dialogState.type === "led-schedule" && Number.isInteger(this.dialogState.ledScheduleEditIndex) && this.dialogState.ledScheduleEditIndex >= 0
@@ -2356,7 +2350,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const scheduleRows = this.ledScheduleEditorRows();
     const limitClass = scheduleRows.length > 5 ? " scroll-limit-5" : "";
     const max = this.ledMaxBrightness();
-    const debugChecked = Boolean(this.dialogState && this.dialogState.ledScheduleDebug);
     const scheduleKeys = this.ledSupportedScheduleKeys();
     const checkControl = (name, label, checked = true) => `
             <div class="led-schedule-color-control color-toggle led-schedule-toggle-control led-schedule-${name}-control">
@@ -2477,7 +2470,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
             ${rampControl(row.ramp ?? 1)}
           </div>
           ${weekdayControl(row)}
-          ${checkControl("debug", this.tr("debug_capture"), debugChecked)}
         </article>`;
     }).join("");
     return `
@@ -3470,14 +3462,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   openLedScheduleResetConfirm() {
-    const root = this.shadowRoot || this;
-    const dialogDebug = root.querySelector("[data-led-schedule-debug]");
     const targetDevice = this.activeLedDevice
       ? { ...this.activeLedDevice, channels: [...(this.activeLedDevice.channels || [])] }
       : {};
-    this._ledScheduleResetDebug = dialogDebug
-      ? Boolean(dialogDebug.checked)
-      : Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
+    this._ledScheduleResetDebug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
     this.openConfirmDialog({
       title: this.tr("delete_all"),
       message: this.tr("led_reset_device_question"),
