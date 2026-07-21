@@ -844,10 +844,13 @@ def test_total_history_timestamp_uses_configured_language_and_first_row() -> Non
     assert '${timestamp ? `<time>${this.escapeHtml(timestamp)}</time>` : ""}</div>' in dashboard
     modal_width_rule = ".modal { box-sizing:border-box; width:min(520px, calc(100vw - 40px)); max-width:100%; }"
     assert modal_width_rule in dashboard
-    assert (
-        ".led-history-timeline { position:relative; display:grid; grid-auto-rows:max-content; align-content:start;"
-        in dashboard
+    history_timeline_rule = "".join(
+        (
+            ".led-history-timeline { position:relative; display:grid; ",
+            "grid-auto-rows:max-content; align-content:start;",
+        )
     )
+    assert history_timeline_rule in dashboard
     assert ".led-history-timeline-copy time { margin-left:auto;" in dashboard
 
 
@@ -871,22 +874,31 @@ def test_mobile_led_dashboard_uses_single_column_and_scrolling_tables() -> None:
     assert ".led-page { grid-template-columns:minmax(0,1fr); }" in dashboard
     assert ".led-middle { grid-column:1; grid-row:2; grid-template-columns:minmax(0,1fr); }" in dashboard
     assert ".led-page .led-channels { grid-template-columns:minmax(0,1fr); }" in dashboard
-    device_edit_actions_rule = (
-        ".led-device-control-card .led-device-edit-actions { grid-template-columns:minmax(0,1fr); gap:8px; }"
+    device_edit_actions_rule = "".join(
+        (
+            ".led-device-control-card .led-device-edit-actions { ",
+            "grid-template-columns:minmax(0,1fr); gap:8px; }",
+        )
     )
     assert device_edit_actions_rule in dashboard
     assert ".led-device-edit-actions .action-row { grid-template-columns:28px minmax(0,1fr) auto;" in dashboard
     assert ".led-device-power-row > span { white-space:normal; overflow-wrap:anywhere; }" in dashboard
     assert ".led-schedule-row-grid > .led-schedule-color-control.led-schedule-time-control" in dashboard
-    schedule_time_title_rule = (
-        ".led-schedule-time-control .led-schedule-row-title { grid-template-columns:auto minmax(0,1fr); }"
+    schedule_time_title_rule = "".join(
+        (
+            ".led-schedule-time-control .led-schedule-row-title { ",
+            "grid-template-columns:auto minmax(0,1fr); }",
+        )
     )
     assert schedule_time_title_rule in dashboard
     assert "data-led-schedule-debug" not in dashboard
     assert ".led-schedule-color-control.led-schedule-weekdays-control {" in dashboard
     assert "grid-template-columns:repeat(auto-fit, minmax(56px, 1fr));" in dashboard
-    schedule_weekdays_grid_rule = (
-        ".led-schedule-weekdays-control .weekday-grid { grid-template-columns:repeat(4, minmax(0,1fr)); }"
+    schedule_weekdays_grid_rule = "".join(
+        (
+            ".led-schedule-weekdays-control .weekday-grid { ",
+            "grid-template-columns:repeat(4, minmax(0,1fr)); }",
+        )
     )
     assert schedule_weekdays_grid_rule in dashboard
     assert ".led-schedule-weekdays-control .weekday-chip { box-sizing:border-box; padding:4px; }" in dashboard
