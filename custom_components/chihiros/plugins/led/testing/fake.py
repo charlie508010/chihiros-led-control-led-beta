@@ -247,10 +247,11 @@ class FakeChihirosDevice:
         ramp_up_in_minutes: int = 1,
         previous_weekdays: list[object] | None = None,
         weekdays: list[object] | None = None,
+        prepare_existing_setting: bool = False,
     ) -> None:
         """Accept fake active schedule replacements."""
         del previous_sunrise, previous_sunset, sunrise, sunset, max_brightness
-        del previous_ramp_up_in_minutes, ramp_up_in_minutes, previous_weekdays, weekdays
+        del previous_ramp_up_in_minutes, ramp_up_in_minutes, previous_weekdays, weekdays, prepare_existing_setting
         await self.query_status()
 
     async def reset_settings(self) -> None:

@@ -1105,6 +1105,51 @@ def test_dyu1000_replace_setting_matches_app_edit_sequence() -> None:
     assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255])
 
 
+def test_dyu1000_replace_second_setting_prepares_existing_row_like_app() -> None:
+    """DYU1000 second edit clears the previous row twice before sending the replacement row."""
+    sent_commands: list[bytes] = []
+
+    async def run() -> None:
+        model = DeviceModel(
+            "Universal WRGB",
+            ("DYU1000",),
+            WRGB_CHANNELS,
+            max_brightness=100,
+            schedule_reset_parameter=40,
+        )
+        device = ChihirosDevice(FakeBLEDevice(), model)  # type: ignore[arg-type]
+
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray, retry: int | None = None, **kwargs: object
+        ) -> None:
+            del retry, kwargs
+            if isinstance(command, list):
+                sent_commands.extend(bytes(item) for item in command)
+            else:
+                sent_commands.append(bytes(command))
+
+        device._send_command = capture_command  # type: ignore[method-assign]
+        await device.replace_setting(
+            previous_sunrise=datetime(2026, 7, 1, 18, 0),
+            previous_sunset=datetime(2026, 7, 1, 22, 0),
+            sunrise=datetime(2026, 7, 1, 18, 0),
+            sunset=datetime(2026, 7, 1, 22, 0),
+            max_brightness=(100, 100, 100, 100),
+            previous_ramp_up_in_minutes=1,
+            ramp_up_in_minutes=1,
+            previous_weekdays=[WeekdaySelect.tuesday, WeekdaySelect.thursday, WeekdaySelect.saturday],
+            weekdays=[WeekdaySelect.wednesday, WeekdaySelect.sunday],
+            prepare_existing_setting=True,
+        )
+
+    asyncio.run(run())
+
+    assert [command[5] for command in sent_commands] == [25, 25, 25]
+    assert sent_commands[0][6:-1] == bytes([18, 0, 22, 0, 1, 42, *([255] * 8)])
+    assert sent_commands[1][6:-1] == bytes([18, 0, 22, 0, 1, 42, *([255] * 8)])
+    assert sent_commands[2][6:-1] == bytes([18, 0, 22, 0, 1, 17, 100, 100, 100, 100, 255, 255, 255, 255])
+
+
 def test_replace_settings_resets_existing_rows_without_switching_automatic_tab() -> None:
     """Full schedule writes clear old rows before sending only the requested mode 25 rows."""
     sent_commands: list[bytes] = []

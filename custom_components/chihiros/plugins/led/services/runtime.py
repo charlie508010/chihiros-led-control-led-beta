@@ -145,6 +145,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             previous_period = call.data.get(ATTR_PREVIOUS_PERIOD)
             if isinstance(previous_period, dict) and not restore_rows:
                 validate_schedule_period(chihiros_data, previous_period)
+                prepare_existing_setting = _stored_row_index(stored_rows, previous_period) > 0
                 await chihiros_data.device.replace_setting(
                     parse_schedule_time(previous_period[ATTR_START]),
                     parse_schedule_time(previous_period[ATTR_END]),
@@ -155,6 +156,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     ramp_up_in_minutes=call.data[ATTR_RAMP_UP_MINUTES],
                     previous_weekdays=parse_weekdays(previous_period.get(ATTR_WEEKDAYS)),
                     weekdays=parse_weekdays(call.data.get(ATTR_WEEKDAYS)),
+                    prepare_existing_setting=prepare_existing_setting,
                 )
                 _replaced = True
             else:
@@ -682,6 +684,24 @@ def _stored_row_to_setting(row: dict[str, Any]) -> tuple[datetime, datetime, dic
         max(1, int(row["ramp"])),
         parse_weekdays(row.get("weekdays")),
     )
+
+
+def _stored_row_index(rows: list[dict[str, Any]], period: dict[str, Any]) -> int:
+    """Return the matching stored schedule-row index, or -1 when unknown."""
+    period_start = str(period.get(ATTR_START, ""))
+    period_end = str(period.get(ATTR_END, ""))
+    period_ramp = max(1, int(period.get(ATTR_RAMP_UP_MINUTES, 1)))
+    period_weekdays = [weekday.value for weekday in parse_weekdays(period.get(ATTR_WEEKDAYS))]
+    for index, row in enumerate(rows):
+        row_weekdays = [weekday.value for weekday in parse_weekdays(row.get("weekdays"))]
+        if (
+            str(row.get("start", "")) == period_start
+            and str(row.get("end", "")) == period_end
+            and max(1, int(row.get("ramp", 1))) == period_ramp
+            and row_weekdays == period_weekdays
+        ):
+            return index
+    return -1
 
 
 async def _remove_stored_schedule_rows(device: Any, rows: list[dict[str, Any]]) -> None:

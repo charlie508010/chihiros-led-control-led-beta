@@ -115,6 +115,7 @@ class ChihirosClient(Protocol):
         ramp_up_in_minutes: int = 1,
         previous_weekdays: list[WeekdaySelect] | None = None,
         weekdays: list[WeekdaySelect] | None = None,
+        prepare_existing_setting: bool = False,
     ) -> None:
         """Replace one active schedule setting."""
 

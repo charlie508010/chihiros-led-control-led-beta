@@ -483,6 +483,7 @@ class ChihirosDevice:
         ramp_up_in_minutes: int = 1,
         previous_weekdays: list[WeekdaySelect] | None = None,
         weekdays: list[WeekdaySelect] | None = None,
+        prepare_existing_setting: bool = False,
     ) -> None:
         """Replace one active automation setting without changing device mode."""
         previous_weekdays = previous_weekdays or [WeekdaySelect.everyday]
@@ -506,6 +507,16 @@ class ChihirosDevice:
         commands_to_send = [delete_command, add_command]
         if self.model.schedule_reset_parameter != 5:
             commands_to_send = [add_command]
+            if prepare_existing_setting:
+                second_delete_command = commands.create_delete_auto_setting_command(
+                    self.get_next_msg_id(),
+                    previous_sunrise.time(),
+                    previous_sunset.time(),
+                    previous_ramp_up_in_minutes,
+                    encode_selected_weekdays(previous_weekdays),
+                    brightness_channels=self._channel_count(),
+                )
+                commands_to_send = [delete_command, second_delete_command, add_command]
         await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
 
     async def reset_settings(self) -> None:
