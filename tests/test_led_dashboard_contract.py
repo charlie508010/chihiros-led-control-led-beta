@@ -44,6 +44,8 @@ def test_private_addon_update_installs_the_supervisor_release_or_refreshes_the_r
     run = source(ADDON_RUN)
 
     assert 'data-addon-update' in dashboard
+    assert "Version: ${installed}\\nStand: aktuell" in dashboard
+    assert "Installiert: ${installed}\\nLatest: ${latest}" not in dashboard
     assert 'fetch("./api/addon-update"' in index
     assert 'if request_path == "/api/addon-update":' in server
     assert 'supervisor_request("GET", "/addons/self/info", token)' in server
@@ -559,7 +561,7 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert ".led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }" in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
     assert '.led-layout-page > [data-led-layout-item="schedule"] > .card,' in core
-    assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:220px; max-height:220px; overflow:auto; }' in core
+    assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:300px; max-height:300px; overflow:auto; }' in core
     assert '.led-layout-page > [data-led-layout-item="templates"] > .card { height:auto; max-height:none; }' in core
     assert "toggleLedLayoutEditor()" in panel
     assert "resetLedLayoutOrder()" in panel
