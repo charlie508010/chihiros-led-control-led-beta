@@ -1145,8 +1145,8 @@ def test_dyu1000_replace_second_setting_prepares_existing_row_like_app() -> None
     asyncio.run(run())
 
     assert [command[5] for command in sent_commands] == [25, 25, 25]
-    assert sent_commands[0][6:-1] == bytes([18, 0, 22, 0, 1, 42, *([255] * 8)])
-    assert sent_commands[1][6:-1] == bytes([18, 0, 22, 0, 1, 42, *([255] * 8)])
+    assert sent_commands[0][6:-1] == bytes([18, 0, 22, 0, 1, 17, *([255] * 8)])
+    assert sent_commands[1][6:-1] == bytes([18, 0, 22, 0, 1, 17, *([255] * 8)])
     assert sent_commands[2][6:-1] == bytes([18, 0, 22, 0, 1, 17, 100, 100, 100, 100, 255, 255, 255, 255])
 
 

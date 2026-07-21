@@ -508,15 +508,23 @@ class ChihirosDevice:
         if self.model.schedule_reset_parameter != 5:
             commands_to_send = [add_command]
             if prepare_existing_setting:
-                second_delete_command = commands.create_delete_auto_setting_command(
+                clear_command = commands.create_delete_auto_setting_command(
                     self.get_next_msg_id(),
-                    previous_sunrise.time(),
-                    previous_sunset.time(),
-                    previous_ramp_up_in_minutes,
-                    encode_selected_weekdays(previous_weekdays),
+                    sunrise.time(),
+                    sunset.time(),
+                    ramp_up_in_minutes,
+                    encode_selected_weekdays(weekdays),
                     brightness_channels=self._channel_count(),
                 )
-                commands_to_send = [delete_command, second_delete_command, add_command]
+                second_clear_command = commands.create_delete_auto_setting_command(
+                    self.get_next_msg_id(),
+                    sunrise.time(),
+                    sunset.time(),
+                    ramp_up_in_minutes,
+                    encode_selected_weekdays(weekdays),
+                    brightness_channels=self._channel_count(),
+                )
+                commands_to_send = [clear_command, second_clear_command, add_command]
         await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
 
     async def reset_settings(self) -> None:
