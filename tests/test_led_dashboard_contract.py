@@ -494,7 +494,8 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
         "[{ ...deletedRow, active: false }]"
         in implementation
     )
-    assert "delete_only: remainingRows.length > 0" in implementation
+    assert "delete_only: true" in implementation
+    assert "delete_only: remainingRows.length > 0" not in implementation
     assert "output: sendResult && sendResult.output" in implementation
 
 
