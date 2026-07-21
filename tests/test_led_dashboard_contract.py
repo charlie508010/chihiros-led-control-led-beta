@@ -808,6 +808,20 @@ def test_template_panel_shows_filtered_template_count() -> None:
     assert 'template_list: "Vorlagenliste"' in dashboard
     assert ".led-template-count {" in dashboard
     assert 'const localPrefix = `${this.tr("template_local")}: `;' in panel
+
+
+def test_template_dialog_has_live_device_preview() -> None:
+    """Template editing can live-send brightness values without opening the debug dialog."""
+    panel = source(LED_PANEL)
+    dashboard = source(DASHBOARD)
+
+    assert "data-led-template-live-preview" in panel
+    assert "queueLedTemplateLivePreview" in panel
+    assert "sendLedTemplateLivePreview" in panel
+    assert 'service: "set_brightness"' in panel
+    assert "data: { brightness, ...this.ledServiceSelector() }" in panel
+    assert 'template_live_preview: "Live-Vorschau"' in dashboard
+    assert 'template_live_preview: "Live preview"' in dashboard
     assert "rawLabel.slice(localPrefix.length)" in panel
     assert '${scheduleRows.length} ${this.tr("schedule_count")}' in panel
     assert 'schedule_count: "Zeitpläne"' in dashboard

@@ -2882,6 +2882,63 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     });
   }
 
+  ledTemplateLivePreviewEnabled() {
+    const root = this.shadowRoot || this;
+    return Boolean(root.querySelector("[data-led-template-live-preview]")?.checked);
+  }
+
+  setLedTemplateLivePreviewStatus(message, level = "") {
+    const root = this.shadowRoot || this;
+    const status = root.querySelector("[data-led-template-live-preview-status]");
+    if (!status) return;
+    status.textContent = String(message || "");
+    status.setAttribute("data-level", String(level || ""));
+  }
+
+  queueLedTemplateLivePreview(force = false) {
+    if (!this.ledTemplateLivePreviewEnabled()) {
+      this.setLedTemplateLivePreviewStatus("", "");
+      return;
+    }
+    if (this._ledTemplateLivePreviewTimer) window.clearTimeout(this._ledTemplateLivePreviewTimer);
+    this._ledTemplateLivePreviewTimer = window.setTimeout(() => {
+      this._ledTemplateLivePreviewTimer = null;
+      this.sendLedTemplateLivePreview().catch(() => {
+        this.setLedTemplateLivePreviewStatus(this.tr("template_live_preview_failed"), "error");
+      });
+    }, force ? 0 : 350);
+  }
+
+  async sendLedTemplateLivePreview() {
+    if (!this.ledTemplateLivePreviewEnabled()) return;
+    const data = this.ledTemplateDialogValues();
+    const keys = this.ledSupportedScheduleKeys();
+    const brightness = {};
+    keys.forEach((key, index) => {
+      brightness[key] = Math.max(0, Math.min(this.ledMaxBrightness(), Math.round(Number(data.values[index] || 0))));
+    });
+    if (!Object.keys(brightness).length) return;
+    (this.ledChannels || []).forEach((channel) => {
+      const key = String(channel && channel.key || "").toLowerCase();
+      if (Object.prototype.hasOwnProperty.call(brightness, key)) channel.value = brightness[key];
+    });
+    this.setLedTemplateLivePreviewStatus(`${this.tr("template_live_preview")}…`, "pending");
+    const result = await this.runDeviceService({
+      service: "set_brightness",
+      data: { brightness, ...this.ledServiceSelector() },
+      title: this.tr("template_live_preview"),
+      debug: false,
+      dialog: false,
+      channel: 1,
+      noChannel: true,
+    });
+    this.setLedManualScheduleWarning(true);
+    this.setLedTemplateLivePreviewStatus(
+      result && result.ok ? this.tr("template_live_preview_sent") : this.tr("template_live_preview_failed"),
+      result && result.ok ? "ok" : "error",
+    );
+  }
+
   applyLedFrontTemplate(value) {
     const template = this.ledScheduleTemplateByValue(value);
     if (!template || !Array.isArray(template.values)) {
@@ -3265,6 +3322,12 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
                 <label><span>${this.tr("name")}</span></label>
                 <input type="text" data-led-template-name value="${this.escapeHtml(state.name || "")}">
               </div>
+              <label class="led-schedule-color-control color-toggle led-template-live-preview-row">
+                <span>${this.tr("template_live_preview")}</span>
+                <input type="checkbox" data-led-template-live-preview>
+                <small>${this.tr("template_live_preview_hint")}</small>
+                <em data-led-template-live-preview-status></em>
+              </label>
               ${keys.map((key, index) => colorControl(
                 key,
                 `CH${index + 1} ${this.ledScheduleChannelLabel(key)}`,

@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1127";
+import "./panels/chihiros-led-panel.js?v=0.2.1128";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -1540,6 +1540,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         template_deleted: "Vorlage gelöscht",
         template_delete_blocked: "Nur lokale Vorlagen können im Dialog gelöscht werden.",
         template_not_found: "Template nicht gefunden",
+        template_live_preview: "Live-Vorschau",
+        template_live_preview_hint: "Änderungen sofort an das Gerät senden",
+        template_live_preview_ready: "Live-Vorschau bereit",
+        template_live_preview_sent: "Live-Vorschau gesendet",
+        template_live_preview_failed: "Live-Vorschau fehlgeschlagen",
         template_list: "Vorlagenliste",
         template_count: "Vorlagen",
         schedule_count: "Zeitpläne",
@@ -1819,6 +1824,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         template_deleted: "Template deleted",
         template_delete_blocked: "Only local templates can be deleted in the dialog.",
         template_not_found: "Template not found",
+        template_live_preview: "Live preview",
+        template_live_preview_hint: "Send changes directly to the device",
+        template_live_preview_ready: "Live preview ready",
+        template_live_preview_sent: "Live preview sent",
+        template_live_preview_failed: "Live preview failed",
         template_list: "Template list",
         template_count: "templates",
         schedule_count: "schedules",
@@ -2497,9 +2507,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         if (name && typeof this.syncLedTemplateControl === "function") {
           this.syncLedTemplateControl(name, el.value);
         }
+        if (typeof this.queueLedTemplateLivePreview === "function") this.queueLedTemplateLivePreview();
       };
       el.addEventListener("input", sync);
       el.addEventListener("change", sync);
+    });
+    this.querySelectorAll("[data-led-template-live-preview]").forEach((el) => {
+      el.addEventListener("change", () => {
+        if (typeof this.queueLedTemplateLivePreview === "function") this.queueLedTemplateLivePreview(true);
+      });
     });
     this.querySelectorAll("[data-led-auto-mode-value]").forEach((el) => {
       el.addEventListener("click", () => {
