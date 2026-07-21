@@ -3403,7 +3403,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       title: this.tr("template"),
       sectionClass: "modal card led-schedule-modal led-template-modal",
       headerHtml: `
-        <div class="led-schedule-dialog-header">
+        <div class="led-schedule-dialog-head">
           <h2>${this.tr("template")}</h2>
           <button type="button" class="led-schedule-dialog-close" data-action="close-dialog" title="${this.escapeHtml(this.tr("close"))}" aria-label="${this.escapeHtml(this.tr("close"))}">
             <span aria-hidden="true">&#10005;</span>

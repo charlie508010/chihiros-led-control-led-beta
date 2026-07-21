@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1140";
+import "./panels/chihiros-led-panel.js?v=0.2.1141";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -628,6 +628,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       && state.templateLivePreviewChanged
       && typeof this.restoreLedAutoModeAfterTemplatePreview === "function"
     ) {
+      if (typeof this.setLedManualScheduleWarning === "function") this.setLedManualScheduleWarning(false);
       this.restoreLedAutoModeAfterTemplatePreview();
     }
     return this.closeDialogState();

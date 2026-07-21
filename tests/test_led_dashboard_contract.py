@@ -857,6 +857,7 @@ def test_template_live_preview_restores_auto_mode_on_dialog_close() -> None:
     assert 'state.type === "led-template-editor"' in dashboard
     assert "state.templateLivePreviewChanged" in dashboard
     assert "restoreLedAutoModeAfterTemplatePreview" in dashboard
+    assert "this.setLedManualScheduleWarning(false);" in dashboard
     assert "templateLivePreviewChanged: true" in panel
     assert "async restoreLedAutoModeAfterTemplatePreview()" in panel
     assert "async saveLedTemplateFromDialog()" in panel
@@ -866,6 +867,7 @@ def test_template_live_preview_restores_auto_mode_on_dialog_close() -> None:
     assert "template_live_preview_close" in panel
     assert "data: { periods, __skip_dashboard_refresh: true, ...this.ledServiceSelector() }" in panel
     assert "dialog: false" in panel
+    assert 'class="led-schedule-dialog-head"' in panel
     assert 'class="led-schedule-dialog-close" data-action="close-dialog"' in panel
 
 
