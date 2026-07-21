@@ -856,8 +856,7 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
     expected_ramp = max(1, int(target["ramp"]))
     expected_by_channel = {str(channel).lower(): int(value) for channel, value in target["levels"].items()}
     positive_expected_levels = {level for level in expected_by_channel.values() if level > 0}
-    if not positive_expected_levels:
-        return True
+    fallback_expected_levels = positive_expected_levels or {0}
 
     def _ranges_match(points: list[tuple[int, int, int]], expected_levels: set[int]) -> bool:
         ranges = device._schedule_curve_ranges(sorted(points))  # noqa: SLF001
@@ -884,4 +883,4 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
         (int(point.hour), int(point.minute), int(next(iter(getattr(point, "levels", {}).values()), 0)))
         for point in snapshot.points
     ]
-    return _ranges_match(first_value_points, positive_expected_levels)
+    return _ranges_match(first_value_points, fallback_expected_levels)

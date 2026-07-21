@@ -466,7 +466,10 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert 'if (storedStatus === "failed") return' not in verification
     assert 'if (storedStatus === "pending") return' not in verification
     assert "const ranges = this.ledScheduleSnapshotRanges();" in verification
-    assert "device._schedule_curve_ranges(sorted(points))" in source(LED_SERVICES)
+    services = source(LED_SERVICES)
+    assert "device._schedule_curve_ranges(sorted(points))" in services
+    assert "if not positive_expected_levels:" not in services
+    assert "fallback_expected_levels = positive_expected_levels or {0}" in services
     assert "verification_status TEXT NOT NULL DEFAULT 'pending'" in server
     assert "previous.get(signature" in server
 
