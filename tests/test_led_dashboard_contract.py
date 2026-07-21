@@ -477,7 +477,10 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert "if not positive_expected_levels:" not in services
     assert "fallback_expected_levels = positive_expected_levels or {0}" in services
     assert "verification_status TEXT NOT NULL DEFAULT 'pending'" in server
-    assert "previous.get(signature" in server
+    assert 'verification_status, verified_at = ("pending", "")' in server
+    assert 'verification_status, verified_at = ("pending", "") if sent else previous.get' in source(
+        ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "storage" / "runtime.py"
+    )
 
 
 def test_scheduler_delete_keeps_verification_for_remaining_rows() -> None:

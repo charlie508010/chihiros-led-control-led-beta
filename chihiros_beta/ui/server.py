@@ -1741,13 +1741,6 @@ def save_led_schedule_rows_local(device: str, periods: list[dict[str, object]]) 
     now = datetime.now().isoformat()
     with sqlite3.connect(path) as conn:
         ensure_led_schedule_table(conn)
-        previous = {
-            str(row[0]): (str(row[1]), str(row[2]))
-            for row in conn.execute(
-                "SELECT schedule_signature, verification_status, verified_at FROM led_schedules WHERE UPPER(device_key)=UPPER(?)",
-                (device_key,),
-            ).fetchall()
-        }
         conn.execute("DELETE FROM led_schedules WHERE UPPER(device_key)=UPPER(?)", (device_key,))
         for index, period in enumerate(periods):
             levels = period.get("levels", period.get("brightness", {}))
@@ -1770,7 +1763,7 @@ def save_led_schedule_rows_local(device: str, periods: list[dict[str, object]]) 
                 sort_keys=True,
                 separators=(",", ":"),
             )
-            verification_status, verified_at = previous.get(signature, ("pending", ""))
+            verification_status, verified_at = ("pending", "")
             conn.execute(
                 """
                 INSERT INTO led_schedules(

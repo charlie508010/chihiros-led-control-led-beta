@@ -75,7 +75,7 @@ def record_led_schedule_rows(chihiros_data: ChihirosData, periods: list[dict[str
                     stored_ramp_up_minutes,
                     weekdays,
                 )
-                verification_status, verified_at = previous.get(signature, ("pending", ""))
+                verification_status, verified_at = ("pending", "") if sent else previous.get(signature, ("pending", ""))
                 conn.execute(
                     """
                     INSERT INTO led_schedules(
