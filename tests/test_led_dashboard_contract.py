@@ -480,6 +480,7 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert "def _range_window_matches" in services
     assert "abs(range_start - target_start) <= 1" in services
     assert "abs(range_end - target_end) <= 1" in services
+    assert "expected_ramp =" not in services
     assert "if positive_expected_levels:" in services
     assert "range_end == target_start" in services
     assert "level > 0 and _overlaps_target" in services
