@@ -3156,6 +3156,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         data: { periods, send: true, ...this.ledServiceSelector(target) },
         title: this.tr("share_schedule"),
         debug,
+        dialog: debug,
       });
       if (!result || !result.ok) {
         this.dialogState = { type: "debug", channel: 1, output: result && result.output ? result.output : `FAIL\n${this.tr("share_schedule")}`, running: false, noChannel: true, level: "error" };
@@ -3178,6 +3179,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         ? sendOutput
         : `${saved ? "OK" : "FAIL"}\n${this.tr(saved ? "schedule_shared" : "share_schedule")}\n${target.label || target.name || target.address}`,
       running: false,
+      debug,
       noChannel: true,
       level: saved ? "ok" : "error",
     };

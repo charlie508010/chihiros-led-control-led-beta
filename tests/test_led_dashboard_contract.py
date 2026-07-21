@@ -359,6 +359,19 @@ def test_scheduler_front_actions_are_bound_to_individual_rows() -> None:
         assert f"[{attribute}]" in dashboard
 
 
+def test_scheduler_share_uses_config_debug_dialog() -> None:
+    """Schedule sharing keeps config-driven debug output visible."""
+    panel = source(LED_PANEL)
+    start = panel.index("async saveSharedLedSchedule()")
+    end = panel.index("\n  ledScheduleShareDialog()", start)
+    implementation = panel[start:end]
+
+    assert "const debug = Boolean(this.uiSettings && this.uiSettings.dashboardDebug);" in implementation
+    assert "dialog: debug" in implementation
+    assert "debug," in implementation
+    assert "saved && debug && sendOutput" in implementation
+
+
 def test_scheduler_row_send_atomically_replaces_device_schedule_with_one_row() -> None:
     """The row send button resets stale device slots and writes only the selected period."""
     panel = source(LED_PANEL)
