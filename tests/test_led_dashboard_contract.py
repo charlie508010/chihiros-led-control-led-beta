@@ -241,9 +241,9 @@ def test_led_device_tabs_use_the_shared_styled_navigation() -> None:
     panel = source(LED_PANEL)
     dashboard = source(DASHBOARD)
 
-    assert '<nav class="doser-device-tabs"' in panel
-    assert ".doser-device-tabs button" in dashboard
-    assert ".doser-device-tabs button.active" in dashboard
+    assert '<nav class="led-device-tabs"' in panel
+    assert ".led-device-tabs button" in dashboard
+    assert ".led-device-tabs button.active" in dashboard
 
 
 def test_led_device_name_is_editable_and_used_by_the_device_tab() -> None:

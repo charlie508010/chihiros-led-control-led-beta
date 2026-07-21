@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1164";
+import "./panels/chihiros-led-panel.js?v=0.2.1165";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2733,12 +2733,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .device-tabs .addon-update-button:hover { border-color:#ff9300; background:rgba(255,147,0,.18); }
         .device-tabs .addon-update-button .tab-icon { color:#ff9300; }
         .device-tabs button.active .tab-icon { filter:drop-shadow(0 0 7px currentColor); }
-        .doser-device-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:-2px 0 12px; }
+        .led-device-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:-2px 0 12px; }
         .led-device-topline { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:8px 14px; margin:-2px 0 12px; }
-        .led-device-topline .doser-device-tabs { margin:0; }
+        .led-device-topline .led-device-tabs { margin:0; }
         .led-device-topline .led-layout-toolbar { justify-content:flex-end; margin:0; }
-        .doser-device-tabs button { min-height:32px; min-width:96px; border:1px solid rgba(81,154,190,.28); border-radius:8px; background:rgba(10,18,21,.72); color:var(--primary-text-color); font:inherit; cursor:pointer; padding:0 12px; }
-        .doser-device-tabs button.active { border-color:#03c9ff; color:#03c9ff; background:rgba(0,122,166,.18); font-weight:700; }
+        .led-device-tabs button { min-height:32px; min-width:96px; border:1px solid rgba(81,154,190,.28); border-radius:8px; background:rgba(10,18,21,.72); color:var(--primary-text-color); font:inherit; cursor:pointer; padding:0 12px; }
+        .led-device-tabs button.active { border-color:#03c9ff; color:#03c9ff; background:rgba(0,122,166,.18); font-weight:700; }
         .page-hero { grid-column:1 / -1; min-height:76px; display:grid; grid-template-columns:52px minmax(0, 1fr); align-items:center; gap:12px; margin:0 0 12px; padding:12px 14px; border:1px solid rgba(81,154,190,.24); border-radius:8px; background:linear-gradient(135deg, rgba(0,122,166,.18), rgba(14,24,27,.92)); }
         .page-hero-icon { width:44px; height:44px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid rgba(3,201,255,.35); background:rgba(3,201,255,.10); }
         .page-hero-icon ha-icon { --mdc-icon-size:28px; color:#03c9ff; }

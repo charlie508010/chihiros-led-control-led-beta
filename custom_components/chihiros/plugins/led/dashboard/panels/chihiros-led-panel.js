@@ -586,7 +586,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         <button type="button" data-led-device="${this.escapeHtml(device.id)}" class="${device.id === this.activeLedDeviceId ? "active" : ""}">
           ${this.escapeHtml(this.ledDeviceDisplayName(device))}
         </button>`).join("");
-    return `<nav class="doser-device-tabs" aria-label="LED ${this.escapeHtml(this.tr("device"))}">${tabs}</nav>`;
+    return `<nav class="led-device-tabs" aria-label="LED ${this.escapeHtml(this.tr("device"))}">${tabs}</nav>`;
   }
 
   ledManualScheduleWarningKey() {
