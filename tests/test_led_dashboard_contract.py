@@ -563,6 +563,8 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert 'data-led-layout-handle' in panel
     assert "clientX" in core
     assert 'document.createComment("led-layout-swap")' in core
+    assert 'window.addEventListener("pointermove", move)' in core
+    assert 'saveOrder();' in core
     assert "move_left" in core
     assert "move_right" in core
     assert "layout_item_schedule" in core

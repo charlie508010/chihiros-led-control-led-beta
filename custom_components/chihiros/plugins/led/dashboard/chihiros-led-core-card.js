@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1150";
+import "./panels/chihiros-led-panel.js?v=0.2.1151";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2690,6 +2690,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           container.insertBefore(target, marker);
           marker.remove();
           refreshOrderStyles();
+          saveOrder();
         };
         const up = () => {
           item.classList.remove("dragging");
@@ -2697,12 +2698,19 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           handle.removeEventListener("pointermove", move);
           handle.removeEventListener("pointerup", up);
           handle.removeEventListener("pointercancel", up);
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", up);
+          handle.releasePointerCapture?.(ev.pointerId);
           saveOrder();
           this.render();
         };
         handle.addEventListener("pointermove", move);
         handle.addEventListener("pointerup", up);
         handle.addEventListener("pointercancel", up);
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
       });
     });
   }
