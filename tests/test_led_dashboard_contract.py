@@ -859,10 +859,14 @@ def test_template_live_preview_restores_auto_mode_on_dialog_close() -> None:
     assert "restoreLedAutoModeAfterTemplatePreview" in dashboard
     assert "templateLivePreviewChanged: true" in panel
     assert "async restoreLedAutoModeAfterTemplatePreview()" in panel
+    assert "async saveLedTemplateFromDialog()" in panel
+    assert "await this.restoreLedAutoModeAfterTemplatePreview();" in panel
+    assert "await this.saveLedTemplateFromDialog()" in dashboard
     assert 'service: "enable_auto_mode"' in panel
     assert "template_live_preview_close" in panel
     assert "data: { periods, __skip_dashboard_refresh: true, ...this.ledServiceSelector() }" in panel
     assert "dialog: false" in panel
+    assert 'class="led-schedule-dialog-close" data-action="close-dialog"' in panel
 
 
 def test_channel_power_uses_single_toggle() -> None:

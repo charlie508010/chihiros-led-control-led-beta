@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1139";
+import "./panels/chihiros-led-panel.js?v=0.2.1140";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2341,7 +2341,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           if (kind === "led-schedule-delete-row" && typeof this.deleteLedScheduleRow === "function") await this.deleteLedScheduleRow(Number(entity), true);
           if (kind === "led-schedule-reset" && typeof this.openLedScheduleResetConfirm === "function") this.openLedScheduleResetConfirm();
           if (kind === "led-enable-auto-mode" && typeof this.enableLedAutoModeFromFront === "function") await this.enableLedAutoModeFromFront();
-          if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") this.saveLedTemplateFromDialog();
+          if (kind === "led-template-save" && typeof this.saveLedTemplateFromDialog === "function") await this.saveLedTemplateFromDialog();
           if (kind === "led-template-share-save" && typeof this.saveSharedLedTemplate === "function") this.saveSharedLedTemplate();
           if (kind === "led-schedule-share-save" && typeof this.saveSharedLedSchedule === "function") await this.saveSharedLedSchedule();
           if (kind === "led-auto-mode-edit" && typeof this.openLedAutoModeDialog === "function") this.openLedAutoModeDialog();

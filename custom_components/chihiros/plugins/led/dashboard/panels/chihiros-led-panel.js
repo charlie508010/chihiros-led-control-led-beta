@@ -3117,7 +3117,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     return { name, values };
   }
 
-  saveLedTemplateFromDialog() {
+  async saveLedTemplateFromDialog() {
     const current = this.dialogState || {};
     const data = this.ledTemplateDialogValues();
     if (!data.name) {
@@ -3133,6 +3133,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     templates.push({ name: data.name, values: data.values });
     this.saveLocalLedTemplates(templates);
     this._ledTemplateSourceFilter = "local";
+    if (current.templateLivePreviewChanged) {
+      await this.restoreLedAutoModeAfterTemplatePreview();
+    }
     this.dialogState = { type: "debug", channel: 1, output: `OK\n${this.tr("template_saved")}\n${data.name}`, running: false, noChannel: true, level: "ok" };
     this.render();
   }
@@ -3399,6 +3402,13 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     return this.sharedModalDialog({
       title: this.tr("template"),
       sectionClass: "modal card led-schedule-modal led-template-modal",
+      headerHtml: `
+        <div class="led-schedule-dialog-header">
+          <h2>${this.tr("template")}</h2>
+          <button type="button" class="led-schedule-dialog-close" data-action="close-dialog" title="${this.escapeHtml(this.tr("close"))}" aria-label="${this.escapeHtml(this.tr("close"))}">
+            <span aria-hidden="true">&#10005;</span>
+          </button>
+        </div>`,
       bodyHtml: `
         <div class="led-schedule-editor">
           <article class="led-schedule-row-card">
