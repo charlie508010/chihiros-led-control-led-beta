@@ -3500,7 +3500,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         data: this.ledServiceSelector(),
         title: this.tr("enable_auto_mode"),
         debug,
-        dialog: false,
+        dialog: debug,
         channel: 1,
         noChannel: true,
       });
@@ -3520,6 +3520,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
         channel: 1,
         output: debug && serviceOutput ? serviceOutput : `OK\n${this.tr("enable_auto_mode")}\n${entity || device.address || ""}`,
         running: false,
+        debug,
         noChannel: true,
         level: "ok",
       };
