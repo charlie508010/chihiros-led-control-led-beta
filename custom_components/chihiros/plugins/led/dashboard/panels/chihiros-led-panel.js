@@ -2893,9 +2893,10 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
 
   ledTemplateLivePreviewEnabled() {
     const root = this.shadowRoot || this;
+    if (this.dialogState && this.dialogState.templateLivePreview) return true;
     const checkbox = root.querySelector("[data-led-template-live-preview]");
     if (checkbox) return Boolean(checkbox.checked);
-    return Boolean(this.dialogState && this.dialogState.templateLivePreview);
+    return false;
   }
 
   setLedTemplateLivePreviewEnabled(enabled) {

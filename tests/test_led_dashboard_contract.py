@@ -820,6 +820,7 @@ def test_template_dialog_has_live_device_preview() -> None:
     assert "sendLedTemplateLivePreview" in panel
     assert "setLedTemplateLivePreviewEnabled(Boolean(el.checked))" in dashboard
     assert "templateLivePreview: Boolean(enabled)" in panel
+    assert "if (this.dialogState && this.dialogState.templateLivePreview) return true;" in panel
     assert "this.dialogState = { ...(this.dialogState || {}), values };" in panel
     assert 'data-led-template-live-preview ${state.templateLivePreview ? "checked" : ""}' in panel
     assert "this.queueLedTemplateLivePreview(false, name)" in dashboard
