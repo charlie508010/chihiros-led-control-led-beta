@@ -442,7 +442,14 @@ class ChihirosDevice:
             brightness_channels=self._channel_count(),
         )
         commands_to_send = [delete_command]
-        if self.model.schedule_reset_parameter != 5 and not delete_only:
+        if self.model.schedule_reset_parameter != 5 and delete_only:
+            commands_to_send.append(
+                commands.create_auto_parameter_command(
+                    self.get_next_msg_id(),
+                    self.model.schedule_reset_parameter,
+                )
+            )
+        elif self.model.schedule_reset_parameter != 5:
             first_finalize = commands.create_auto_parameter_command(
                 self.get_next_msg_id(),
                 self.model.schedule_reset_parameter,

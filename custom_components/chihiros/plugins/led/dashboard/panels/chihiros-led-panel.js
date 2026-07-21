@@ -1786,8 +1786,9 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       return ok;
     }
     const address = this.activeLedDevice && this.activeLedDevice.address ? this.activeLedDevice.address : undefined;
+    const rowsToSend = remainingRows.length > 0 ? [{ ...remainingRows[0], active: false }] : [{ ...deletedRow, active: false }];
     const deletePeriod = this.ledSchedulePeriodsFromRows(
-      [{ ...deletedRow, active: false }],
+      rowsToSend,
       this.activeLedDevice || {},
       true,
     )[0] || {};

@@ -208,8 +208,8 @@ def test_dyu1000_remove_setting_sends_delete_finalize_sequence() -> None:
     assert sent_commands[3][6:-1] == bytes([40, 255, 255])
 
 
-def test_dyu1000_delete_only_remove_setting_sends_single_delete_frame() -> None:
-    """DYU1000 row deletion skips finalize frames when other schedules remain."""
+def test_dyu1000_delete_only_remove_setting_sends_delete_and_finalize_frame() -> None:
+    """DYU1000 row deletion sends one delete frame and one finalize frame."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
@@ -244,8 +244,9 @@ def test_dyu1000_delete_only_remove_setting_sends_single_delete_frame() -> None:
 
     asyncio.run(run())
 
-    assert [command[5] for command in sent_commands] == [25]
+    assert [command[5] for command in sent_commands] == [25, 5]
     assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 84, *([255] * 8)])
+    assert sent_commands[1][6:-1] == bytes([40, 255, 255])
 
 
 def test_dyu1000_inactive_schedule_can_append_app_matching_final_values() -> None:

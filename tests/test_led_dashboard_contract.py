@@ -489,6 +489,11 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     assert 'output: this.tr("debug_sending")' in implementation
     assert 'running: true' in implementation
     assert "debug, dialog: true" in implementation
+    assert (
+        "remainingRows.length > 0 ? [{ ...remainingRows[0], active: false }] : "
+        "[{ ...deletedRow, active: false }]"
+        in implementation
+    )
     assert "delete_only: remainingRows.length > 0" in implementation
     assert "output: sendResult && sendResult.output" in implementation
 
