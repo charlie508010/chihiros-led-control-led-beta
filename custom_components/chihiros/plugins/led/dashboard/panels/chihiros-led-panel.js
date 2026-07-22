@@ -2677,23 +2677,29 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   ledScheduleRowVerification(row) {
+    const device = this.activeLedDevice || {};
+    const state = device.schedule_entity && this._hass && this._hass.states ? this._hass.states[device.schedule_entity] : null;
+    const hasSnapshot = Boolean(state && state.attributes && Array.isArray(state.attributes.points));
+    const ranges = this.ledScheduleSnapshotRanges();
+    if (hasSnapshot) {
+      if (!ranges.length) {
+        return { level: "fail", text: this.tr("mismatch") };
+      }
+      const levels = this.normalizeLedScheduleLevels(row && row.levels ? row.levels : {});
+      const supportedLevels = this.ledSupportedScheduleKeys(device).map((key) => Number(levels[key] || 0));
+      const configuredRamp = this.normalizeLedRampMinutes(row && row.ramp);
+      const expectedRamp = configuredRamp;
+      const matches = ranges.some((range) => (
+        range.start === row.start && range.end === row.end && range.ramp === expectedRamp && supportedLevels.includes(range.level)
+      ));
+      return matches
+        ? { level: "ok", text: this.tr("verified") }
+        : { level: "fail", text: this.tr("mismatch") };
+    }
     const storedStatus = String(row && row.verification_status ? row.verification_status : "").toLowerCase();
     if (storedStatus === "verified") return { level: "ok", text: this.tr("verified") };
     if (storedStatus === "failed") return { level: "fail", text: this.tr("mismatch") };
-    const ranges = this.ledScheduleSnapshotRanges();
-    if (!ranges.length) {
-      return { level: "pending", text: this.tr("not_checked") };
-    }
-    const levels = this.normalizeLedScheduleLevels(row && row.levels ? row.levels : {});
-    const supportedLevels = this.ledSupportedScheduleKeys(this.activeLedDevice || {}).map((key) => Number(levels[key] || 0));
-    const configuredRamp = this.normalizeLedRampMinutes(row && row.ramp);
-    const expectedRamp = configuredRamp;
-    const matches = ranges.some((range) => (
-      range.start === row.start && range.end === row.end && range.ramp === expectedRamp && supportedLevels.includes(range.level)
-    ));
-    return matches
-      ? { level: "ok", text: this.tr("verified") }
-      : { level: "fail", text: this.tr("mismatch") };
+    return { level: "pending", text: this.tr("not_checked") };
   }
 
   ledScheduleDialog() {

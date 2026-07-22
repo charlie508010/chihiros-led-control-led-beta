@@ -495,21 +495,20 @@ def test_scheduler_reset_debug_keeps_delete_and_verification_operations() -> Non
 
 
 def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
-    """The dashboard marker lets a fresh matching snapshot recover a stored failed result."""
+    """The dashboard marker prefers live snapshots and falls back to persisted results."""
     panel = source(LED_PANEL)
     server = source(ROOT / "chihiros_beta" / "ui" / "server.py")
     verification = panel.split("ledScheduleRowVerification(row)", 1)[1].split("ledScheduleDialog()", 1)[0]
 
     assert 'storedStatus === "verified"' in panel
     assert 'storedStatus === "failed"' in panel
-    assert 'if (storedStatus === "verified") return' in verification
-    assert verification.index('if (storedStatus === "verified") return') < verification.index(
-        "const ranges = this.ledScheduleSnapshotRanges();"
+    assert "const hasSnapshot = Boolean(" in verification
+    assert "if (hasSnapshot) {" in verification
+    assert 'return { level: "fail", text: this.tr("mismatch") };' in verification
+    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
+        'if (storedStatus === "verified") return'
     )
     assert 'if (storedStatus === "failed") return' in verification
-    assert verification.index('if (storedStatus === "failed") return') < verification.index(
-        "const ranges = this.ledScheduleSnapshotRanges();"
-    )
     assert 'if (storedStatus === "pending") return' not in verification
     assert "const ranges = this.ledScheduleSnapshotRanges();" in verification
     services = source(LED_SERVICES)
@@ -587,8 +586,12 @@ def test_inactive_schedule_delete_only_removes_selected_row() -> None:
     constants = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "const.py")
 
     assert "active = bool(call.data.get(ATTR_ACTIVE, True))" in services
-    assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
     assert 'ATTR_DELETE_ONLY = "delete_only"' in constants
+    assert 'ATTR_REMAINING_PERIODS = "remaining_periods"' in constants
+    assert "vol.Optional(ATTR_REMAINING_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)])," in constants
+    assert '"remaining_periods": call.data.get(ATTR_REMAINING_PERIODS, [])' in services
+    assert "remaining_periods = call.data.get(ATTR_REMAINING_PERIODS)" in services
+    assert "finalize=not bool(remaining_periods)," in services
     delete_only_brightness = "".join(
         (
             "max_brightness=None if bool(data.get(ATTR_DELETE_ONLY, False)) ",
@@ -606,18 +609,14 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert 'return f"{device_key}|{_verification_target_signature(target)}"' in services
     assert "def _verification_target_signature" in services
     assert 'task_key = f"{device_key}|batch"' in services
-    assert "removed_rows: list[dict[str, Any]] = []" in services
     assert "for attempt in range(max(1, len(targets))):" in services
-    assert "matched_target = next(" in services
-    assert "matched_rows = [matched_target] if matched_target is not None else []" in services
-    assert 'statuses[id(matched_target)] = "verified"' in services
-    assert "await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)" in services
-    assert "removed_rows.extend(matched_rows)" in services
-    assert "remaining_settings = [_stored_row_to_setting(row) for row in remaining]" in services
-    assert "chihiros_data.device.replace_settings(remaining_settings)," in services
-    assert "settings = [_stored_row_to_setting(row) for row in targets]" in services
-    assert "schedule batch restore " in services
-    assert "Restored targets: {len(targets)}" in services
+    assert "matched_rows = [" in services
+    assert "for target in matched_rows:" in services
+    assert 'statuses[id(target)] = "verified"' in services
+    assert "remaining = [target for target in remaining if target not in matched_rows]" in services
+    assert "await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)" not in services
+    assert "chihiros_data.device.replace_settings(remaining_settings)," not in services
+    assert "schedule batch restore " not in services
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
     assert '"verified" if _schedule_snapshot_matches' in services

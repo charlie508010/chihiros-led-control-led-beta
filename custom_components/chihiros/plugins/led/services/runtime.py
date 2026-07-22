@@ -35,6 +35,7 @@ from ..const import (
     ATTR_PREVIOUS_INDEX,
     ATTR_PREVIOUS_PERIOD,
     ATTR_RAMP_UP_MINUTES,
+    ATTR_REMAINING_PERIODS,
     ATTR_SEND,
     ATTR_START,
     ATTR_WEEKDAYS,
@@ -269,6 +270,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "ramp_up_minutes": call.data.get(ATTR_RAMP_UP_MINUTES, 1),
             "weekdays": call.data.get(ATTR_WEEKDAYS, []),
             "periods": call.data.get(ATTR_PERIODS, []),
+            "remaining_periods": call.data.get(ATTR_REMAINING_PERIODS, []),
             "delete_only": bool(call.data.get(ATTR_DELETE_ONLY, False)),
             "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
         }
@@ -286,7 +288,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     )
                     for period in periods
                 ]
-                remaining_periods = call.data.get("remaining_periods")
+                remaining_periods = call.data.get(ATTR_REMAINING_PERIODS)
                 await chihiros_data.device.remove_settings(
                     settings,
                     finalize=not bool(remaining_periods),
@@ -951,7 +953,7 @@ def _schedule_led_verification_batch(
     *,
     notify_debug_file: bool = False,
 ) -> None:
-    """Run delayed checks and temporarily remove verified rows so hidden rows can surface."""
+    """Run delayed checks for all schedule rows without mutating the device."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
     task_key = f"{device_key}|batch"
     tasks = hass.data.setdefault(LED_VERIFICATION_TASKS, {})
@@ -963,87 +965,47 @@ def _schedule_led_verification_batch(
     async def _verify() -> None:
         statuses: dict[int, str | None] = {id(target): None for target in targets}
         remaining = list(targets)
-        removed_rows: list[dict[str, Any]] = []
         cancelled = False
         try:
             await asyncio.sleep(60)
             lock = hass.data.setdefault(LED_RUNTIME_POLL_LOCK, asyncio.Lock())
             async with lock:
-                try:
-                    for attempt in range(max(1, len(targets))):
-                        chihiros_data.device.last_schedule_snapshot_notification = None
-                        prepare_device_debug(chihiros_data.device, notify_debug_file)
-                        await asyncio.wait_for(
-                            chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
+                for attempt in range(max(1, len(targets))):
+                    chihiros_data.device.last_schedule_snapshot_notification = None
+                    prepare_device_debug(chihiros_data.device, notify_debug_file)
+                    await asyncio.wait_for(
+                        chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
+                    )
+                    snapshot = chihiros_data.device.last_schedule_snapshot_notification
+                    matched_rows = [
+                        target
+                        for target in remaining
+                        if _schedule_snapshot_matches(chihiros_data.device, snapshot, target)
+                    ]
+                    for target in matched_rows:
+                        statuses[id(target)] = "verified"
+                    remaining = [target for target in remaining if target not in matched_rows]
+                    if snapshot is not None and not matched_rows:
+                        for target in remaining:
+                            statuses[id(target)] = "failed"
+                    if notify_debug_file:
+                        await _append_led_notify_debug_file(
+                            hass,
+                            device_key,
+                            "schedule batch verification "
+                            f"{', '.join(_debug_schedule_target_range(target) for target in targets)}",
+                            [
+                                f"Attempt: {attempt + 1}",
+                                f"Matched: {len(matched_rows)}",
+                                f"Remaining: {len(remaining)}",
+                                *[f"Matched target: {_debug_schedule_target(target)}" for target in matched_rows],
+                                "",
+                                led_service_debug_output(chihiros_data.device, last_operation=False)
+                                or "Keine TX/RX/Notify-Debugdaten erfasst.",
+                            ],
                         )
-                        snapshot = chihiros_data.device.last_schedule_snapshot_notification
-                        matched_target = next(
-                            (
-                                target
-                                for target in remaining
-                                if _schedule_snapshot_matches(chihiros_data.device, snapshot, target)
-                            ),
-                            None,
-                        )
-                        matched_rows = [matched_target] if matched_target is not None else []
-                        if matched_target is not None:
-                            statuses[id(matched_target)] = "verified"
-                            remaining = [target for target in remaining if target is not matched_target]
-                        elif snapshot is not None:
-                            for target in remaining:
-                                statuses[id(target)] = "failed"
-                        if notify_debug_file:
-                            await _append_led_notify_debug_file(
-                                hass,
-                                device_key,
-                                "schedule batch verification "
-                                f"{', '.join(_debug_schedule_target_range(target) for target in targets)}",
-                                [
-                                    f"Attempt: {attempt + 1}",
-                                    f"Matched: {len(matched_rows)}",
-                                    f"Remaining: {len(remaining)}",
-                                    *[f"Matched target: {_debug_schedule_target(target)}" for target in matched_rows],
-                                    "",
-                                    led_service_debug_output(chihiros_data.device, last_operation=False)
-                                    or "Keine TX/RX/Notify-Debugdaten erfasst.",
-                                ],
-                            )
-                        if not remaining or matched_target is None:
-                            break
-                        await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)
-                        removed_rows.extend(matched_rows)
-                        remaining_settings = [_stored_row_to_setting(row) for row in remaining]
-                        await asyncio.wait_for(
-                            chihiros_data.device.replace_settings(remaining_settings),
-                            timeout=LED_VERIFICATION_RESTORE_TIMEOUT,
-                        )
-                finally:
-                    if removed_rows:
-                        prepare_device_debug(chihiros_data.device, notify_debug_file)
-                        settings = [_stored_row_to_setting(row) for row in targets]
-                        await asyncio.wait_for(
-                            chihiros_data.device.replace_settings(settings),
-                            timeout=LED_VERIFICATION_RESTORE_TIMEOUT,
-                        )
-                        if notify_debug_file:
-                            chihiros_data.device.last_schedule_snapshot_notification = None
-                            await asyncio.wait_for(
-                                chihiros_data.device.query_status_active(),
-                                timeout=LED_VERIFICATION_QUERY_TIMEOUT,
-                            )
-                            await _append_led_notify_debug_file(
-                                hass,
-                                device_key,
-                                "schedule batch restore "
-                                f"{', '.join(_debug_schedule_target_range(target) for target in targets)}",
-                                [
-                                    f"Restored targets: {len(targets)}",
-                                    *[f"Restored target: {_debug_schedule_target(target)}" for target in targets],
-                                    "",
-                                    led_service_debug_output(chihiros_data.device, last_operation=False)
-                                    or "Keine TX/RX/Notify-Debugdaten erfasst.",
-                                ],
-                            )
+                    if not remaining or snapshot is not None:
+                        break
         except asyncio.CancelledError:
             cancelled = True
             raise

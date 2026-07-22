@@ -29,6 +29,7 @@ ATTR_PRESERVE_LOCAL = "preserve_local"
 ATTR_PREVIOUS_PERIOD = "previous_period"
 ATTR_PREVIOUS_INDEX = "previous_index"
 ATTR_RAMP_UP_MINUTES = "ramp_up_minutes"
+ATTR_REMAINING_PERIODS = "remaining_periods"
 ATTR_SEND = "send"
 ATTR_START = "start"
 ATTR_WEEKDAYS = "weekdays"
@@ -79,6 +80,7 @@ REMOVE_SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_RAMP_UP_MINUTES, default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
         vol.Optional(ATTR_WEEKDAYS): vol.All(list, [vol.In(WEEKDAY_VALUES)]),
         vol.Optional(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
+        vol.Optional(ATTR_REMAINING_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
         vol.Optional(ATTR_DEBUG, default=False): bool,
         vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
