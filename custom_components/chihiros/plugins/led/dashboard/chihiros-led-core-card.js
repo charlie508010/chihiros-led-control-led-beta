@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1211";
+import "./panels/chihiros-led-panel.js?v=0.2.1212";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2893,22 +2893,22 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-page > [data-led-layout-item="channel-2"] { grid-column:2; grid-row:2; }
         .led-layout-page > [data-led-layout-item="channel-3"] { grid-column:3; grid-row:2; }
         .led-layout-page > [data-led-layout-item="channel-4"] { grid-column:4; grid-row:2; }
-        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1 / span 3; grid-row:3; }
-        .led-layout-page > [data-led-layout-item="history"] { grid-column:4; grid-row:3; }
-        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1 / span 3; grid-row:4; }
-        .led-layout-page > [data-led-layout-item="connection"] { grid-column:4; grid-row:4; }
-        .led-layout-page > [data-led-layout-item="control"] { grid-column:1 / span 3; grid-row:5; }
-        .led-layout-page > [data-led-layout-item="presets"] { grid-column:4; grid-row:5; }
+        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1 / span 2; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="history"] { grid-column:3 / span 2; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1 / span 2; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="connection"] { grid-column:3 / span 2; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="control"] { grid-column:1 / span 2; grid-row:5; }
+        .led-layout-page > [data-led-layout-item="presets"] { grid-column:3 / span 2; grid-row:5; }
         .led-layout-page.has-custom-layout > .led-layout-item,
         .led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }
         .led-layout-page.has-custom-layout > [data-led-layout-item="channels"],
         .led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }
         .led-layout-page.has-custom-layout > [data-led-layout-item="schedule"],
         .led-layout-page.has-custom-layout > [data-led-layout-item="templates"],
-        .led-layout-page.has-custom-layout > [data-led-layout-item="control"] { grid-column:span 3 !important; }
+        .led-layout-page.has-custom-layout > [data-led-layout-item="control"],
         .led-layout-page.has-custom-layout > [data-led-layout-item="history"],
         .led-layout-page.has-custom-layout > [data-led-layout-item="connection"],
-        .led-layout-page.has-custom-layout > [data-led-layout-item="presets"],
+        .led-layout-page.has-custom-layout > [data-led-layout-item="presets"] { grid-column:span 2 !important; }
         .led-layout-page.has-custom-layout > [data-led-layout-item^="channel-"] { grid-column:span 1 !important; }
         .led-layout-page > .led-layout-item > .card,
         .led-layout-page > .led-layout-item > .middle { width:100%; height:100%; box-sizing:border-box; }

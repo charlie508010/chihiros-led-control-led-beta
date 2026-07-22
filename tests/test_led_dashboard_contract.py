@@ -718,8 +718,8 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
     assert '.led-layout-page.has-custom-layout > [data-led-layout-item="schedule"],' in core
     assert (
-        '.led-layout-page.has-custom-layout > [data-led-layout-item="control"] { '
-        "grid-column:span 3 !important; }" in core
+        '.led-layout-page.has-custom-layout > [data-led-layout-item="presets"] { '
+        "grid-column:span 2 !important; }" in core
     )
     assert '.led-layout-page.has-custom-layout > [data-led-layout-item="history"],' in core
     assert (
@@ -729,7 +729,8 @@ def test_led_layout_editor_contract_remains_available() -> None:
     assert '.led-layout-page > [data-led-layout-item="channel-1"] { grid-column:1; grid-row:2; }' in core
     assert ".led-page { --led-layout-large-box-height:300px; display:grid; grid-template-columns:repeat(4," in core
     assert '.led-layout-page > [data-led-layout-item="channel-4"] { grid-column:4; grid-row:2; }' in core
-    assert '.led-layout-page > [data-led-layout-item="schedule"] { grid-column:1 / span 3; grid-row:3; }' in core
+    assert '.led-layout-page > [data-led-layout-item="schedule"] { grid-column:1 / span 2; grid-row:3; }' in core
+    assert '.led-layout-page > [data-led-layout-item="history"] { grid-column:3 / span 2; grid-row:3; }' in core
     assert '.led-layout-page > [data-led-layout-item="schedule"] > .card,' in core
     large_connection_card_rule = (
         '.led-layout-page > [data-led-layout-item="connection"] > .card { '
