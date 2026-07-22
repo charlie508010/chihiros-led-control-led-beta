@@ -23,6 +23,7 @@ ATTR_ENABLE_AUTO_MODE = "enable_auto_mode"
 ATTR_ENTITY_ID = "entity_id"
 ATTR_ENTRY_ID = "entry_id"
 ATTR_LEVELS = "levels"
+ATTR_NOTIFY_DEBUG_FILE = "notify_debug_file"
 ATTR_PERIODS = "periods"
 ATTR_PRESERVE_LOCAL = "preserve_local"
 ATTR_PREVIOUS_PERIOD = "previous_period"
@@ -59,6 +60,7 @@ ADD_SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_PREVIOUS_INDEX): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
         vol.Optional(ATTR_DEBUG, default=False): bool,
+        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
     }
 )
 ENABLE_AUTO_MODE_SCHEMA = vol.Schema(
@@ -66,6 +68,7 @@ ENABLE_AUTO_MODE_SCHEMA = vol.Schema(
         **SCHEDULE_SELECTOR_SCHEMA,
         vol.Optional(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_DEBUG, default=False): bool,
+        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
     }
 )
 REMOVE_SCHEDULE_SCHEMA = vol.Schema(
@@ -76,12 +79,14 @@ REMOVE_SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_RAMP_UP_MINUTES, default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
         vol.Optional(ATTR_WEEKDAYS): vol.All(list, [vol.In(WEEKDAY_VALUES)]),
         vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
+        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
     }
 )
 RESET_SCHEDULE_SCHEMA = vol.Schema(
     {
         **SCHEDULE_SELECTOR_SCHEMA,
         vol.Optional(ATTR_DEBUG, default=False): bool,
+        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
         vol.Optional(ATTR_PRESERVE_LOCAL, default=False): bool,
     }
 )
@@ -91,6 +96,7 @@ SET_SCHEDULE_SCHEMA = vol.Schema(
         vol.Required(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_SEND, default=True): bool,
         vol.Optional(ATTR_DEBUG, default=False): bool,
+        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
     }
 )
 SET_BRIGHTNESS_SCHEMA = vol.Schema(
@@ -98,5 +104,6 @@ SET_BRIGHTNESS_SCHEMA = vol.Schema(
         **SCHEDULE_SELECTOR_SCHEMA,
         vol.Required(ATTR_BRIGHTNESS): vol.Any(BRIGHTNESS_VALUE_SCHEMA, LEVELS_SCHEMA),
         vol.Optional(ATTR_DEBUG, default=False): bool,
+        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
     }
 )

@@ -412,6 +412,24 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
     assert '"dashboard_debug": bool(data.get("dashboard_debug", False))' in server
 
 
+def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
+    """The config toggle must enable backend notify/debug file capture for LED services."""
+    dashboard = source(DASHBOARD)
+    services = source(LED_SERVICES)
+    constants = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "const.py")
+
+    assert "notifyDebugFile: false" in dashboard
+    assert 'data-ui-setting="notifyDebugFile"' in dashboard
+    assert "notify_debug_file: true" in dashboard
+    assert 'notify_debug_file: "Notify/Rückmeldung in Datei speichern"' in dashboard
+    assert 'notify_debug_file: "Save notify/response debug to file"' in dashboard
+    assert 'ATTR_NOTIFY_DEBUG_FILE = "notify_debug_file"' in constants
+    assert "_append_led_notify_debug_file" in services
+    assert "prepare_device_debug(chihiros_data.device, debug or notify_debug_file)" in services
+    assert "notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))" in services
+    assert '"notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))' in services
+
+
 def test_debug_sections_restore_headers_after_running_dialog() -> None:
     """Running debug is plain, completed structured debug keeps headers and copy buttons."""
     dashboard = source(DASHBOARD)
@@ -533,7 +551,8 @@ def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> No
     assert "return {}" in services
     assert "await _remove_stored_schedule_rows(chihiros_data.device, stored_rows[:2])" in services
     assert "restore_rows = stored_rows[:2] if active and len(stored_rows) > 2 else []" in services
-    assert "_record_or_schedule_led_verification(hass, chihiros_data, device_key, target, restore_rows)" in services
+    assert "_record_or_schedule_led_verification(" in services
+    assert "notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))" in services
     assert "save_led_schedule_verification_job, device_key, target, restore_rows" in services
     assert "chihiros_data.device.replace_settings(settings)," in services
     assert "timeout=LED_VERIFICATION_RESTORE_TIMEOUT" in services
@@ -564,7 +583,7 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert "return f\"{device_key}|{target['start']}|{target['end']}\"" in services
     assert 'task_key = f"{device_key}|batch"' in services
     assert "removed_rows: list[dict[str, Any]] = []" in services
-    assert "for _attempt in range(max(1, len(targets))):" in services
+    assert "for attempt in range(max(1, len(targets))):" in services
     assert "matched = [" in services
     assert "await _remove_stored_schedule_rows(chihiros_data.device, matched)" in services
     assert "removed_rows.extend(matched)" in services

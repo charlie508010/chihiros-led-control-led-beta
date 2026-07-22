@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1186";
+import "./panels/chihiros-led-panel.js?v=0.2.1187";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -56,6 +56,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       language: String(this.config?.language || "").toLowerCase().startsWith("en") ? "en" : "de",
       showMac: this.config?.show_mac !== false,
       dashboardDebug: Boolean(this.config?.dashboard_debug),
+      notifyDebugFile: false,
       activeTab: "led",
       channelNames: {},
       deviceNames: {},
@@ -158,6 +159,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const language = this.language();
     const showMac = this.uiSettings?.showMac !== false;
     const dashboardDebug = Boolean(this.uiSettings?.dashboardDebug);
+    const notifyDebugFile = Boolean(this.uiSettings?.notifyDebugFile);
     const powerOverrides = this.uiSettings?.deviceMaxPowerWatts || {};
     const pluginRows = Object.values(this.config?.plugin_assets || {})
       .filter((plugin) => plugin && plugin.id && plugin.id !== "led")
@@ -192,6 +194,11 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             <span>${this.tr("dashboard_debug")}</span>
           </label>
           <small class="settings-note">${this.tr("dashboard_debug_hint")}</small>
+          <label class="config-check">
+            <input type="checkbox" data-ui-setting="notifyDebugFile" ${notifyDebugFile ? "checked" : ""}>
+            <span>${this.tr("notify_debug_file")}</span>
+          </label>
+          <small class="settings-note">${this.tr("notify_debug_file_hint")}</small>
           <h3>${this.tr("rated_power")}</h3>
           <small class="settings-note">${this.tr("rated_power_hint")}</small>
           ${powerRows || `<small class="settings-note">${this.tr("no_device")}</small>`}
@@ -1157,7 +1164,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   }
 
   async runDeviceService({ service = "", data = {}, title = "", debug = false, dialog = false, channel = 1, noChannel = true } = {}) {
-    const serviceData = debug ? { ...data, debug: true } : data;
+    const notifyDebugFile = Boolean(this.uiSettings && this.uiSettings.notifyDebugFile);
+    const serviceData = {
+      ...data,
+      ...(debug ? { debug: true } : {}),
+      ...(notifyDebugFile ? { notify_debug_file: true } : {}),
+    };
     if (dialog && typeof this.callAddonServiceWithDialog === "function") {
       const result = await this.callAddonServiceWithDialog(service, serviceData, {
         channel,
@@ -1815,6 +1827,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         debug_output_short: "Debug ausgeben",
         dashboard_debug: "Dashboard-Debug für Einzelaktionen",
         dashboard_debug_hint: "Zeigt bei einzelnen Geräteaktionen ein Debug-Fenster mit HA-Aufruf, Payload und Protokolldaten.",
+        notify_debug_file: "Notify/Rückmeldung in Datei speichern",
+        notify_debug_file_hint: "Schreibt LED-TX/RX- und Notify-Abläufe in /config/.chihiros_led_core/debug/.",
         debug_sending: "Sende Zeitplan an das Gerät...",
         debug_empty: "Keine Debug-Ausgabe zurückgegeben.",
         led_schedule_time_invalid: "Ungültiges Zeitfenster",
@@ -2113,6 +2127,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         debug_output_short: "Output debug",
         dashboard_debug: "Dashboard debug for single actions",
         dashboard_debug_hint: "Shows a debug window with the HA action, payload, and protocol data for individual device actions.",
+        notify_debug_file: "Save notify/response debug to file",
+        notify_debug_file_hint: "Writes LED TX/RX and notify flow logs to /config/.chihiros_led_core/debug/.",
         debug_sending: "Sending schedule to device...",
         debug_empty: "No debug output returned.",
         led_schedule_time_invalid: "Invalid time window",

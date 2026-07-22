@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
@@ -14,6 +16,7 @@ from homeassistant.util import dt as dt_util
 from ....const import DOMAIN
 from ....core.diagnostics import make_service_result
 from ....core.services import response_requested
+from ....core.storage import state_db_path
 from ..const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
@@ -26,6 +29,7 @@ from ..const import (
     ATTR_ENTITY_ID,
     ATTR_ENTRY_ID,
     ATTR_LEVELS,
+    ATTR_NOTIFY_DEBUG_FILE,
     ATTR_PERIODS,
     ATTR_PRESERVE_LOCAL,
     ATTR_PREVIOUS_INDEX,
@@ -134,6 +138,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "levels": call.data.get(ATTR_LEVELS, {}),
             "ramp_up_minutes": call.data.get(ATTR_RAMP_UP_MINUTES, 1),
             "weekdays": call.data.get(ATTR_WEEKDAYS, []),
+            "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
         }
 
         async def _operation(chihiros_data: ChihirosData) -> dict[str, Any]:
@@ -175,7 +180,14 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 _replaced = False
             if active:
                 target = _verification_row(call.data)
-                await _record_or_schedule_led_verification(hass, chihiros_data, device_key, target, restore_rows)
+                await _record_or_schedule_led_verification(
+                    hass,
+                    chihiros_data,
+                    device_key,
+                    target,
+                    restore_rows,
+                    notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+                )
             return {}
 
         return await _async_led_send_service(
@@ -195,6 +207,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "entity_id": call.data.get(ATTR_ENTITY_ID, ""),
             "address": call.data.get(ATTR_ADDRESS, ""),
             "debug": bool(call.data.get(ATTR_DEBUG, False)),
+            "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
             "periods": call.data.get(ATTR_PERIODS, []),
         }
 
@@ -225,7 +238,13 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 chihiros_data.device,
                 settings,
             )
-            await _record_or_schedule_led_verifications(hass, chihiros_data, device_key, verification_rows)
+            await _record_or_schedule_led_verifications(
+                hass,
+                chihiros_data,
+                device_key,
+                verification_rows,
+                notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+            )
             return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}
 
         return await _async_led_send_service(
@@ -261,6 +280,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "entity_id": call.data.get(ATTR_ENTITY_ID, ""),
             "address": call.data.get(ATTR_ADDRESS, ""),
             "debug": bool(call.data.get(ATTR_DEBUG, False)),
+            "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
             "preserve_local": preserve_local,
         }
 
@@ -290,6 +310,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "entity_id": call.data.get(ATTR_ENTITY_ID, ""),
             "address": call.data.get(ATTR_ADDRESS, ""),
             "send": send,
+            "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
             "periods": call.data.get(ATTR_PERIODS, []),
         }
 
@@ -317,7 +338,14 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             if send and len(call.data[ATTR_PERIODS]) == 1:
                 target = _verification_row(call.data[ATTR_PERIODS][0])
                 restore_rows = stored_rows[:2] if len(stored_rows) > 2 else []
-                await _record_or_schedule_led_verification(hass, chihiros_data, device_key, target, restore_rows)
+                await _record_or_schedule_led_verification(
+                    hass,
+                    chihiros_data,
+                    device_key,
+                    target,
+                    restore_rows,
+                    notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+                )
             return {
                 "rows": len(call.data[ATTR_PERIODS]),
                 "send": send,
@@ -346,6 +374,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "address": call.data.get(ATTR_ADDRESS, ""),
             "brightness": brightness,
             "debug": bool(call.data.get(ATTR_DEBUG, False)),
+            "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
         }
 
         async def _operation(chihiros_data: ChihirosData) -> dict[str, Any]:
@@ -414,11 +443,12 @@ async def _async_led_send_service(
 ) -> dict[str, Any] | None:
     """Run one LED send service with one shared response/debug path."""
     debug = bool(call.data.get(ATTR_DEBUG, False))
+    notify_debug_file = bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))
     chihiros_data: ChihirosData | None = None
     try:
         chihiros_data = await _async_resolve_led_device(hass, resolve_device, call.data)
         ensure_light_device(chihiros_data)
-        prepare_device_debug(chihiros_data.device, debug)
+        prepare_device_debug(chihiros_data.device, debug or notify_debug_file)
         details = await operation(chihiros_data)
         debug_output = (
             led_service_debug_output(
@@ -429,11 +459,35 @@ async def _async_led_send_service(
             if debug and debug_last_operation
             else ""
         )
+        notify_debug_path = ""
+        if notify_debug_file:
+            notify_output = debug_output or led_service_debug_output(
+                chihiros_data.device,
+                last_operation=False,
+                include_missing_tx_frames=service == SERVICE_SET_BRIGHTNESS,
+            )
+            notify_debug_path = await _append_led_notify_debug_file(
+                hass,
+                str(getattr(chihiros_data.device, "address", "") or chihiros_data.title),
+                service,
+                [
+                    f"Service: {service}",
+                    f"Action: {action}",
+                    f"Summary: {summary}",
+                    f"Send status: {ok_send_status}",
+                    f"Send detail: {ok_send_detail}",
+                    "",
+                    notify_output or "Keine TX/RX/Notify-Debugdaten erfasst.",
+                ],
+            )
         response = {
             "ok": True,
             "send_status": ok_send_status,
             "send_detail": ok_send_detail,
         }
+        result_details = details if isinstance(details, dict) else {}
+        if notify_debug_path:
+            result_details = {**result_details, "notify_debug_file": notify_debug_path}
         result = make_service_result(
             service=service,
             ok=True,
@@ -446,7 +500,7 @@ async def _async_led_send_service(
             summary=summary,
             request=request,
             response=response,
-            details=details if isinstance(details, dict) else None,
+            details=result_details or None,
             raw_debug=debug_output,
         )
         return result if response_requested(call) else None
@@ -486,6 +540,29 @@ async def _async_led_send_service(
             raw_debug=debug_output,
         )
         return result if response_requested(call) else None
+
+
+async def _append_led_notify_debug_file(
+    hass: HomeAssistant,
+    device_key: str,
+    phase: str,
+    lines: list[str],
+) -> str:
+    """Append one LED notify/debug block to the per-device diagnostic file."""
+    return await hass.async_add_executor_job(_append_led_notify_debug_file_sync, device_key, phase, lines)
+
+
+def _append_led_notify_debug_file_sync(device_key: str, phase: str, lines: list[str]) -> str:
+    """Write one LED notify/debug block outside the event loop."""
+    safe_device = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(device_key or "device").upper()).strip("_") or "device"
+    directory = state_db_path().parent / "debug"
+    path = directory / f"led-notify-{safe_device}-{dt_util.now().strftime('%Y%m%d')}.log"
+    directory.mkdir(parents=True, exist_ok=True)
+    timestamp = dt_util.now().isoformat()
+    body = "\n".join(str(line) for line in lines).strip()
+    with Path(path).open("a", encoding="utf-8") as handle:
+        handle.write("\n".join(["-" * 72, f"{timestamp} | {phase}", body, ""]) + "\n")
+    return str(path)
 
 
 async def async_enable_led_auto_mode(
@@ -651,16 +728,29 @@ def _verification_row(period: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _debug_schedule_target(target: dict[str, Any]) -> str:
+    """Return one compact schedule target line for debug files."""
+    levels = target.get("levels") if isinstance(target.get("levels"), dict) else {}
+    levels_text = ", ".join(f"{key}={value}" for key, value in sorted(levels.items())) or "-"
+    weekdays = ",".join(str(value) for value in target.get("weekdays") or []) or "-"
+    return (
+        f"{target.get('start', '')}-{target.get('end', '')}; "
+        f"levels: {levels_text}; ramp: {target.get('ramp', '-')}; weekdays: {weekdays}"
+    )
+
+
 async def _record_or_schedule_led_verification(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
     device_key: str,
     target: dict[str, Any],
     restore_rows: list[dict[str, Any]],
+    *,
+    notify_debug_file: bool = False,
 ) -> None:
     """Persist a pending verification job and schedule a delayed device check."""
     await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
-    _schedule_led_verification(hass, chihiros_data, target, restore_rows)
+    _schedule_led_verification(hass, chihiros_data, target, restore_rows, notify_debug_file=notify_debug_file)
 
 
 async def _record_or_schedule_led_verifications(
@@ -668,12 +758,14 @@ async def _record_or_schedule_led_verifications(
     chihiros_data: ChihirosData,
     device_key: str,
     targets: list[dict[str, Any]],
+    *,
+    notify_debug_file: bool = False,
 ) -> None:
     """Persist all rows as pending and check them with one device query."""
     for target in targets:
         await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
     if targets:
-        _schedule_led_verification_batch(hass, chihiros_data, targets)
+        _schedule_led_verification_batch(hass, chihiros_data, targets, notify_debug_file=notify_debug_file)
 
 
 def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:
@@ -686,6 +778,8 @@ def _schedule_led_verification(
     chihiros_data: ChihirosData,
     target: dict[str, Any],
     restore_rows: list[dict[str, Any]],
+    *,
+    notify_debug_file: bool = False,
 ) -> None:
     """Run one delayed check for each latest schedule-row write."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
@@ -704,6 +798,7 @@ def _schedule_led_verification(
             async with lock:
                 try:
                     chihiros_data.device.last_schedule_snapshot_notification = None
+                    prepare_device_debug(chihiros_data.device, notify_debug_file)
                     await asyncio.wait_for(
                         chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
                     )
@@ -711,6 +806,20 @@ def _schedule_led_verification(
                     status = (
                         "verified" if _schedule_snapshot_matches(chihiros_data.device, snapshot, target) else "failed"
                     )
+                    if notify_debug_file:
+                        await _append_led_notify_debug_file(
+                            hass,
+                            device_key,
+                            "schedule verification",
+                            [
+                                f"Target: {_debug_schedule_target(target)}",
+                                f"Status: {status}",
+                                f"Restore rows: {len(restore_rows)}",
+                                "",
+                                led_service_debug_output(chihiros_data.device, last_operation=False)
+                                or "Keine TX/RX/Notify-Debugdaten erfasst.",
+                            ],
+                        )
                 finally:
                     if restore_rows:
                         settings = [_stored_row_to_setting(row) for row in restore_rows]
@@ -741,6 +850,8 @@ def _schedule_led_verification_batch(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
     targets: list[dict[str, Any]],
+    *,
+    notify_debug_file: bool = False,
 ) -> None:
     """Run delayed checks and temporarily remove verified rows so hidden rows can surface."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
@@ -761,8 +872,9 @@ def _schedule_led_verification_batch(
             lock = hass.data.setdefault(LED_RUNTIME_POLL_LOCK, asyncio.Lock())
             async with lock:
                 try:
-                    for _attempt in range(max(1, len(targets))):
+                    for attempt in range(max(1, len(targets))):
                         chihiros_data.device.last_schedule_snapshot_notification = None
+                        prepare_device_debug(chihiros_data.device, notify_debug_file)
                         await asyncio.wait_for(
                             chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
                         )
@@ -775,6 +887,21 @@ def _schedule_led_verification_batch(
                         for target in matched:
                             statuses[id(target)] = "verified"
                         remaining = [target for target in remaining if target not in matched]
+                        if notify_debug_file:
+                            await _append_led_notify_debug_file(
+                                hass,
+                                device_key,
+                                "schedule batch verification",
+                                [
+                                    f"Attempt: {attempt + 1}",
+                                    f"Matched: {len(matched)}",
+                                    f"Remaining: {len(remaining)}",
+                                    *[f"Matched target: {_debug_schedule_target(target)}" for target in matched],
+                                    "",
+                                    led_service_debug_output(chihiros_data.device, last_operation=False)
+                                    or "Keine TX/RX/Notify-Debugdaten erfasst.",
+                                ],
+                            )
                         if not remaining or not matched:
                             break
                         await _remove_stored_schedule_rows(chihiros_data.device, matched)
