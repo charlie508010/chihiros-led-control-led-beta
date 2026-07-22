@@ -209,6 +209,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             "debug": bool(call.data.get(ATTR_DEBUG, False)),
             "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
             "periods": call.data.get(ATTR_PERIODS, []),
+            "remaining_periods": call.data.get("remaining_periods", []),
         }
 
         async def _operation(chihiros_data: ChihirosData) -> dict[str, Any]:
@@ -285,7 +286,11 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     )
                     for period in periods
                 ]
-                await chihiros_data.device.remove_settings(settings)
+                remaining_periods = call.data.get("remaining_periods")
+                await chihiros_data.device.remove_settings(
+                    settings,
+                    finalize=not bool(remaining_periods),
+                )
             else:
                 start = parse_schedule_time(call.data[ATTR_START])
                 end = parse_schedule_time(call.data[ATTR_END])

@@ -487,6 +487,7 @@ class ChihirosDevice:
     async def remove_settings(
         self,
         settings: Sequence[tuple[datetime, datetime, int, list[WeekdaySelect] | None]],
+        finalize: bool = True,
     ) -> None:
         """Remove multiple automation settings in one app-like delete sequence."""
         commands_to_send: list[bytearray] = []
@@ -501,7 +502,7 @@ class ChihirosDevice:
                     brightness_channels=self._channel_count(),
                 )
             )
-        if self.model.schedule_reset_parameter != 5:
+        if self.model.schedule_reset_parameter != 5 and finalize:
             commands_to_send.append(
                 commands.create_auto_parameter_command(
                     self.get_next_msg_id(),

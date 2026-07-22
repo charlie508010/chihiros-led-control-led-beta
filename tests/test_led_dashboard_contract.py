@@ -730,6 +730,10 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     assert "const rowsToSend = [...rows]" in implementation
     assert 'String(right.start || "").localeCompare(String(left.start || ""))' in implementation
     assert "periods: this.ledSchedulePeriodsFromRows(rowsToSend, this.activeLedDevice || {}, true)," in implementation
+    assert (
+        "remaining_periods: this.ledSchedulePeriodsFromRows(remainingRows, "
+        "this.activeLedDevice || {}, true),"
+    ) in implementation
     assert "delete_only: true" in implementation
     assert "delete_only: remainingRows.length > 0" not in implementation
     assert "output: sendResult && sendResult.output" in implementation

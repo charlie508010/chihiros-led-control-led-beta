@@ -108,6 +108,7 @@ class ChihirosClient(Protocol):
     async def remove_settings(
         self,
         settings: Sequence[tuple[datetime, datetime, int, list[WeekdaySelect] | None]],
+        finalize: bool = True,
     ) -> None:
         """Remove multiple schedule settings."""
 

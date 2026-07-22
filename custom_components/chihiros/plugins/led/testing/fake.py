@@ -240,9 +240,10 @@ class FakeChihirosDevice:
     async def remove_settings(
         self,
         settings: Sequence[tuple[datetime, datetime, int, list[object] | None]],
+        finalize: bool = True,
     ) -> None:
         """Accept fake multi-row schedule deletes."""
-        del settings
+        del settings, finalize
         await self.query_status()
 
     async def replace_setting(

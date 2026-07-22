@@ -307,6 +307,43 @@ def test_dyu1000_remove_settings_sends_app_like_delete_sequence() -> None:
     ]
 
 
+def test_dyu1000_remove_settings_can_skip_finalizer_when_rows_remain() -> None:
+    """The 40 finalizer is sent only when no schedule remains after deletion."""
+    sent_commands: list[bytes] = []
+
+    async def run() -> None:
+        model = DeviceModel(
+            "Universal WRGB",
+            ("DYU1000",),
+            WRGB_CHANNELS,
+            max_brightness=100,
+            schedule_reset_parameter=40,
+        )
+        device = ChihirosDevice(FakeBLEDevice(), model)  # type: ignore[arg-type]
+
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray,
+            retry: int | None = None,
+            **kwargs: object,
+        ) -> None:
+            del retry, kwargs
+            if isinstance(command, list):
+                sent_commands.extend(bytes(item) for item in command)
+            else:
+                sent_commands.append(bytes(command))
+
+        device._send_command = capture_command  # type: ignore[method-assign]
+        await device.remove_settings(
+            [(datetime(2026, 7, 16, 12, 0), datetime(2026, 7, 16, 18, 0), 1, None)],
+            finalize=False,
+        )
+
+    asyncio.run(run())
+
+    assert [command[5] for command in sent_commands] == [25]
+    assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
+
+
 def test_dyu1000_inactive_schedule_can_append_app_matching_final_values() -> None:
     """DYU1000 inactive schedule can append the app-observed final value frame."""
     sent_commands: list[bytes] = []

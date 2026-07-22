@@ -1802,6 +1802,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       ? {
           ...deletePeriod,
           periods: this.ledSchedulePeriodsFromRows(rowsToSend, this.activeLedDevice || {}, true),
+          remaining_periods: this.ledSchedulePeriodsFromRows(remainingRows, this.activeLedDevice || {}, true),
           delete_only: true,
           device_key: deviceKey,
           ...this.ledServiceSelector(),
