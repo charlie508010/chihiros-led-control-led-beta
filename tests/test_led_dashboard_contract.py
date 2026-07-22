@@ -563,6 +563,12 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
 
     assert "return f\"{device_key}|{target['start']}|{target['end']}\"" in services
     assert 'task_key = f"{device_key}|batch"' in services
+    assert "removed_rows: list[dict[str, Any]] = []" in services
+    assert "for _attempt in range(max(1, len(targets))):" in services
+    assert "matched = [" in services
+    assert "await _remove_stored_schedule_rows(chihiros_data.device, matched)" in services
+    assert "removed_rows.extend(matched)" in services
+    assert "settings = [_stored_row_to_setting(row) for row in targets]" in services
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
     assert '"verified" if _schedule_snapshot_matches' in services

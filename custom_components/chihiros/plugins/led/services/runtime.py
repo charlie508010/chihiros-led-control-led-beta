@@ -742,7 +742,7 @@ def _schedule_led_verification_batch(
     chihiros_data: ChihirosData,
     targets: list[dict[str, Any]],
 ) -> None:
-    """Run one delayed device query for multiple schedule-row checks."""
+    """Run delayed checks and temporarily remove verified rows so hidden rows can surface."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
     task_key = f"{device_key}|batch"
     tasks = hass.data.setdefault(LED_VERIFICATION_TASKS, {})
@@ -753,22 +753,39 @@ def _schedule_led_verification_batch(
 
     async def _verify() -> None:
         statuses = {id(target): "failed" for target in targets}
+        remaining = list(targets)
+        removed_rows: list[dict[str, Any]] = []
         cancelled = False
         try:
             await asyncio.sleep(60)
             lock = hass.data.setdefault(LED_RUNTIME_POLL_LOCK, asyncio.Lock())
             async with lock:
-                chihiros_data.device.last_schedule_snapshot_notification = None
-                await asyncio.wait_for(
-                    chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
-                )
-                snapshot = chihiros_data.device.last_schedule_snapshot_notification
-                statuses = {
-                    id(target): (
-                        "verified" if _schedule_snapshot_matches(chihiros_data.device, snapshot, target) else "failed"
-                    )
-                    for target in targets
-                }
+                try:
+                    for _attempt in range(max(1, len(targets))):
+                        chihiros_data.device.last_schedule_snapshot_notification = None
+                        await asyncio.wait_for(
+                            chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
+                        )
+                        snapshot = chihiros_data.device.last_schedule_snapshot_notification
+                        matched = [
+                            target
+                            for target in remaining
+                            if _schedule_snapshot_matches(chihiros_data.device, snapshot, target)
+                        ]
+                        for target in matched:
+                            statuses[id(target)] = "verified"
+                        remaining = [target for target in remaining if target not in matched]
+                        if not remaining or not matched:
+                            break
+                        await _remove_stored_schedule_rows(chihiros_data.device, matched)
+                        removed_rows.extend(matched)
+                finally:
+                    if removed_rows:
+                        settings = [_stored_row_to_setting(row) for row in targets]
+                        await asyncio.wait_for(
+                            chihiros_data.device.replace_settings(settings),
+                            timeout=LED_VERIFICATION_RESTORE_TIMEOUT,
+                        )
         except asyncio.CancelledError:
             cancelled = True
             raise

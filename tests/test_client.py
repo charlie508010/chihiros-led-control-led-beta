@@ -679,6 +679,51 @@ def test_render_protocol_debug_closes_trailing_schedule_at_existing_boundary() -
     assert "Zeitplan 2: 09:00-17:00 Level=5% Ramp=1 min" in schedules
 
 
+def test_render_protocol_debug_closes_trailing_zero_schedule_at_day_end() -> None:
+    """A final zero-only curve block represents the off schedule through 23:59."""
+    parameters = [
+        3,
+        6,
+        36,
+        *([0] * 13),
+        3,
+        6,
+        36,
+        9,
+        0,
+        0,
+        9,
+        1,
+        5,
+        16,
+        59,
+        5,
+        17,
+        0,
+        0,
+        17,
+        1,
+        65,
+        21,
+        59,
+        65,
+        22,
+        0,
+        0,
+        22,
+        1,
+        0,
+    ]
+    frame = bytes([0x5B, 0x15, 0x30, 0x00, 0x01, 0xFE, *parameters, 0x00])
+
+    schedules = ChihirosDevice._describe_schedule_curve_snapshot(frame)
+
+    assert "Zeitplan-Snapshot Kurvenpunkte=8, Zeitplaene=3" in schedules
+    assert "Zeitplan 1: 09:00-17:00 Level=5% Ramp=1 min" in schedules
+    assert "Zeitplan 2: 17:00-22:00 Level=65% Ramp=1 min" in schedules
+    assert "Zeitplan 3: 22:00-23:59 Level=0% Ramp=1 min" in schedules
+
+
 def test_render_protocol_debug_ignores_incomplete_active_schedule_point() -> None:
     """A standalone active point without an end marker is not a schedule."""
     frame = bytes(

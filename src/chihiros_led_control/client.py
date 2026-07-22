@@ -885,6 +885,8 @@ class ChihirosDevice:
                     end_index += 1
                 ramp_hour, ramp_minute, _ramp_level = points[index + 1]
                 end_hour, end_minute, _end_level = points[end_index]
+                if end_index == len(points) - 1:
+                    end_hour, end_minute = 23, 59
                 ramp = ChihirosDevice._minute_distance(start_hour, start_minute, ramp_hour, ramp_minute)
                 if not 1 <= ramp <= 150:
                     ramp = 1
