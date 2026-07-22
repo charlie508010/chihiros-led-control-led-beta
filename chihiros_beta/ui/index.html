@@ -234,14 +234,17 @@
       };
       let card = null;
       let dashboardBoundaryTimer = null;
-      let dashboardVerificationTimer = null;
+      let dashboardVerificationTimers = [];
 
       function scheduleVerificationDashboardRefresh() {
-        if (dashboardVerificationTimer) window.clearTimeout(dashboardVerificationTimer);
-        dashboardVerificationTimer = window.setTimeout(() => {
-          dashboardVerificationTimer = null;
-          refreshDashboard().catch(() => setStatus("offline", false));
-        }, 70000);
+        dashboardVerificationTimers.forEach((timer) => window.clearTimeout(timer));
+        dashboardVerificationTimers = [70000, 95000, 125000, 155000].map((delay) => {
+          const timer = window.setTimeout(() => {
+            dashboardVerificationTimers = dashboardVerificationTimers.filter((item) => item !== timer);
+            refreshDashboard().catch(() => setStatus("offline", false));
+          }, delay);
+          return timer;
+        });
       }
 
       function ensureCard() {

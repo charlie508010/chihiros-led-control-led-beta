@@ -644,7 +644,8 @@ def test_scheduler_verification_refreshes_without_page_reload() -> None:
     panel = source(LED_PANEL)
 
     assert "scheduleVerificationDashboardRefresh()" in index
-    assert "}, 70000);" in index
+    assert "[70000, 95000, 125000, 155000]" in index
+    assert "dashboardVerificationTimers.forEach((timer) => window.clearTimeout(timer));" in index
     assert 'service === "add_schedule" || service === "set_schedule" || service === "enable_auto_mode"' in index
     assert "await window.ChihirosAddonApi.refreshDashboard();" in panel
 
