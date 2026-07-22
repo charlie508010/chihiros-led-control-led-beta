@@ -247,6 +247,10 @@ Nach einem Push muss bei Bedarf geprüft werden, dass GitHub die Commits nicht e
 lesen und schreiben auf \\172.20.48.110\config\.chihiros\chihiros_state.sqlite3 erlaube ich mache aber immer ein backup
 löschen ist nicht erlaubt
 
+lesen auf \\HASS.LOCAL\config\.chihiros_led_core\debug und alle Dateien darunter ist erlaubt
+schreiben in diesem Debug-Ordner nur nach ausdrücklicher Freigabe
+löschen ist dort nicht erlaubt
+
 ## 14. LED-Core-Abgrenzung
 
 - Dieses Repository ist die eigenständige Arbeitskopie für die LED-Steuerung.
@@ -255,3 +259,7 @@ löschen ist nicht erlaubt
 - Weitere Gerätearten werden später über getrennte Plugins oder Pakete angebunden.
 - Ein Plugin darf die geprüften LED-Protokoll-, Scheduler-, Dashboard- oder Home-Assistant-Funktionen nicht verändern.
 - Historische interne Kompatibilitätsfunktionen dürfen erst entfernt werden, wenn die LED-Tests ihre Entbehrlichkeit belegen.
+
+darf die file unter lesen zur auswertung
+
+\\HASS.LOCAL\config\.chihiros_led_core\debug

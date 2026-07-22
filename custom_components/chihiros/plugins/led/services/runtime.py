@@ -987,6 +987,8 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
     expected_by_channel = {str(channel).lower(): int(value) for channel, value in target["levels"].items()}
     positive_expected_levels = {level for level in expected_by_channel.values() if level > 0}
     fallback_expected_levels = positive_expected_levels or {0}
+    if not getattr(snapshot, "points", ()) and not positive_expected_levels:
+        return True
 
     def _minutes(hour: int, minute: int) -> int:
         return (hour * 60) + minute

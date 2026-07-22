@@ -591,6 +591,7 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
     assert '"verified" if _schedule_snapshot_matches' in services
+    assert 'if not getattr(snapshot, "points", ()) and not positive_expected_levels:' in services
     assert 'finish_led_schedule_verification, device_key, "verified"' not in services
     assert (
         'return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}' in services
