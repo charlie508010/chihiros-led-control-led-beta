@@ -565,7 +565,7 @@ def test_new_scheduler_dialog_keeps_entered_times_while_sending() -> None:
 
 
 def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> None:
-    """More than two rows use the device's two visible slots only for the delayed check."""
+    """More than two rows temporarily remove visible slots and then restore the full row set."""
     services = source(LED_SERVICES)
 
     assert "await asyncio.sleep(60)" in services
@@ -576,6 +576,7 @@ def test_scheduler_verification_waits_once_and_restores_two_visible_rows() -> No
     assert "_record_or_schedule_led_verification(" in services
     assert "notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))" in services
     assert "save_led_schedule_verification_job, device_key, target, restore_rows" in services
+    assert "_verification_restore_rows(restore_rows, target)" in services
     assert "chihiros_data.device.replace_settings(settings)," in services
     assert "timeout=LED_VERIFICATION_RESTORE_TIMEOUT" in services
 
@@ -602,13 +603,16 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     services = source(LED_SERVICES)
     storage = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "storage" / "runtime.py")
 
-    assert "return f\"{device_key}|{target['start']}|{target['end']}\"" in services
+    assert 'return f"{device_key}|{_verification_target_signature(target)}"' in services
+    assert "def _verification_target_signature" in services
     assert 'task_key = f"{device_key}|batch"' in services
     assert "removed_rows: list[dict[str, Any]] = []" in services
     assert "for attempt in range(max(1, len(targets))):" in services
-    assert "matched = [" in services
-    assert "await _remove_stored_schedule_rows(chihiros_data.device, matched)" in services
-    assert "removed_rows.extend(matched)" in services
+    assert "matched_target = next(" in services
+    assert "matched_rows = [matched_target] if matched_target is not None else []" in services
+    assert 'statuses[id(matched_target)] = "verified"' in services
+    assert "await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)" in services
+    assert "removed_rows.extend(matched_rows)" in services
     assert "settings = [_stored_row_to_setting(row) for row in targets]" in services
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
@@ -625,7 +629,8 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert "if not _verification_requires_snapshot" not in services
     assert "PRIMARY KEY (device_key, schedule_signature)" in storage
     assert "WHERE UPPER(device_key)=UPPER(?) AND schedule_signature=?" in storage
-    assert 'old_target.get("start") == target["start"]' in storage
+    assert "old_target_signature = _schedule_signature(" in storage
+    assert "if old_target_signature == signature:" in storage
     assert "record_led_schedule_verification(device_key, target, status)" in storage
 
 

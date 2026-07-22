@@ -759,6 +759,29 @@ def _debug_schedule_target_range(target: dict[str, Any]) -> str:
     return f"{target.get('start', '')}-{target.get('end', '')}"
 
 
+def _verification_target_signature(target: dict[str, Any]) -> str:
+    """Return a stable verification identity for one complete schedule target."""
+    levels = target.get("levels") if isinstance(target.get("levels"), dict) else {}
+    weekdays = target.get("weekdays") if isinstance(target.get("weekdays"), list) else []
+    return "|".join(
+        (
+            str(target.get("start", "")),
+            str(target.get("end", "")),
+            ",".join(f"{key}={int(value)}" for key, value in sorted(levels.items())),
+            str(int(target.get("ramp", 1))),
+            ",".join(sorted(str(value) for value in weekdays)),
+        )
+    )
+
+
+def _verification_restore_rows(restore_rows: list[dict[str, Any]], target: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the full row set that must be written back after a one-row verification."""
+    target_signature = _verification_target_signature(target)
+    rows = [row for row in restore_rows if _verification_target_signature(row) != target_signature]
+    rows.append(target)
+    return rows
+
+
 async def _record_or_schedule_led_verification(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
@@ -794,7 +817,7 @@ async def _record_or_schedule_led_verifications(
 
 def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:
     """Return the persisted one-row verification task key."""
-    return f"{device_key}|{target['start']}|{target['end']}"
+    return f"{device_key}|{_verification_target_signature(target)}"
 
 
 def _schedule_led_verification(
@@ -846,7 +869,9 @@ def _schedule_led_verification(
                         )
                 finally:
                     if restore_rows:
-                        settings = [_stored_row_to_setting(row) for row in restore_rows]
+                        settings = [
+                            _stored_row_to_setting(row) for row in _verification_restore_rows(restore_rows, target)
+                        ]
                         await asyncio.wait_for(
                             chihiros_data.device.replace_settings(settings),
                             timeout=LED_VERIFICATION_RESTORE_TIMEOUT,
@@ -903,14 +928,18 @@ def _schedule_led_verification_batch(
                             chihiros_data.device.query_status_active(), timeout=LED_VERIFICATION_QUERY_TIMEOUT
                         )
                         snapshot = chihiros_data.device.last_schedule_snapshot_notification
-                        matched = [
-                            target
-                            for target in remaining
-                            if _schedule_snapshot_matches(chihiros_data.device, snapshot, target)
-                        ]
-                        for target in matched:
-                            statuses[id(target)] = "verified"
-                        remaining = [target for target in remaining if target not in matched]
+                        matched_target = next(
+                            (
+                                target
+                                for target in remaining
+                                if _schedule_snapshot_matches(chihiros_data.device, snapshot, target)
+                            ),
+                            None,
+                        )
+                        matched_rows = [matched_target] if matched_target is not None else []
+                        if matched_target is not None:
+                            statuses[id(matched_target)] = "verified"
+                            remaining = [target for target in remaining if target is not matched_target]
                         if notify_debug_file:
                             await _append_led_notify_debug_file(
                                 hass,
@@ -919,18 +948,18 @@ def _schedule_led_verification_batch(
                                 f"{', '.join(_debug_schedule_target_range(target) for target in targets)}",
                                 [
                                     f"Attempt: {attempt + 1}",
-                                    f"Matched: {len(matched)}",
+                                    f"Matched: {len(matched_rows)}",
                                     f"Remaining: {len(remaining)}",
-                                    *[f"Matched target: {_debug_schedule_target(target)}" for target in matched],
+                                    *[f"Matched target: {_debug_schedule_target(target)}" for target in matched_rows],
                                     "",
                                     led_service_debug_output(chihiros_data.device, last_operation=False)
                                     or "Keine TX/RX/Notify-Debugdaten erfasst.",
                                 ],
                             )
-                        if not remaining or not matched:
+                        if not remaining or matched_target is None:
                             break
-                        await _remove_stored_schedule_rows(chihiros_data.device, matched)
-                        removed_rows.extend(matched)
+                        await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)
+                        removed_rows.extend(matched_rows)
                 finally:
                     if removed_rows:
                         settings = [_stored_row_to_setting(row) for row in targets]

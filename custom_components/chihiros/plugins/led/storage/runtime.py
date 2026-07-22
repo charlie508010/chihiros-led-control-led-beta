@@ -237,7 +237,14 @@ def save_led_schedule_verification_job(device_key: str, target: dict[str, Any], 
             (device_key,),
         ).fetchall():
             old_target = json.loads(str(old_target_json))
-            if old_target.get("start") == target["start"] and old_target.get("end") == target["end"]:
+            old_target_signature = _schedule_signature(
+                str(old_target["start"]),
+                str(old_target["end"]),
+                old_target["levels"],
+                int(old_target["ramp"]),
+                old_target["weekdays"],
+            )
+            if old_target_signature == signature:
                 conn.execute(
                     """
                     DELETE FROM led_schedule_verification_jobs
