@@ -67,8 +67,12 @@ def test_enable_auto_mode_sends_switch_and_reset() -> None:
     async def run() -> None:
         device = ChihirosDevice(FakeBLEDevice(), DeviceModel("Test", (), WHITE_CHANNELS))  # type: ignore[arg-type]
 
-        async def capture_command(command: list[bytes] | bytes | bytearray, retry: int | None = None) -> None:
-            del retry
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray,
+            retry: int | None = None,
+            **kwargs,
+        ) -> None:
+            del retry, kwargs
             if isinstance(command, list):
                 sent_commands.extend(bytes(item) for item in command)
             else:
@@ -92,8 +96,12 @@ def test_enable_auto_mode_restores_existing_schedules_after_switch() -> None:
     async def run() -> None:
         device = ChihirosDevice(FakeBLEDevice(), DeviceModel("Test WRGB", (), WRGB_CHANNELS))  # type: ignore[arg-type]
 
-        async def capture_command(command: list[bytes] | bytes | bytearray, retry: int | None = None) -> None:
-            del retry
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray,
+            retry: int | None = None,
+            **kwargs,
+        ) -> None:
+            del retry, kwargs
             if isinstance(command, list):
                 sent_commands.extend(bytes(item) for item in command)
             else:
@@ -445,7 +453,8 @@ def test_query_status_stays_passive_after_command_send() -> None:
         async def ensure_connected() -> None:
             events.append("connect")
 
-        async def send_locked(commands: list[bytes]) -> None:
+        async def send_locked(commands: list[bytes], **kwargs) -> None:
+            del kwargs
             events.append(f"send:{len(commands)}")
 
         async def execute_disconnect() -> None:
@@ -529,7 +538,8 @@ def test_send_command_disconnects_after_command_batch() -> None:
         async def ensure_connected() -> None:
             events.append("connect")
 
-        async def send_locked(commands: list[bytes]) -> None:
+        async def send_locked(commands: list[bytes], **kwargs) -> None:
+            del kwargs
             events.append(f"send:{len(commands)}")
 
         async def execute_disconnect() -> None:

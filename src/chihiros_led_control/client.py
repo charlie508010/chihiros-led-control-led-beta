@@ -54,6 +54,7 @@ BLEAK_BACKOFF_TIME = 0.25
 COMMAND_NOTIFICATION_WAIT = 0.5
 AUTH_NOTIFICATION_WAIT = 3.0
 SCHEDULE_DELETE_SETTLE_WAIT = 3.5
+SCHEDULE_RESTORE_COMMAND_WAIT = 1.0
 NotificationCallback = Callable[[ParsedNotification], None]
 
 
@@ -582,7 +583,7 @@ class ChihirosDevice:
                     encode_selected_weekdays(weekdays or [WeekdaySelect.everyday]),
                 )
             )
-        await self._send_command(commands_to_send, 3)
+        await self._send_command(commands_to_send, 3, inter_command_wait=SCHEDULE_RESTORE_COMMAND_WAIT)
 
     async def enable_auto_mode(
         self,
@@ -615,7 +616,7 @@ class ChihirosDevice:
                     encode_selected_weekdays(weekdays or [WeekdaySelect.everyday]),
                 )
             )
-        await self._send_command(commands_to_send, 3)
+        await self._send_command(commands_to_send, 3, inter_command_wait=SCHEDULE_RESTORE_COMMAND_WAIT)
 
     async def set_manual_mode(self) -> None:
         """Switch to manual mode."""
@@ -628,6 +629,7 @@ class ChihirosDevice:
         notification_wait: float = COMMAND_NOTIFICATION_WAIT,
         connection_prelude: str = "standard",
         immediate_after_prelude: bool = False,
+        inter_command_wait: float = 0.0,
     ) -> None:
         """Send commands to the device."""
         commands_to_send = command if isinstance(command, list) else [bytes(command)]
@@ -653,7 +655,7 @@ class ChihirosDevice:
                 await self._ensure_connected()
                 del retry
                 if not self._connection_prelude_commands_sent:
-                    await self._send_command_locked(commands_to_send)
+                    await self._send_command_locked(commands_to_send, inter_command_wait=inter_command_wait)
                 if notification_wait:
                     await asyncio.sleep(notification_wait)
             finally:
@@ -670,7 +672,12 @@ class ChihirosDevice:
                 self._connection_prelude_commands_sent = False
                 await self._execute_disconnect()
 
-    async def _send_command_while_connected(self, commands_to_send: list[bytes], retry: int | None = None) -> None:
+    async def _send_command_while_connected(
+        self,
+        commands_to_send: list[bytes],
+        retry: int | None = None,
+        inter_command_wait: float = 0.0,
+    ) -> None:
         """Send commands while connected."""
         self._logger.debug(
             "%s: Sending commands %s",
@@ -685,7 +692,7 @@ class ChihirosDevice:
             )
         async with self._operation_lock:
             try:
-                await self._send_command_locked(commands_to_send)
+                await self._send_command_locked(commands_to_send, inter_command_wait=inter_command_wait)
                 return
             except BleakNotFoundError:
                 self._logger.error(
@@ -711,10 +718,10 @@ class ChihirosDevice:
         raise RuntimeError("Unreachable")
 
     @retry_bluetooth_connection_error(DEFAULT_ATTEMPTS)
-    async def _send_command_locked(self, commands_to_send: list[bytes]) -> None:
+    async def _send_command_locked(self, commands_to_send: list[bytes], inter_command_wait: float = 0.0) -> None:
         """Send commands and retry transient Bluetooth failures."""
         try:
-            await self._execute_command_locked(commands_to_send)
+            await self._execute_command_locked(commands_to_send, inter_command_wait=inter_command_wait)
         except BleakDBusError as ex:
             await asyncio.sleep(BLEAK_BACKOFF_TIME)
             self._logger.debug(
@@ -731,14 +738,14 @@ class ChihirosDevice:
             await self._execute_disconnect()
             raise
 
-    async def _execute_command_locked(self, commands_to_send: list[bytes]) -> None:
+    async def _execute_command_locked(self, commands_to_send: list[bytes], inter_command_wait: float = 0.0) -> None:
         """Write commands to the BLE characteristic."""
         assert self._client is not None  # nosec
         if not self._read_char:
             raise CharacteristicMissingError("Read characteristic missing")
         if not self._write_char:
             raise CharacteristicMissingError("Write characteristic missing")
-        for command in commands_to_send:
+        for index, command in enumerate(commands_to_send):
             self.tx_debug_frames.append(bytes(command))
             self.debug_frames.append(
                 {
@@ -754,6 +761,8 @@ class ChihirosDevice:
                     f"Sending commands [yellow]{[command.hex()]}[/yellow]"
                 )
             await self._client.write_gatt_char(self._write_char, command, False)
+            if inter_command_wait > 0 and index < len(commands_to_send) - 1:
+                await asyncio.sleep(inter_command_wait)
 
     @staticmethod
     def _weekday_mask_text(mask: int) -> str:
