@@ -410,14 +410,14 @@ def test_schedule_delete_waits_after_rtc_like_vendor_app(monkeypatch: pytest.Mon
             bytes.fromhex("a5011600011916001700017fffffffffffffffff00"),
             bytes.fromhex("a5011600021916001700017f00000000ffffffff00"),
         ]
-        device._connection_prelude_inter_command_wait = 3.0  # noqa: SLF001
+        device._connection_prelude_inter_command_wait = 5.0  # noqa: SLF001
         monkeypatch.setattr(asyncio, "sleep", capture_sleep)
 
         await device._send_connection_prelude(FakeClient())  # type: ignore[arg-type]
 
     asyncio.run(run())
 
-    assert events == ["write:4", "write:9", "write:9", "sleep:3.5", "write:25", "sleep:3.0", "write:25"]
+    assert events == ["write:4", "write:9", "write:9", "sleep:3.5", "write:25", "sleep:5.0", "write:25"]
 
 
 def test_query_status_is_passive() -> None:
