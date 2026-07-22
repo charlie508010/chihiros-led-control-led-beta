@@ -561,7 +561,22 @@ def _append_led_notify_debug_file_sync(device_key: str, phase: str, lines: list[
     timestamp = dt_util.now().isoformat()
     body = "\n".join(str(line) for line in lines).strip()
     with Path(path).open("a", encoding="utf-8") as handle:
-        handle.write("\n".join(["-" * 72, f"{timestamp} | {phase}", body, ""]) + "\n")
+        handle.write(
+            "\n".join(
+                [
+                    "=" * 72,
+                    f"LED DEBUG START | {timestamp} | {phase}",
+                    f"Geraet: {safe_device}",
+                    "-" * 72,
+                    body,
+                    "-" * 72,
+                    f"LED DEBUG ENDE  | {dt_util.now().isoformat()} | {phase}",
+                    "=" * 72,
+                    "",
+                ]
+            )
+            + "\n"
+        )
     return str(path)
 
 

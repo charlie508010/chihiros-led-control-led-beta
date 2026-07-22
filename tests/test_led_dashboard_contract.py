@@ -442,6 +442,8 @@ def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
     assert 'debug_scope_auto_mode: "Auto-Modus"' in dashboard
     assert 'ATTR_NOTIFY_DEBUG_FILE = "notify_debug_file"' in constants
     assert "_append_led_notify_debug_file" in services
+    assert "LED DEBUG START" in services
+    assert "LED DEBUG ENDE" in services
     assert "prepare_device_debug(chihiros_data.device, debug or notify_debug_file)" in services
     assert "notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))" in services
     assert '"notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))' in services
