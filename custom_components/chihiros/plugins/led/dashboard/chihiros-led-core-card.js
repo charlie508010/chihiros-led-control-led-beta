@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1208";
+import "./panels/chihiros-led-panel.js?v=0.2.1209";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2821,7 +2821,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .ha-tab-page { display:grid; grid-template-columns:1fr; gap:12px; }
         .ha-entities-card { min-height:220px; }
         .entity-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:8px 14px; }
-        .led-page { --led-layout-large-box-height:300px; display:grid; grid-template-columns:minmax(0, 1.25fr) minmax(280px, .75fr); gap:12px; align-items:start; }
+        .led-page { --led-layout-large-box-height:300px; display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; align-items:start; }
         .led-layout-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; }
         .led-layout-toolbar button { min-height:34px; display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(81,154,190,.35); border-radius:8px; background:rgba(0,0,0,.16); color:var(--primary-text-color); font:inherit; font-weight:800; cursor:pointer; }
         .led-layout-toolbar button.active { border-color:#03c9ff; background:rgba(0,122,166,.22); color:#7dd3fc; }
@@ -2831,14 +2831,14 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-page > [data-led-layout-item="channels"] { grid-column:1 / -1; grid-row:1; }
         .led-layout-page > [data-led-layout-item="channel-1"] { grid-column:1; grid-row:2; }
         .led-layout-page > [data-led-layout-item="channel-2"] { grid-column:2; grid-row:2; }
-        .led-layout-page > [data-led-layout-item="channel-3"] { grid-column:1; grid-row:3; }
-        .led-layout-page > [data-led-layout-item="channel-4"] { grid-column:2; grid-row:3; }
-        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:4; }
-        .led-layout-page > [data-led-layout-item="history"] { grid-column:2; grid-row:4; }
-        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:5; }
-        .led-layout-page > [data-led-layout-item="connection"] { grid-column:2; grid-row:5; }
-        .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:6; }
-        .led-layout-page > [data-led-layout-item="presets"] { grid-column:2; grid-row:6; }
+        .led-layout-page > [data-led-layout-item="channel-3"] { grid-column:3; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="channel-4"] { grid-column:4; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1 / span 3; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="history"] { grid-column:4; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1 / span 3; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="connection"] { grid-column:4; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="control"] { grid-column:1 / span 3; grid-row:5; }
+        .led-layout-page > [data-led-layout-item="presets"] { grid-column:4; grid-row:5; }
         .led-layout-page.has-custom-layout > .led-layout-item,
         .led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }
         .led-layout-page.has-custom-layout > [data-led-layout-item="channels"],
