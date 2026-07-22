@@ -960,6 +960,11 @@ def _schedule_led_verification_batch(
                             break
                         await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)
                         removed_rows.extend(matched_rows)
+                        remaining_settings = [_stored_row_to_setting(row) for row in remaining]
+                        await asyncio.wait_for(
+                            chihiros_data.device.replace_settings(remaining_settings),
+                            timeout=LED_VERIFICATION_RESTORE_TIMEOUT,
+                        )
                 finally:
                     if removed_rows:
                         settings = [_stored_row_to_setting(row) for row in targets]

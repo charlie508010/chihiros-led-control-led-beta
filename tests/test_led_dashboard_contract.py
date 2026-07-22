@@ -613,6 +613,8 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert 'statuses[id(matched_target)] = "verified"' in services
     assert "await _remove_stored_schedule_rows(chihiros_data.device, matched_rows)" in services
     assert "removed_rows.extend(matched_rows)" in services
+    assert "remaining_settings = [_stored_row_to_setting(row) for row in remaining]" in services
+    assert "chihiros_data.device.replace_settings(remaining_settings)," in services
     assert "settings = [_stored_row_to_setting(row) for row in targets]" in services
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
