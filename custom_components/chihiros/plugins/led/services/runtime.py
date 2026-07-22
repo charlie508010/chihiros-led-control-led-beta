@@ -967,11 +967,31 @@ def _schedule_led_verification_batch(
                         )
                 finally:
                     if removed_rows:
+                        prepare_device_debug(chihiros_data.device, notify_debug_file)
                         settings = [_stored_row_to_setting(row) for row in targets]
                         await asyncio.wait_for(
                             chihiros_data.device.replace_settings(settings),
                             timeout=LED_VERIFICATION_RESTORE_TIMEOUT,
                         )
+                        if notify_debug_file:
+                            chihiros_data.device.last_schedule_snapshot_notification = None
+                            await asyncio.wait_for(
+                                chihiros_data.device.query_status_active(),
+                                timeout=LED_VERIFICATION_QUERY_TIMEOUT,
+                            )
+                            await _append_led_notify_debug_file(
+                                hass,
+                                device_key,
+                                "schedule batch restore "
+                                f"{', '.join(_debug_schedule_target_range(target) for target in targets)}",
+                                [
+                                    f"Restored targets: {len(targets)}",
+                                    *[f"Restored target: {_debug_schedule_target(target)}" for target in targets],
+                                    "",
+                                    led_service_debug_output(chihiros_data.device, last_operation=False)
+                                    or "Keine TX/RX/Notify-Debugdaten erfasst.",
+                                ],
+                            )
         except asyncio.CancelledError:
             cancelled = True
             raise
