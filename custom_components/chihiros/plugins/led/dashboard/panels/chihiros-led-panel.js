@@ -2689,9 +2689,20 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       const supportedLevels = this.ledSupportedScheduleKeys(device).map((key) => Number(levels[key] || 0));
       const configuredRamp = this.normalizeLedRampMinutes(row && row.ramp);
       const expectedRamp = configuredRamp;
+      const expectedAllZero = supportedLevels.length > 0 && supportedLevels.every((level) => level === 0);
+      const toMinutes = (time) => {
+        const [hour, minute] = String(time || "00:00").split(":").map(Number);
+        return (hour * 60) + minute;
+      };
+      const targetStart = toMinutes(row && row.start);
+      const targetEnd = toMinutes(row && row.end);
+      const positiveOverlapsTarget = ranges.some((range) => (
+        Number(range.level || 0) > 0 && toMinutes(range.start) < targetEnd && toMinutes(range.end) > targetStart
+      ));
+      const hasLeftBoundary = ranges.some((range) => toMinutes(range.end) === targetStart);
       const matches = ranges.some((range) => (
         range.start === row.start && range.end === row.end && range.ramp === expectedRamp && supportedLevels.includes(range.level)
-      ));
+      )) || (expectedAllZero && hasLeftBoundary && !positiveOverlapsTarget);
       return matches
         ? { level: "ok", text: this.tr("verified") }
         : { level: "fail", text: this.tr("mismatch") };

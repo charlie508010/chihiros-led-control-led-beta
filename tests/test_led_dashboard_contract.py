@@ -505,6 +505,10 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert "const hasSnapshot = Boolean(" in verification
     assert "if (hasSnapshot) {" in verification
     assert 'return { level: "fail", text: this.tr("mismatch") };' in verification
+    assert "const expectedAllZero = supportedLevels.length > 0" in verification
+    assert "const positiveOverlapsTarget = ranges.some((range) => (" in verification
+    assert "const hasLeftBoundary = ranges.some((range) => toMinutes(range.end) === targetStart);" in verification
+    assert "expectedAllZero && hasLeftBoundary && !positiveOverlapsTarget" in verification
     assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
         'if (storedStatus === "verified") return'
     )
