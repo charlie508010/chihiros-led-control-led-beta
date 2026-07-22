@@ -765,6 +765,10 @@ async def _record_or_schedule_led_verifications(
     for target in targets:
         await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, [])
     if targets:
+        targets = sorted(
+            targets,
+            key=lambda target: not any(int(value) > 0 for value in target.get("levels", {}).values()),
+        )
         _schedule_led_verification_batch(hass, chihiros_data, targets, notify_debug_file=notify_debug_file)
 
 
@@ -1024,6 +1028,13 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
             _range_window_matches(sh, sm, eh, em) and level in expected_levels for sh, sm, eh, em, level, ramp in ranges
         ) or _implicit_zero_range_matches(points)
 
+    primary_points = [
+        (int(point.hour), int(point.minute), int(next(iter(getattr(point, "levels", {}).values()), 0)))
+        for point in snapshot.points
+    ]
+    if _ranges_match(primary_points, fallback_expected_levels):
+        return True
+
     snapshot_channels = sorted(
         {str(channel).lower() for point in snapshot.points for channel in getattr(point, "levels", {}).keys()}
     )
@@ -1037,8 +1048,4 @@ def _schedule_snapshot_matches(device: Any, snapshot: Any, target: dict[str, Any
         if _ranges_match(channel_points, {expected_by_channel[channel]}):
             return True
 
-    first_value_points = [
-        (int(point.hour), int(point.minute), int(next(iter(getattr(point, "levels", {}).values()), 0)))
-        for point in snapshot.points
-    ]
-    return _ranges_match(first_value_points, fallback_expected_levels)
+    return False
