@@ -389,7 +389,7 @@ def test_schedule_write_stops_when_auth_notification_is_missing(monkeypatch: pyt
 
 
 def test_schedule_delete_waits_after_rtc_like_vendor_app(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The app-observed settling delay occurs after both RTC writes and before delete."""
+    """The app-observed settling delays occur before and between deferred schedule writes."""
     events: list[str] = []
     device: ChihirosDevice
 
@@ -406,14 +406,18 @@ def test_schedule_delete_waits_after_rtc_like_vendor_app(monkeypatch: pytest.Mon
         nonlocal device
         device = ChihirosDevice(FakeBLEDevice(), DeviceModel("Test WRGB", (), WRGB_CHANNELS))  # type: ignore[arg-type]
         device._write_char = object()  # type: ignore[assignment]
-        device._connection_prelude_commands = [bytes.fromhex("a5011600011916001700017fffffffffffffffff00")]
+        device._connection_prelude_commands = [
+            bytes.fromhex("a5011600011916001700017fffffffffffffffff00"),
+            bytes.fromhex("a5011600021916001700017f00000000ffffffff00"),
+        ]
+        device._connection_prelude_inter_command_wait = 3.0  # noqa: SLF001
         monkeypatch.setattr(asyncio, "sleep", capture_sleep)
 
         await device._send_connection_prelude(FakeClient())  # type: ignore[arg-type]
 
     asyncio.run(run())
 
-    assert events == ["write:4", "write:9", "write:9", "sleep:3.5", "write:25"]
+    assert events == ["write:4", "write:9", "write:9", "sleep:3.5", "write:25", "sleep:3.0", "write:25"]
 
 
 def test_query_status_is_passive() -> None:
@@ -1281,6 +1285,7 @@ def test_dyu1000_replace_second_setting_prepares_existing_row_like_app() -> None
 def test_replace_settings_resets_existing_rows_without_switching_automatic_tab() -> None:
     """Full schedule writes clear old rows before sending only the requested mode 25 rows."""
     sent_commands: list[bytes] = []
+    call_options: list[dict[str, object]] = []
 
     async def run() -> None:
         device = ChihirosDevice(FakeBLEDevice(), DeviceModel("Test WRGB", (), WRGB_CHANNELS))  # type: ignore[arg-type]
@@ -1290,7 +1295,8 @@ def test_replace_settings_resets_existing_rows_without_switching_automatic_tab()
             retry: int | None = None,
             **kwargs,
         ) -> None:
-            del retry, kwargs
+            del retry
+            call_options.append(kwargs)
             if isinstance(command, list):
                 sent_commands.extend(bytes(item) for item in command)
             else:
@@ -1310,6 +1316,8 @@ def test_replace_settings_resets_existing_rows_without_switching_automatic_tab()
     assert sent_commands[0][6:-1] == bytes([5, 255, 255])
     assert sent_commands[1][6:-1] == bytes([17, 0, 22, 0, 1, 127, 65, 40, 65, 55, 255, 255, 255, 255])
     assert sent_commands[2][6:-1] == bytes([9, 0, 17, 0, 1, 127, 10, 5, 5, 5, 255, 255, 255, 255])
+    assert call_options[1]["immediate_after_prelude"] is True
+    assert call_options[1]["inter_command_wait"] == client_module.SCHEDULE_RESTORE_COMMAND_WAIT
 
 
 def test_dyu1000_replace_settings_empty_does_not_send_finalize_parameter() -> None:

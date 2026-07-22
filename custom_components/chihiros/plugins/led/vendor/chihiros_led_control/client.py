@@ -54,7 +54,7 @@ BLEAK_BACKOFF_TIME = 0.25
 COMMAND_NOTIFICATION_WAIT = 0.5
 AUTH_NOTIFICATION_WAIT = 3.0
 SCHEDULE_DELETE_SETTLE_WAIT = 3.5
-SCHEDULE_RESTORE_COMMAND_WAIT = 1.0
+SCHEDULE_RESTORE_COMMAND_WAIT = 3.0
 NotificationCallback = Callable[[ParsedNotification], None]
 
 
@@ -94,6 +94,7 @@ class ChihirosDevice:
         self._tx_debug_counter = 0
         self._connection_prelude_mode = "standard"
         self._connection_prelude_commands: list[bytes] = []
+        self._connection_prelude_inter_command_wait = 0.0
         self._connection_prelude_commands_sent = False
         self._schedule_notification_event = asyncio.Event()
         self.loop = asyncio.get_running_loop()
@@ -583,7 +584,12 @@ class ChihirosDevice:
                     encode_selected_weekdays(weekdays or [WeekdaySelect.everyday]),
                 )
             )
-        await self._send_command(commands_to_send, 3, inter_command_wait=SCHEDULE_RESTORE_COMMAND_WAIT)
+        await self._send_command(
+            commands_to_send,
+            3,
+            immediate_after_prelude=True,
+            inter_command_wait=SCHEDULE_RESTORE_COMMAND_WAIT,
+        )
 
     async def enable_auto_mode(
         self,
@@ -634,6 +640,7 @@ class ChihirosDevice:
         async with self._operation_lock:
             self._connection_prelude_mode = connection_prelude
             self._connection_prelude_commands = commands_to_send if immediate_after_prelude else []
+            self._connection_prelude_inter_command_wait = inter_command_wait if immediate_after_prelude else 0.0
             self._connection_prelude_commands_sent = False
             debug_start = len(self.debug_frames)
             tx_start = len(self.tx_debug_frames)
@@ -656,6 +663,7 @@ class ChihirosDevice:
                 )
                 self._connection_prelude_mode = "standard"
                 self._connection_prelude_commands = []
+                self._connection_prelude_inter_command_wait = 0.0
                 self._connection_prelude_commands_sent = False
                 await self._execute_disconnect()
 
@@ -1216,6 +1224,7 @@ class ChihirosDevice:
             )
         prelude.extend(self._command_with_next_message_id(command) for command in self._connection_prelude_commands)
         wait_for_auth_notification = bool(self._connection_prelude_commands)
+        deferred_command_wait = max(0.0, float(self._connection_prelude_inter_command_wait))
         if wait_for_auth_notification:
             self._schedule_notification_event.clear()
         self._logger.debug(
@@ -1242,6 +1251,8 @@ class ChihirosDevice:
                     f"Sending commands [yellow]{[command.hex()]}[/yellow]"
                 )
             await client.write_gatt_char(self._write_char, command, False)
+            if deferred_command_wait > 0 and index >= deferred_start and index < len(prelude) - 1:
+                await asyncio.sleep(deferred_command_wait)
             if index == 0 and wait_for_auth_notification:
                 try:
                     await asyncio.wait_for(self._schedule_notification_event.wait(), timeout=AUTH_NOTIFICATION_WAIT)
