@@ -601,22 +601,9 @@ class ChihirosDevice:
     ) -> None:
         """Switch to automatic mode and restore the active schedules."""
         del timestamp  # The standard connection prelude synchronizes the current local time.
-        commands_to_send = [
-            commands.create_switch_to_auto_mode_command(self.get_next_msg_id()),
-            commands.create_reset_auto_settings_command(self.get_next_msg_id(), 5),
-        ]
-        for sunrise, sunset, brightness, ramp, weekdays in settings or ():
-            commands_to_send.append(
-                commands.create_add_auto_setting_command(
-                    self.get_next_msg_id(),
-                    sunrise.time(),
-                    sunset.time(),
-                    self._brightness_parameter_values(brightness),
-                    ramp,
-                    encode_selected_weekdays(weekdays or [WeekdaySelect.everyday]),
-                )
-            )
-        await self._send_command(commands_to_send, 3, inter_command_wait=SCHEDULE_RESTORE_COMMAND_WAIT)
+        del settings  # Schedule restore is a separate operation so the device can settle after mode switching.
+        command = commands.create_switch_to_auto_mode_command(self.get_next_msg_id())
+        await self._send_command(command, 3)
 
     async def set_manual_mode(self) -> None:
         """Switch to manual mode."""

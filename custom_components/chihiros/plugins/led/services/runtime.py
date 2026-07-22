@@ -592,7 +592,9 @@ async def async_enable_led_auto_mode(
             load_active_led_schedule_settings,
             str(device.address),
         )
-    await device.enable_auto_mode(dt_util.now(), settings)
+    await device.enable_auto_mode(dt_util.now())
+    if settings:
+        await device.replace_settings(settings)
     coordinator.async_set_auto_mode(True)
     return len(settings)
 

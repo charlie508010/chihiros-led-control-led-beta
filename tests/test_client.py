@@ -60,8 +60,8 @@ def test_compare_log_renders_sent_frames_only() -> None:
     assert "5B" not in output
 
 
-def test_enable_auto_mode_sends_switch_and_reset() -> None:
-    """Auto mode setup sends app-observed mode 18 followed by mode 5."""
+def test_enable_auto_mode_sends_switch_only() -> None:
+    """Auto mode setup sends the app-observed mode 18 frame without schedule writes."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
@@ -84,13 +84,12 @@ def test_enable_auto_mode_sends_switch_and_reset() -> None:
 
     asyncio.run(run())
 
-    assert [command[5] for command in sent_commands] == [5, 5]
+    assert [command[5] for command in sent_commands] == [5]
     assert sent_commands[0][6:-1] == bytes([18, 255])
-    assert sent_commands[1][6:9] == bytes([5, 255, 255])
 
 
-def test_enable_auto_mode_restores_existing_schedules_after_switch() -> None:
-    """Stored schedules follow the two automatic-tab mode frames."""
+def test_enable_auto_mode_ignores_schedule_restore_payload() -> None:
+    """Schedule restore is handled by the Home Assistant service as a separate BLE operation."""
     sent_commands: list[bytes] = []
 
     async def run() -> None:
@@ -124,10 +123,8 @@ def test_enable_auto_mode_restores_existing_schedules_after_switch() -> None:
 
     asyncio.run(run())
 
-    assert [command[5] for command in sent_commands] == [5, 5, 25]
+    assert [command[5] for command in sent_commands] == [5]
     assert sent_commands[0][6:-1] == bytes([18, 255])
-    assert sent_commands[1][6:9] == bytes([5, 255, 255])
-    assert sent_commands[2][6:-1] == bytes([12, 0, 18, 0, 1, 127, 100, 100, 100, 100, 255, 255, 255, 255])
 
 
 def test_manual_color_apply_debug_meaning() -> None:
