@@ -839,7 +839,7 @@ def _schedule_led_verification(
         previous.cancel()
 
     async def _verify() -> None:
-        status = "failed"
+        status: str | None = None
         cancelled = False
         try:
             await asyncio.sleep(60)
@@ -882,13 +882,12 @@ def _schedule_led_verification(
             cancelled = True
             raise
         except Exception:  # noqa: BLE001
-            status = "failed"
             _LOGGER.exception("Delayed LED schedule verification failed for %s", device_key)
         finally:
             # A replacement task for the same schedule owns the persisted job.
             # Finishing here would delete that newer job and create a false
             # failure in history.
-            if not cancelled:
+            if not cancelled and status is not None:
                 await hass.async_add_executor_job(finish_led_schedule_verification, device_key, target, status)
                 await async_refresh_status(chihiros_data)
             if tasks.get(task_key) is asyncio.current_task():
@@ -914,7 +913,7 @@ def _schedule_led_verification_batch(
             previous.cancel()
 
     async def _verify() -> None:
-        statuses = {id(target): "failed" for target in targets}
+        statuses: dict[int, str | None] = {id(target): None for target in targets}
         remaining = list(targets)
         removed_rows: list[dict[str, Any]] = []
         cancelled = False
@@ -942,6 +941,9 @@ def _schedule_led_verification_batch(
                         if matched_target is not None:
                             statuses[id(matched_target)] = "verified"
                             remaining = [target for target in remaining if target is not matched_target]
+                        elif snapshot is not None:
+                            for target in remaining:
+                                statuses[id(target)] = "failed"
                         if notify_debug_file:
                             await _append_led_notify_debug_file(
                                 hass,
@@ -1002,11 +1004,14 @@ def _schedule_led_verification_batch(
         finally:
             if not cancelled:
                 for target in targets:
+                    status = statuses[id(target)]
+                    if status is None:
+                        continue
                     await hass.async_add_executor_job(
                         finish_led_schedule_verification,
                         device_key,
                         target,
-                        statuses[id(target)],
+                        status,
                     )
                 await async_refresh_status(chihiros_data)
             if tasks.get(task_key) is asyncio.current_task():
