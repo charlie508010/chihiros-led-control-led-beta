@@ -716,6 +716,16 @@ def test_led_layout_editor_contract_remains_available() -> None:
     )
     assert editing_layout_rule in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
+    assert '.led-layout-page.has-custom-layout > [data-led-layout-item="schedule"],' in core
+    assert (
+        '.led-layout-page.has-custom-layout > [data-led-layout-item="control"] { '
+        "grid-column:span 3 !important; }" in core
+    )
+    assert '.led-layout-page.has-custom-layout > [data-led-layout-item="history"],' in core
+    assert (
+        '.led-layout-page.has-custom-layout > [data-led-layout-item^="channel-"] { '
+        "grid-column:span 1 !important; }" in core
+    )
     assert '.led-layout-page > [data-led-layout-item="channel-1"] { grid-column:1; grid-row:2; }' in core
     assert ".led-page { --led-layout-large-box-height:300px; display:grid; grid-template-columns:repeat(4," in core
     assert '.led-layout-page > [data-led-layout-item="channel-4"] { grid-column:4; grid-row:2; }' in core
