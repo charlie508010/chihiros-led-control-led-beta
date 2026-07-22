@@ -405,11 +405,17 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
     assert "dashboardDebug: Boolean(this.config?.dashboard_debug)" in dashboard
     assert 'Object.prototype.hasOwnProperty.call(this.config, "dashboard_debug")' in dashboard
     assert 'key === "dashboardDebug"' in dashboard
-    assert "dashboard_debug: value" in dashboard
+    assert "dashboard_debug: dashboardDebug" in dashboard
+    assert "notify_debug_scope: notifyDebugScope" in dashboard
     assert "database_diagnostics_enabled: data.get" in dashboard
     assert "dashboard_debug: Boolean(this.uiSettings && this.uiSettings.dashboardDebug)" in dashboard
+    assert 'this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope) !== "off"' in dashboard
     assert "dashboard_debug: Boolean(addonDatabase && addonDatabase.dashboard_debug)" in index
+    assert "notify_debug_file: Boolean(addonDatabase && addonDatabase.notify_debug_file)" in index
+    assert 'notify_debug_scope: String(addonDatabase && addonDatabase.notify_debug_scope || "off")' in index
     assert '"dashboard_debug": bool(data.get("dashboard_debug", False))' in server
+    assert '"notify_debug_file": notify_debug_scope != "off"' in server
+    assert '"notify_debug_scope": notify_debug_scope' in server
 
 
 def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
@@ -418,11 +424,22 @@ def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
     services = source(LED_SERVICES)
     constants = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "const.py")
 
-    assert "notifyDebugFile: false" in dashboard
-    assert 'data-ui-setting="notifyDebugFile"' in dashboard
+    assert "notifyDebugScope: this.normalizeNotifyDebugScope" in dashboard
+    assert 'Object.prototype.hasOwnProperty.call(this.config, "notify_debug_file")' in dashboard
+    assert 'Object.prototype.hasOwnProperty.call(this.config, "notify_debug_scope")' in dashboard
+    assert 'data-ui-setting="notifyDebugScope"' in dashboard
+    assert "shouldWriteNotifyDebugFile(service)" in dashboard
+    assert (
+        'if (scope === "scheduler") return ["add_schedule", "set_schedule", "reset_schedule"].includes(name);'
+        in dashboard
+    )
+    assert 'if (scope === "auto_mode") return name === "enable_auto_mode";' in dashboard
+    assert 'if (scope === "manual") return ["set_brightness", "turn_on", "turn_off"].includes(name);' in dashboard
     assert "notify_debug_file: true" in dashboard
-    assert 'notify_debug_file: "Notify/Rückmeldung in Datei speichern"' in dashboard
-    assert 'notify_debug_file: "Save notify/response debug to file"' in dashboard
+    assert 'notify_debug_file: "Debug-Datei Umfang"' in dashboard
+    assert 'notify_debug_file: "Debug file scope"' in dashboard
+    assert 'debug_scope_scheduler: "Scheduler"' in dashboard
+    assert 'debug_scope_auto_mode: "Auto-Modus"' in dashboard
     assert 'ATTR_NOTIFY_DEBUG_FILE = "notify_debug_file"' in constants
     assert "_append_led_notify_debug_file" in services
     assert "prepare_device_debug(chihiros_data.device, debug or notify_debug_file)" in services

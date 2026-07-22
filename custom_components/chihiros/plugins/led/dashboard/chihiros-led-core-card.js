@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1189";
+import "./panels/chihiros-led-panel.js?v=0.2.1190";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -56,7 +56,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       language: String(this.config?.language || "").toLowerCase().startsWith("en") ? "en" : "de",
       showMac: this.config?.show_mac !== false,
       dashboardDebug: Boolean(this.config?.dashboard_debug),
-      notifyDebugFile: false,
+      notifyDebugScope: this.normalizeNotifyDebugScope(this.config?.notify_debug_scope ?? this.config?.notify_debug_file),
       activeTab: "led",
       channelNames: {},
       deviceNames: {},
@@ -67,6 +67,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       const settings = raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
       if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "dashboard_debug")) {
         settings.dashboardDebug = Boolean(this.config.dashboard_debug);
+      }
+      if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "notify_debug_file")) {
+        settings.notifyDebugScope = this.normalizeNotifyDebugScope(this.config.notify_debug_file);
+      }
+      if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "notify_debug_scope")) {
+        settings.notifyDebugScope = this.normalizeNotifyDebugScope(this.config.notify_debug_scope);
       }
       return settings;
     } catch (_err) {
@@ -159,7 +165,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const language = this.language();
     const showMac = this.uiSettings?.showMac !== false;
     const dashboardDebug = Boolean(this.uiSettings?.dashboardDebug);
-    const notifyDebugFile = Boolean(this.uiSettings?.notifyDebugFile);
+    const notifyDebugScope = this.normalizeNotifyDebugScope(this.uiSettings?.notifyDebugScope);
     const powerOverrides = this.uiSettings?.deviceMaxPowerWatts || {};
     const pluginRows = Object.values(this.config?.plugin_assets || {})
       .filter((plugin) => plugin && plugin.id && plugin.id !== "led")
@@ -194,9 +200,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             <span>${this.tr("dashboard_debug")}</span>
           </label>
           <small class="settings-note">${this.tr("dashboard_debug_hint")}</small>
-          <label class="config-check">
-            <input type="checkbox" data-ui-setting="notifyDebugFile" ${notifyDebugFile ? "checked" : ""}>
+          <label class="config-row">
             <span>${this.tr("notify_debug_file")}</span>
+            <select data-ui-setting="notifyDebugScope">
+              <option value="off" ${notifyDebugScope === "off" ? "selected" : ""}>${this.tr("debug_scope_off")}</option>
+              <option value="all" ${notifyDebugScope === "all" ? "selected" : ""}>${this.tr("debug_scope_all")}</option>
+              <option value="scheduler" ${notifyDebugScope === "scheduler" ? "selected" : ""}>${this.tr("debug_scope_scheduler")}</option>
+              <option value="auto_mode" ${notifyDebugScope === "auto_mode" ? "selected" : ""}>${this.tr("debug_scope_auto_mode")}</option>
+              <option value="manual" ${notifyDebugScope === "manual" ? "selected" : ""}>${this.tr("debug_scope_manual")}</option>
+            </select>
           </label>
           <small class="settings-note">${this.tr("notify_debug_file_hint")}</small>
           <h3>${this.tr("rated_power")}</h3>
@@ -370,17 +382,35 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         const value = input.type === "checkbox" ? Boolean(input.checked) : String(input.value || "");
         this.uiSettings = { ...(this.uiSettings || {}), [key]: value };
         this.saveUiSettings();
-        if (key === "dashboardDebug") {
+        if (key === "dashboardDebug" || key === "notifyDebugScope") {
           const api = window.ChihirosAddonApi;
           const addonDatabase = { ...((this.config && this.config.addon_database) || {}) };
+          const dashboardDebug = key === "dashboardDebug"
+            ? value
+            : Boolean(this.uiSettings && this.uiSettings.dashboardDebug);
+          const notifyDebugScope = key === "notifyDebugScope"
+            ? this.normalizeNotifyDebugScope(value)
+            : this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope);
           this.config = {
             ...(this.config || {}),
-            dashboard_debug: value,
-            addon_database: { ...addonDatabase, dashboard_debug: value },
+            dashboard_debug: dashboardDebug,
+            notify_debug_file: notifyDebugScope !== "off",
+            notify_debug_scope: notifyDebugScope,
+            addon_database: {
+              ...addonDatabase,
+              dashboard_debug: dashboardDebug,
+              notify_debug_file: notifyDebugScope !== "off",
+              notify_debug_scope: notifyDebugScope,
+            },
           };
           if (api && typeof api.saveDatabaseConfig === "function") {
             try {
-              await api.saveDatabaseConfig({ ...addonDatabase, dashboard_debug: value });
+              await api.saveDatabaseConfig({
+                ...addonDatabase,
+                dashboard_debug: dashboardDebug,
+                notify_debug_file: notifyDebugScope !== "off",
+                notify_debug_scope: notifyDebugScope,
+              });
             } catch (_err) {
               // Keep the local setting even if the add-on endpoint is temporarily unavailable.
             }
@@ -400,6 +430,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             database_diagnostics_enabled: data.get("database_diagnostics_enabled") === "on",
             diagnostic_retention_days: Number(data.get("diagnostic_retention_days") || 0),
             dashboard_debug: Boolean(this.uiSettings && this.uiSettings.dashboardDebug),
+            notify_debug_file: this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope) !== "off",
+            notify_debug_scope: this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope),
           });
         } catch (error) {
           this.dialogState = {
@@ -1163,8 +1195,24 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     else this.closeDialog();
   }
 
+  normalizeNotifyDebugScope(value) {
+    if (value === true) return "all";
+    const normalized = String(value || "off").trim().toLowerCase();
+    return ["off", "all", "scheduler", "auto_mode", "manual"].includes(normalized) ? normalized : "off";
+  }
+
+  shouldWriteNotifyDebugFile(service) {
+    const scope = this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope);
+    const name = String(service || "").trim();
+    if (scope === "all") return true;
+    if (scope === "auto_mode") return name === "enable_auto_mode";
+    if (scope === "scheduler") return ["add_schedule", "set_schedule", "reset_schedule"].includes(name);
+    if (scope === "manual") return ["set_brightness", "turn_on", "turn_off"].includes(name);
+    return false;
+  }
+
   async runDeviceService({ service = "", data = {}, title = "", debug = false, dialog = false, channel = 1, noChannel = true } = {}) {
-    const notifyDebugFile = Boolean(this.uiSettings && this.uiSettings.notifyDebugFile);
+    const notifyDebugFile = this.shouldWriteNotifyDebugFile(service);
     const serviceData = {
       ...data,
       ...(debug ? { debug: true } : {}),
@@ -1827,8 +1875,13 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         debug_output_short: "Debug ausgeben",
         dashboard_debug: "Dashboard-Debug für Einzelaktionen",
         dashboard_debug_hint: "Zeigt bei einzelnen Geräteaktionen ein Debug-Fenster mit HA-Aufruf, Payload und Protokolldaten.",
-        notify_debug_file: "Notify/Rückmeldung in Datei speichern",
-        notify_debug_file_hint: "Schreibt LED-TX/RX- und Notify-Abläufe in /config/.chihiros_led_core/debug/.",
+        notify_debug_file: "Debug-Datei Umfang",
+        notify_debug_file_hint: "Schreibt ausgewählte LED-TX/RX- und Notify-Abläufe in /config/.chihiros_led_core/debug/.",
+        debug_scope_off: "Aus",
+        debug_scope_all: "Alles",
+        debug_scope_scheduler: "Scheduler",
+        debug_scope_auto_mode: "Auto-Modus",
+        debug_scope_manual: "Manuelle Steuerung / Schalter",
         debug_sending: "Sende Zeitplan an das Gerät...",
         debug_empty: "Keine Debug-Ausgabe zurückgegeben.",
         led_schedule_time_invalid: "Ungültiges Zeitfenster",
@@ -2127,8 +2180,13 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         debug_output_short: "Output debug",
         dashboard_debug: "Dashboard debug for single actions",
         dashboard_debug_hint: "Shows a debug window with the HA action, payload, and protocol data for individual device actions.",
-        notify_debug_file: "Save notify/response debug to file",
-        notify_debug_file_hint: "Writes LED TX/RX and notify flow logs to /config/.chihiros_led_core/debug/.",
+        notify_debug_file: "Debug file scope",
+        notify_debug_file_hint: "Writes selected LED TX/RX and notify flow logs to /config/.chihiros_led_core/debug/.",
+        debug_scope_off: "Off",
+        debug_scope_all: "All",
+        debug_scope_scheduler: "Scheduler",
+        debug_scope_auto_mode: "Auto mode",
+        debug_scope_manual: "Manual control / switches",
         debug_sending: "Sending schedule to device...",
         debug_empty: "No debug output returned.",
         led_schedule_time_invalid: "Invalid time window",
