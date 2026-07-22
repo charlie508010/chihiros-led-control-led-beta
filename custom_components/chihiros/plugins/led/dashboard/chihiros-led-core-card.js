@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1207";
+import "./panels/chihiros-led-panel.js?v=0.2.1208";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -2829,19 +2829,22 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-layout-toolbar small { color:rgba(255,255,255,.62); line-height:1.35; }
         .led-layout-page > .led-layout-item { display:block; min-width:0; }
         .led-layout-page > [data-led-layout-item="channels"] { grid-column:1 / -1; grid-row:1; }
-        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:2; }
-        .led-layout-page > [data-led-layout-item="history"] { grid-column:2; grid-row:2; }
-        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:3; }
-        .led-layout-page > [data-led-layout-item="connection"] { grid-column:2; grid-row:3; }
-        .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:4; }
-        .led-layout-page > [data-led-layout-item="presets"] { grid-column:2; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="channel-1"] { grid-column:1; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="channel-2"] { grid-column:2; grid-row:2; }
+        .led-layout-page > [data-led-layout-item="channel-3"] { grid-column:1; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="channel-4"] { grid-column:2; grid-row:3; }
+        .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="history"] { grid-column:2; grid-row:4; }
+        .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:5; }
+        .led-layout-page > [data-led-layout-item="connection"] { grid-column:2; grid-row:5; }
+        .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:6; }
+        .led-layout-page > [data-led-layout-item="presets"] { grid-column:2; grid-row:6; }
         .led-layout-page.has-custom-layout > .led-layout-item,
         .led-layout-page.is-editing > .led-layout-item { grid-column:auto !important; grid-row:auto !important; order:var(--led-layout-order,0); }
         .led-layout-page.has-custom-layout > [data-led-layout-item="channels"],
         .led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }
         .led-layout-page > .led-layout-item > .card,
         .led-layout-page > .led-layout-item > .middle { width:100%; height:100%; box-sizing:border-box; }
-        .led-layout-page > [data-led-layout-item="channels"] > .card,
         .led-layout-page > [data-led-layout-item="schedule"] > .card,
         .led-layout-page > [data-led-layout-item="history"] > .card,
         .led-layout-page > [data-led-layout-item="templates"] > .card,
@@ -2905,7 +2908,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         .led-fan-control input[type="range"] { width:100%; min-width:0; accent-color:#03c9ff; }
         .led-fan-control input[type="number"] { width:64px; min-height:32px; box-sizing:border-box; border:1px solid rgba(3,201,255,.35); border-radius:7px; background:rgba(255,255,255,.06); color:var(--primary-text-color); padding:4px 7px; text-align:right; font:inherit; font-weight:800; }
         .led-fan-control > span { color:rgba(255,255,255,.68); font-weight:800; }
-        .led-channels-card { grid-column:1 / -1; grid-row:1; min-height:220px; }
+        .led-channels-card { grid-column:1 / -1; grid-row:1; min-height:0; }
+        .led-channels-summary-card { min-height:auto; }
         .led-channels-title-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; margin-bottom:12px; }
         .led-channels-title-row h2 { margin:0; }
         .led-total-watt, .led-channel-watt { display:inline-flex; align-items:center; justify-content:center; gap:3px; min-height:24px; box-sizing:border-box; border:1px solid rgba(245,166,35,.28); border-radius:6px; background:rgba(0,0,0,.24); color:rgba(255,255,255,.88); font-size:11px; font-weight:750; line-height:1; white-space:nowrap; }
@@ -3472,13 +3476,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         @media (max-width:700px) {
           .led-page { grid-template-columns:minmax(0,1fr); }
           .led-layout-page > [data-led-layout-item="channels"] { grid-column:1; grid-row:1; }
-          .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:2; }
-          .led-layout-page > [data-led-layout-item="history"] { grid-column:1; grid-row:3; }
-          .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:4; }
-          .led-layout-page > [data-led-layout-item="connection"] { grid-column:1; grid-row:5; }
-          .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:6; }
-          .led-layout-page > [data-led-layout-item="presets"] { grid-column:1; grid-row:7; }
-          .led-layout-page > [data-led-layout-item="channels"] > .card,
+          .led-layout-page > [data-led-layout-item="channel-1"] { grid-column:1; grid-row:2; }
+          .led-layout-page > [data-led-layout-item="channel-2"] { grid-column:1; grid-row:3; }
+          .led-layout-page > [data-led-layout-item="channel-3"] { grid-column:1; grid-row:4; }
+          .led-layout-page > [data-led-layout-item="channel-4"] { grid-column:1; grid-row:5; }
+          .led-layout-page > [data-led-layout-item="schedule"] { grid-column:1; grid-row:6; }
+          .led-layout-page > [data-led-layout-item="history"] { grid-column:1; grid-row:7; }
+          .led-layout-page > [data-led-layout-item="templates"] { grid-column:1; grid-row:8; }
+          .led-layout-page > [data-led-layout-item="connection"] { grid-column:1; grid-row:9; }
+          .led-layout-page > [data-led-layout-item="control"] { grid-column:1; grid-row:10; }
+          .led-layout-page > [data-led-layout-item="presets"] { grid-column:1; grid-row:11; }
           .led-layout-page > [data-led-layout-item="schedule"] > .card,
           .led-layout-page > [data-led-layout-item="history"] > .card,
           .led-layout-page > [data-led-layout-item="templates"] > .card,

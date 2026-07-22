@@ -672,8 +672,13 @@ def test_led_layout_editor_contract_remains_available() -> None:
     )
 
     assert "ledLayoutUserKey()" in panel
-    assert 'return ["channels", "schedule", "history", "templates", "connection", "control", "presets"];' in panel
+    assert "ledLayoutChannelItemIds()" in panel
+    assert "...this.ledLayoutChannelItemIds()," in panel
+    assert "ledLayoutItemLabel(itemId)" in panel
+    assert "`channel-${channel.id}`" in panel
+    assert "Object.fromEntries(channels.map((channel)" in panel
     assert 'if (item === "middle")' in panel
+    assert 'migrated.push("channels", ...this.ledLayoutChannelItemIds());' in panel
     assert "chihiros-led-core-layout:${user}:${deviceKey}" in panel
     assert "ledLayoutHasCustomOrder()" in panel
     assert "has-custom-layout" in panel
@@ -687,6 +692,8 @@ def test_led_layout_editor_contract_remains_available() -> None:
     )
     assert editing_layout_rule in core
     assert '.led-layout-page.is-editing > [data-led-layout-item="channels"] { grid-column:1 / -1 !important; }' in core
+    assert '.led-layout-page > [data-led-layout-item="channel-1"] { grid-column:1; grid-row:2; }' in core
+    assert '.led-layout-page > [data-led-layout-item="channel-4"] { grid-column:2; grid-row:3; }' in core
     assert '.led-layout-page > [data-led-layout-item="schedule"] > .card,' in core
     large_connection_card_rule = (
         '.led-layout-page > [data-led-layout-item="connection"] > .card { '

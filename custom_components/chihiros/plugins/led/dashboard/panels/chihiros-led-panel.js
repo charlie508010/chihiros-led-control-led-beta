@@ -3754,7 +3754,29 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
   }
 
   ledLayoutDefaultOrder() {
-    return ["channels", "schedule", "history", "templates", "connection", "control", "presets"];
+    return [
+      "channels",
+      ...this.ledLayoutChannelItemIds(),
+      "schedule",
+      "history",
+      "templates",
+      "connection",
+      "control",
+      "presets",
+    ];
+  }
+
+  ledLayoutChannelItemIds() {
+    return (this.ledChannels || []).map((channel) => `channel-${channel.id}`);
+  }
+
+  ledLayoutItemLabel(itemId) {
+    const channelId = String(itemId || "").replace(/^channel-/, "");
+    if (String(itemId || "").startsWith("channel-")) {
+      const channel = (this.ledChannels || []).find((item) => String(item.id) === channelId);
+      return channel ? `CH${channel.id} ${this.ledChannelDisplayName(channel)}` : this.tr("color_channels");
+    }
+    return this.tr(`layout_item_${itemId}`);
   }
 
   normalizeLedLayoutOrder(order) {
@@ -3763,6 +3785,8 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     (Array.isArray(order) ? order : []).forEach((item) => {
       if (item === "middle") {
         migrated.push("schedule", "history");
+      } else if (item === "channels") {
+        migrated.push("channels", ...this.ledLayoutChannelItemIds());
       } else {
         migrated.push(item);
       }
@@ -3864,7 +3888,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
               <ha-icon icon="mdi:drag"></ha-icon>
               <span>${this.tr("layout_drag")}</span>
             </button>
-            <span>${this.tr(`layout_item_${itemId}`)}</span>
+            <span>${this.ledLayoutItemLabel(itemId)}</span>
             <div>
               <button type="button" data-action="led-layout-move:${itemId}:-1" ${disabledUp} title="${this.tr("move_left")}">←</button>
               <button type="button" data-action="led-layout-move:${itemId}:-1" ${disabledUp} title="${this.tr("move_up")}">↑</button>
@@ -3888,7 +3912,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
           </section>
         </div>`;
     }
-    const columns = Math.max(1, Math.min(4, channels.length || 1));
     const firmware = this.ledEntityState(device.firmware_entity);
     const runtimeEntity = this.resolveLedRuntimeEntity(device);
     const runtime = this.ledEntityState(runtimeEntity);
@@ -3897,11 +3920,6 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
     const initialWattValues = channels.map((channel) => this.ledChannelValue(channel));
     const unknownValues = new Set(["unknown", "unavailable", String(this.tr("unknown")).trim().toLowerCase()]);
     const firmwareUnknown = unknownValues.has(String(firmware).trim().toLowerCase());
-    const channelContent = channels.length
-      ? `<div class="led-channels channels-${columns}" style="--channel-columns:${columns}">
-            ${channels.map((channel) => this.ledChannelCard(channel)).join("")}
-          </div>`
-      : `<div class="empty-state">${this.tr("no_led_channels")}.</div>`;
     const layoutOrder = this.ledLayoutOrder();
     const connectionCard = `
       <section class="card small led-connection-card">
@@ -3958,17 +3976,18 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       </div>
     </section>`;
     const channelsCard = `
-      <section class="card led-channels-card">
+      <section class="card led-channels-card led-channels-summary-card">
         ${showWatts
           ? `<div class="led-channels-title-row"><h2>${this.tr("color_channels")}</h2><span class="led-total-watt" title="${this.escapeHtml(this.tr("estimated_power"))}"><span class="led-watt-bolt" aria-hidden="true">⚡</span><span data-led-total-watts>${this.tr("total")} ≈ ${this.ledWattFormat(this.ledTotalEstimatedWatts(initialWattValues))} W / ${this.ledWattFormat(this.ledMaxPowerWatts(device))} W</span></span></div>`
           : `<h2>${this.tr("color_channels")}</h2>`}
-        ${channelContent}
+        ${channels.length ? "" : `<div class="empty-state">${this.tr("no_led_channels")}.</div>`}
       </section>`;
     const scheduleCard = this.ledScheduleSummaryPanel();
     const historyCard = this.ledHistoryPanel();
     const templateCard = this.ledTemplatePanel();
     const layoutItems = {
       channels: channelsCard,
+      ...Object.fromEntries(channels.map((channel) => [`channel-${channel.id}`, this.ledChannelCard(channel)])),
       schedule: scheduleCard,
       history: historyCard,
       templates: templateCard,
