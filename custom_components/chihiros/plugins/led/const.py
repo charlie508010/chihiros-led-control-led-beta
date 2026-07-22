@@ -24,6 +24,8 @@ ATTR_ENTITY_ID = "entity_id"
 ATTR_ENTRY_ID = "entry_id"
 ATTR_LEVELS = "levels"
 ATTR_NOTIFY_DEBUG_FILE = "notify_debug_file"
+ATTR_NOTIFY_DEBUG_RESET_FILE = "notify_debug_reset_file"
+ATTR_NOTIFY_DEBUG_RETENTION_DAYS = "notify_debug_retention_days"
 ATTR_PERIODS = "periods"
 ATTR_PRESERVE_LOCAL = "preserve_local"
 ATTR_PREVIOUS_PERIOD = "previous_period"
@@ -38,6 +40,15 @@ WEEKDAY_VALUES = [weekday.value for weekday in WeekdaySelect]
 
 BRIGHTNESS_VALUE_SCHEMA = vol.All(vol.Coerce(int), vol.Range(min=0, max=100))
 LEVELS_SCHEMA = {str: BRIGHTNESS_VALUE_SCHEMA}
+DEBUG_FILE_OPTIONS_SCHEMA = {
+    vol.Optional(ATTR_DEBUG, default=False): bool,
+    vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+    vol.Optional(ATTR_NOTIFY_DEBUG_RESET_FILE, default=False): bool,
+    vol.Optional(ATTR_NOTIFY_DEBUG_RETENTION_DAYS, default=0): vol.All(
+        vol.Coerce(int),
+        vol.Range(min=0, max=3650),
+    ),
+}
 SCHEDULE_SELECTOR_SCHEMA = {
     vol.Optional(ATTR_ENTRY_ID): str,
     vol.Optional(ATTR_ENTITY_ID): str,
@@ -60,16 +71,14 @@ ADD_SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_PREVIOUS_PERIOD): vol.Schema(SCHEDULE_PERIOD_SCHEMA),
         vol.Optional(ATTR_PREVIOUS_INDEX): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
-        vol.Optional(ATTR_DEBUG, default=False): bool,
-        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+        **DEBUG_FILE_OPTIONS_SCHEMA,
     }
 )
 ENABLE_AUTO_MODE_SCHEMA = vol.Schema(
     {
         **SCHEDULE_SELECTOR_SCHEMA,
         vol.Optional(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
-        vol.Optional(ATTR_DEBUG, default=False): bool,
-        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+        **DEBUG_FILE_OPTIONS_SCHEMA,
     }
 )
 REMOVE_SCHEDULE_SCHEMA = vol.Schema(
@@ -82,15 +91,13 @@ REMOVE_SCHEDULE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_REMAINING_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_DELETE_ONLY, default=False): bool,
-        vol.Optional(ATTR_DEBUG, default=False): bool,
-        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+        **DEBUG_FILE_OPTIONS_SCHEMA,
     }
 )
 RESET_SCHEDULE_SCHEMA = vol.Schema(
     {
         **SCHEDULE_SELECTOR_SCHEMA,
-        vol.Optional(ATTR_DEBUG, default=False): bool,
-        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+        **DEBUG_FILE_OPTIONS_SCHEMA,
         vol.Optional(ATTR_PRESERVE_LOCAL, default=False): bool,
     }
 )
@@ -99,15 +106,13 @@ SET_SCHEDULE_SCHEMA = vol.Schema(
         **SCHEDULE_SELECTOR_SCHEMA,
         vol.Required(ATTR_PERIODS): vol.All(list, [vol.Schema(SCHEDULE_PERIOD_SCHEMA)]),
         vol.Optional(ATTR_SEND, default=True): bool,
-        vol.Optional(ATTR_DEBUG, default=False): bool,
-        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+        **DEBUG_FILE_OPTIONS_SCHEMA,
     }
 )
 SET_BRIGHTNESS_SCHEMA = vol.Schema(
     {
         **SCHEDULE_SELECTOR_SCHEMA,
         vol.Required(ATTR_BRIGHTNESS): vol.Any(BRIGHTNESS_VALUE_SCHEMA, LEVELS_SCHEMA),
-        vol.Optional(ATTR_DEBUG, default=False): bool,
-        vol.Optional(ATTR_NOTIFY_DEBUG_FILE, default=False): bool,
+        **DEBUG_FILE_OPTIONS_SCHEMA,
     }
 )

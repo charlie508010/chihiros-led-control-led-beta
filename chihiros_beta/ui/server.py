@@ -1798,6 +1798,10 @@ def normalize_dashboard_settings(data: dict[str, object]) -> dict[str, object]:
         retention_days = int(data.get("diagnostic_retention_days") or DEFAULT_DIAGNOSTIC_RETENTION_DAYS)
     except (TypeError, ValueError):
         retention_days = DEFAULT_DIAGNOSTIC_RETENTION_DAYS
+    try:
+        notify_debug_retention_days = int(data.get("notify_debug_retention_days") or 0)
+    except (TypeError, ValueError):
+        notify_debug_retention_days = 0
     notify_debug_scope = str(data.get("notify_debug_scope") or "").strip().lower()
     if notify_debug_scope not in {"off", "all", "scheduler", "auto_mode", "manual"}:
         notify_debug_scope = "all" if bool(data.get("notify_debug_file", False)) else "off"
@@ -1808,6 +1812,8 @@ def normalize_dashboard_settings(data: dict[str, object]) -> dict[str, object]:
         "dashboard_debug": bool(data.get("dashboard_debug", False)),
         "notify_debug_file": notify_debug_scope != "off",
         "notify_debug_scope": notify_debug_scope,
+        "notify_debug_reset_file": bool(data.get("notify_debug_reset_file", False)),
+        "notify_debug_retention_days": max(0, min(3650, notify_debug_retention_days)),
         "diagnostic_retention_days": max(0, min(3650, retention_days)),
     }
 

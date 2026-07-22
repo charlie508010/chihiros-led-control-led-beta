@@ -270,6 +270,8 @@
           dashboard_debug: Boolean(addonDatabase && addonDatabase.dashboard_debug),
           notify_debug_file: Boolean(addonDatabase && addonDatabase.notify_debug_file),
           notify_debug_scope: String(addonDatabase && addonDatabase.notify_debug_scope || "off"),
+          notify_debug_reset_file: Boolean(addonDatabase && addonDatabase.notify_debug_reset_file),
+          notify_debug_retention_days: Number(addonDatabase && addonDatabase.notify_debug_retention_days || 0),
           show_mac: true,
           show_fan_demo: true,
         });

@@ -30,6 +30,8 @@ from ..const import (
     ATTR_ENTRY_ID,
     ATTR_LEVELS,
     ATTR_NOTIFY_DEBUG_FILE,
+    ATTR_NOTIFY_DEBUG_RESET_FILE,
+    ATTR_NOTIFY_DEBUG_RETENTION_DAYS,
     ATTR_PERIODS,
     ATTR_PRESERVE_LOCAL,
     ATTR_PREVIOUS_INDEX,
@@ -78,6 +80,14 @@ LED_VERIFICATION_TASKS = f"{DOMAIN}_led_verification_tasks"
 LED_RUNTIME_POLL_LOCK = f"{DOMAIN}_runtime_poll_lock"
 LED_VERIFICATION_QUERY_TIMEOUT = 20
 LED_VERIFICATION_RESTORE_TIMEOUT = 30
+
+
+def _notify_debug_retention_days(call: ServiceCall) -> int:
+    """Return the bounded LED notify debug retention from service data."""
+    try:
+        return max(0, min(3650, int(call.data.get(ATTR_NOTIFY_DEBUG_RETENTION_DAYS, 0) or 0)))
+    except (TypeError, ValueError):
+        return 0
 
 
 def async_update_led_services(hass: HomeAssistant, enabled: bool, resolve_device: ResolveDevice) -> None:
@@ -188,6 +198,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     target,
                     restore_rows,
                     notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+                    notify_debug_retention_days=_notify_debug_retention_days(call),
                 )
             return {}
 
@@ -246,6 +257,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                 device_key,
                 verification_rows,
                 notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+                notify_debug_retention_days=_notify_debug_retention_days(call),
             )
             return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}
 
@@ -390,6 +402,7 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
                     target,
                     restore_rows,
                     notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+                    notify_debug_retention_days=_notify_debug_retention_days(call),
                 )
             return {
                 "rows": len(call.data[ATTR_PERIODS]),
@@ -529,6 +542,8 @@ async def _async_led_send_service(
                     "",
                     notify_output or "Keine TX/RX/Notify-Debugdaten erfasst.",
                 ],
+                reset_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_RESET_FILE, False)),
+                retention_days=_notify_debug_retention_days(call),
             )
         response = {
             "ok": True,
@@ -597,17 +612,46 @@ async def _append_led_notify_debug_file(
     device_key: str,
     phase: str,
     lines: list[str],
+    *,
+    reset_file: bool = False,
+    retention_days: int = 0,
 ) -> str:
     """Append one LED notify/debug block to the per-device diagnostic file."""
-    return await hass.async_add_executor_job(_append_led_notify_debug_file_sync, device_key, phase, lines)
+    return await hass.async_add_executor_job(
+        _append_led_notify_debug_file_sync,
+        device_key,
+        phase,
+        lines,
+        reset_file,
+        retention_days,
+    )
 
 
-def _append_led_notify_debug_file_sync(device_key: str, phase: str, lines: list[str]) -> str:
+def _append_led_notify_debug_file_sync(
+    device_key: str,
+    phase: str,
+    lines: list[str],
+    reset_file: bool = False,
+    retention_days: int = 0,
+) -> str:
     """Write one LED notify/debug block outside the event loop."""
     safe_device = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(device_key or "device").upper()).strip("_") or "device"
     directory = state_db_path().parent / "debug"
     path = directory / f"led-notify-{safe_device}-{dt_util.now().strftime('%Y%m%d')}.log"
     directory.mkdir(parents=True, exist_ok=True)
+    if reset_file and path.exists():
+        path.write_text("", encoding="utf-8")
+    retention = max(0, min(3650, int(retention_days or 0)))
+    if retention > 0:
+        cutoff = dt_util.now().timestamp() - (retention * 86400)
+        for old_path in directory.glob(f"led-notify-{safe_device}-*.log"):
+            if old_path == path:
+                continue
+            try:
+                if old_path.stat().st_mtime < cutoff:
+                    old_path.unlink()
+            except OSError:
+                _LOGGER.debug("Could not remove expired LED debug file %s", old_path, exc_info=True)
     timestamp = dt_util.now().isoformat()
     body = "\n".join(str(line) for line in lines).strip()
     with Path(path).open("a", encoding="utf-8") as handle:
@@ -842,10 +886,18 @@ async def _record_or_schedule_led_verification(
     restore_rows: list[dict[str, Any]],
     *,
     notify_debug_file: bool = False,
+    notify_debug_retention_days: int = 0,
 ) -> None:
     """Persist a pending verification job and schedule a delayed device check."""
     await hass.async_add_executor_job(save_led_schedule_verification_job, device_key, target, restore_rows)
-    _schedule_led_verification(hass, chihiros_data, target, restore_rows, notify_debug_file=notify_debug_file)
+    _schedule_led_verification(
+        hass,
+        chihiros_data,
+        target,
+        restore_rows,
+        notify_debug_file=notify_debug_file,
+        notify_debug_retention_days=notify_debug_retention_days,
+    )
 
 
 async def _record_or_schedule_led_verifications(
@@ -855,6 +907,7 @@ async def _record_or_schedule_led_verifications(
     targets: list[dict[str, Any]],
     *,
     notify_debug_file: bool = False,
+    notify_debug_retention_days: int = 0,
 ) -> None:
     """Persist all rows as pending and check them with one device query."""
     for target in targets:
@@ -864,7 +917,13 @@ async def _record_or_schedule_led_verifications(
             targets,
             key=lambda target: not any(int(value) > 0 for value in target.get("levels", {}).values()),
         )
-        _schedule_led_verification_batch(hass, chihiros_data, targets, notify_debug_file=notify_debug_file)
+        _schedule_led_verification_batch(
+            hass,
+            chihiros_data,
+            targets,
+            notify_debug_file=notify_debug_file,
+            notify_debug_retention_days=notify_debug_retention_days,
+        )
 
 
 def _led_verification_task_key(device_key: str, target: dict[str, Any]) -> str:
@@ -879,6 +938,7 @@ def _schedule_led_verification(
     restore_rows: list[dict[str, Any]],
     *,
     notify_debug_file: bool = False,
+    notify_debug_retention_days: int = 0,
 ) -> None:
     """Run one delayed check for each latest schedule-row write."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
@@ -918,6 +978,7 @@ def _schedule_led_verification(
                                 led_service_debug_output(chihiros_data.device, last_operation=False)
                                 or "Keine TX/RX/Notify-Debugdaten erfasst.",
                             ],
+                            retention_days=notify_debug_retention_days,
                         )
                 finally:
                     if restore_rows:
@@ -952,6 +1013,7 @@ def _schedule_led_verification_batch(
     targets: list[dict[str, Any]],
     *,
     notify_debug_file: bool = False,
+    notify_debug_retention_days: int = 0,
 ) -> None:
     """Run delayed checks for all schedule rows without mutating the device."""
     device_key = str(chihiros_data.device.address or chihiros_data.title)
@@ -1003,6 +1065,7 @@ def _schedule_led_verification_batch(
                                 led_service_debug_output(chihiros_data.device, last_operation=False)
                                 or "Keine TX/RX/Notify-Debugdaten erfasst.",
                             ],
+                            retention_days=notify_debug_retention_days,
                         )
                     if not remaining or snapshot is not None:
                         break

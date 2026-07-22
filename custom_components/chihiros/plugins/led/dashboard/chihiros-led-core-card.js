@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1209";
+import "./panels/chihiros-led-panel.js?v=0.2.1210";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -57,6 +57,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       showMac: this.config?.show_mac !== false,
       dashboardDebug: Boolean(this.config?.dashboard_debug),
       notifyDebugScope: this.normalizeNotifyDebugScope(this.config?.notify_debug_scope ?? this.config?.notify_debug_file),
+      notifyDebugResetFile: Boolean(this.config?.notify_debug_reset_file),
+      notifyDebugRetentionDays: Number(this.config?.notify_debug_retention_days || 0),
       activeTab: "led",
       channelNames: {},
       deviceNames: {},
@@ -73,6 +75,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       }
       if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "notify_debug_scope")) {
         settings.notifyDebugScope = this.normalizeNotifyDebugScope(this.config.notify_debug_scope);
+      }
+      if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "notify_debug_reset_file")) {
+        settings.notifyDebugResetFile = Boolean(this.config.notify_debug_reset_file);
+      }
+      if (this.config?.addon_mode && Object.prototype.hasOwnProperty.call(this.config, "notify_debug_retention_days")) {
+        settings.notifyDebugRetentionDays = Number(this.config.notify_debug_retention_days || 0);
       }
       return settings;
     } catch (_err) {
@@ -166,6 +174,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     const showMac = this.uiSettings?.showMac !== false;
     const dashboardDebug = Boolean(this.uiSettings?.dashboardDebug);
     const notifyDebugScope = this.normalizeNotifyDebugScope(this.uiSettings?.notifyDebugScope);
+    const notifyDebugResetFile = Boolean(this.uiSettings?.notifyDebugResetFile);
+    const notifyDebugRetentionDays = Math.max(0, Math.min(3650, Number(this.uiSettings?.notifyDebugRetentionDays || 0)));
     const powerOverrides = this.uiSettings?.deviceMaxPowerWatts || {};
     const pluginRows = Object.values(this.config?.plugin_assets || {})
       .filter((plugin) => plugin && plugin.id && plugin.id !== "led")
@@ -195,6 +205,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             <input type="checkbox" data-ui-setting="showMac" ${showMac ? "checked" : ""}>
             <span>${this.tr("show_mac")}</span>
           </label>
+        </section>
+        <section class="card config-card">
+          <h2>${this.tr("debug_settings")}</h2>
           <label class="config-check">
             <input type="checkbox" data-ui-setting="dashboardDebug" ${dashboardDebug ? "checked" : ""}>
             <span>${this.tr("dashboard_debug")}</span>
@@ -211,8 +224,20 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             </select>
           </label>
           <small class="settings-note">${this.tr("notify_debug_file_hint")}</small>
-          <h3>${this.tr("rated_power")}</h3>
-          <small class="settings-note">${this.tr("rated_power_hint")}</small>
+          <label class="config-check">
+            <input type="checkbox" data-ui-setting="notifyDebugResetFile" ${notifyDebugResetFile ? "checked" : ""}>
+            <span>${this.tr("notify_debug_reset_file")}</span>
+          </label>
+          <small class="settings-note">${this.tr("notify_debug_reset_file_hint")}</small>
+          <label class="config-row">
+            <span>${this.tr("notify_debug_retention_days")}</span>
+            <input type="number" min="0" max="3650" step="1" value="${notifyDebugRetentionDays}" data-ui-setting="notifyDebugRetentionDays">
+          </label>
+          <small class="settings-note">${this.tr("notify_debug_retention_days_hint")}</small>
+        </section>
+        <section class="card config-card">
+          <h2>${this.tr("rated_power_led")}</h2>
+          <small class="settings-note">${this.tr("rated_power_led_hint")}</small>
           ${powerRows || `<small class="settings-note">${this.tr("no_device")}</small>`}
         </section>
         ${this.config?.addon_mode ? `<section class="card config-card">
@@ -382,7 +407,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         const value = input.type === "checkbox" ? Boolean(input.checked) : String(input.value || "");
         this.uiSettings = { ...(this.uiSettings || {}), [key]: value };
         this.saveUiSettings();
-        if (key === "dashboardDebug" || key === "notifyDebugScope") {
+        if (["dashboardDebug", "notifyDebugScope", "notifyDebugResetFile", "notifyDebugRetentionDays"].includes(key)) {
           const api = window.ChihirosAddonApi;
           const addonDatabase = { ...((this.config && this.config.addon_database) || {}) };
           const dashboardDebug = key === "dashboardDebug"
@@ -391,16 +416,26 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           const notifyDebugScope = key === "notifyDebugScope"
             ? this.normalizeNotifyDebugScope(value)
             : this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope);
+          const notifyDebugResetFile = key === "notifyDebugResetFile"
+            ? Boolean(value)
+            : Boolean(this.uiSettings && this.uiSettings.notifyDebugResetFile);
+          const notifyDebugRetentionDays = key === "notifyDebugRetentionDays"
+            ? Number(value || 0)
+            : Number((this.uiSettings && this.uiSettings.notifyDebugRetentionDays) || 0);
           this.config = {
             ...(this.config || {}),
             dashboard_debug: dashboardDebug,
             notify_debug_file: notifyDebugScope !== "off",
             notify_debug_scope: notifyDebugScope,
+            notify_debug_reset_file: notifyDebugResetFile,
+            notify_debug_retention_days: notifyDebugRetentionDays,
             addon_database: {
               ...addonDatabase,
               dashboard_debug: dashboardDebug,
               notify_debug_file: notifyDebugScope !== "off",
               notify_debug_scope: notifyDebugScope,
+              notify_debug_reset_file: notifyDebugResetFile,
+              notify_debug_retention_days: notifyDebugRetentionDays,
             },
           };
           if (api && typeof api.saveDatabaseConfig === "function") {
@@ -410,6 +445,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
                 dashboard_debug: dashboardDebug,
                 notify_debug_file: notifyDebugScope !== "off",
                 notify_debug_scope: notifyDebugScope,
+                notify_debug_reset_file: notifyDebugResetFile,
+                notify_debug_retention_days: notifyDebugRetentionDays,
               });
             } catch (_err) {
               // Keep the local setting even if the add-on endpoint is temporarily unavailable.
@@ -432,6 +469,8 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
             dashboard_debug: Boolean(this.uiSettings && this.uiSettings.dashboardDebug),
             notify_debug_file: this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope) !== "off",
             notify_debug_scope: this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope),
+            notify_debug_reset_file: Boolean(this.uiSettings && this.uiSettings.notifyDebugResetFile),
+            notify_debug_retention_days: Number((this.uiSettings && this.uiSettings.notifyDebugRetentionDays) || 0),
           });
         } catch (error) {
           this.dialogState = {
@@ -1213,10 +1252,15 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
 
   async runDeviceService({ service = "", data = {}, title = "", debug = false, dialog = false, channel = 1, noChannel = true } = {}) {
     const notifyDebugFile = this.shouldWriteNotifyDebugFile(service);
+    const notifyDebugRetentionDays = Math.max(0, Math.min(3650, Number(this.uiSettings?.notifyDebugRetentionDays || 0)));
     const serviceData = {
       ...data,
       ...(debug ? { debug: true } : {}),
-      ...(notifyDebugFile ? { notify_debug_file: true } : {}),
+      ...(notifyDebugFile ? {
+        notify_debug_file: true,
+        notify_debug_reset_file: Boolean(this.uiSettings?.notifyDebugResetFile),
+        notify_debug_retention_days: notifyDebugRetentionDays,
+      } : {}),
     };
     if (dialog && typeof this.callAddonServiceWithDialog === "function") {
       const result = await this.callAddonServiceWithDialog(service, serviceData, {
@@ -1777,8 +1821,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         restart_addon: "LED-Core-Add-on neu starten.",
         install: "Installieren",
         rated_power: "Nennleistung",
+        rated_power_led: "Nennleistung LED",
         estimated_power: "Geschätzter Verbrauch; kein Messwert",
         rated_power_hint: "Optionale Leistung für Controller oder Modelle ohne eindeutig erkennbare Größe. Sie hat Vorrang vor der automatischen Erkennung.",
+        rated_power_led_hint: "Optionale LED-Leistung pro Gerät. Sie hat Vorrang vor der automatischen Erkennung.",
         automatic: "automatisch",
         recorder_storage_hint: "Entity-Zustände, History und Statistiken bleiben im Home-Assistant-Recorder.",
         own_database: "Eigene DB",
@@ -1873,10 +1919,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         result_output: "Rückmeldung",
         debug_capture: "Debug-Ausgabe anzeigen",
         debug_output_short: "Debug ausgeben",
+        debug_settings: "Debug",
+        debug_settings_hint: "Steuert sichtbare Debug-Dialoge und gespeicherte LED-Ablaufdateien.",
         dashboard_debug: "Dashboard-Debug für Einzelaktionen",
         dashboard_debug_hint: "Zeigt bei einzelnen Geräteaktionen ein Debug-Fenster mit HA-Aufruf, Payload und Protokolldaten.",
         notify_debug_file: "Debug-Datei Umfang",
         notify_debug_file_hint: "Schreibt ausgewählte LED-TX/RX- und Notify-Abläufe in /config/.chihiros_led_core/debug/.",
+        notify_debug_reset_file: "Debug-Datei vor neuem Ablauf leeren",
+        notify_debug_reset_file_hint: "Leert die Tagesdatei beim Start eines neuen ausgewählten Debug-Ablaufs.",
+        notify_debug_retention_days: "Debug-Dateien aufbewahren (Tage)",
+        notify_debug_retention_days_hint: "0 = unbegrenzt; ältere LED-Debugdateien werden nur bei aktivem Debug-Schreiben entfernt.",
         debug_scope_off: "Aus",
         debug_scope_all: "Alles",
         debug_scope_scheduler: "Scheduler",
@@ -2082,8 +2134,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         restart_addon: "Restart the LED Core add-on.",
         install: "Install",
         rated_power: "Rated power",
+        rated_power_led: "LED rated power",
         estimated_power: "Estimated consumption; not a measured value",
         rated_power_hint: "Optional power for controllers or models whose size cannot be detected. It takes precedence over automatic detection.",
+        rated_power_led_hint: "Optional LED power per device. It takes precedence over automatic detection.",
         automatic: "automatic",
         recorder_storage_hint: "Entity states, history and statistics remain in the Home Assistant Recorder.",
         own_database: "Own DB",
@@ -2178,10 +2232,16 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         result_output: "Response",
         debug_capture: "Show debug output",
         debug_output_short: "Output debug",
+        debug_settings: "Debug",
+        debug_settings_hint: "Controls visible debug dialogs and saved LED flow files.",
         dashboard_debug: "Dashboard debug for single actions",
         dashboard_debug_hint: "Shows a debug window with the HA action, payload, and protocol data for individual device actions.",
         notify_debug_file: "Debug file scope",
         notify_debug_file_hint: "Writes selected LED TX/RX and notify flow logs to /config/.chihiros_led_core/debug/.",
+        notify_debug_reset_file: "Clear debug file before a new flow",
+        notify_debug_reset_file_hint: "Clears the daily file when a new selected debug flow starts.",
+        notify_debug_retention_days: "Keep debug files (days)",
+        notify_debug_retention_days_hint: "0 = unlimited; older LED debug files are removed only when debug file writing is active.",
         debug_scope_off: "Off",
         debug_scope_all: "All",
         debug_scope_scheduler: "Scheduler",

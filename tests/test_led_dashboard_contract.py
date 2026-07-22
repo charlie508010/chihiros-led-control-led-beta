@@ -407,15 +407,28 @@ def test_config_debug_setting_is_persisted_by_addon() -> None:
     assert 'key === "dashboardDebug"' in dashboard
     assert "dashboard_debug: dashboardDebug" in dashboard
     assert "notify_debug_scope: notifyDebugScope" in dashboard
+    assert "notify_debug_reset_file: notifyDebugResetFile" in dashboard
+    assert "notify_debug_retention_days: notifyDebugRetentionDays" in dashboard
     assert "database_diagnostics_enabled: data.get" in dashboard
     assert "dashboard_debug: Boolean(this.uiSettings && this.uiSettings.dashboardDebug)" in dashboard
     assert 'this.normalizeNotifyDebugScope(this.uiSettings && this.uiSettings.notifyDebugScope) !== "off"' in dashboard
+    assert "notify_debug_reset_file: Boolean(this.uiSettings && this.uiSettings.notifyDebugResetFile)" in dashboard
+    assert (
+        "notify_debug_retention_days: Number((this.uiSettings && this.uiSettings.notifyDebugRetentionDays) || 0)"
+        in dashboard
+    )
     assert "dashboard_debug: Boolean(addonDatabase && addonDatabase.dashboard_debug)" in index
     assert "notify_debug_file: Boolean(addonDatabase && addonDatabase.notify_debug_file)" in index
     assert 'notify_debug_scope: String(addonDatabase && addonDatabase.notify_debug_scope || "off")' in index
+    assert "notify_debug_reset_file: Boolean(addonDatabase && addonDatabase.notify_debug_reset_file)" in index
+    assert (
+        "notify_debug_retention_days: Number(addonDatabase && addonDatabase.notify_debug_retention_days || 0)" in index
+    )
     assert '"dashboard_debug": bool(data.get("dashboard_debug", False))' in server
     assert '"notify_debug_file": notify_debug_scope != "off"' in server
     assert '"notify_debug_scope": notify_debug_scope' in server
+    assert '"notify_debug_reset_file": bool(data.get("notify_debug_reset_file", False))' in server
+    assert '"notify_debug_retention_days": max(0, min(3650, notify_debug_retention_days))' in server
 
 
 def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
@@ -428,6 +441,8 @@ def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
     assert 'Object.prototype.hasOwnProperty.call(this.config, "notify_debug_file")' in dashboard
     assert 'Object.prototype.hasOwnProperty.call(this.config, "notify_debug_scope")' in dashboard
     assert 'data-ui-setting="notifyDebugScope"' in dashboard
+    assert 'data-ui-setting="notifyDebugResetFile"' in dashboard
+    assert 'data-ui-setting="notifyDebugRetentionDays"' in dashboard
     assert "shouldWriteNotifyDebugFile(service)" in dashboard
     assert (
         'if (scope === "scheduler") return ["add_schedule", "set_schedule", "reset_schedule"].includes(name);'
@@ -436,12 +451,20 @@ def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
     assert 'if (scope === "auto_mode") return name === "enable_auto_mode";' in dashboard
     assert 'if (scope === "manual") return ["set_brightness", "turn_on", "turn_off"].includes(name);' in dashboard
     assert "notify_debug_file: true" in dashboard
+    assert "notify_debug_reset_file: Boolean(this.uiSettings?.notifyDebugResetFile)" in dashboard
+    assert "notify_debug_retention_days: notifyDebugRetentionDays" in dashboard
     assert 'notify_debug_file: "Debug-Datei Umfang"' in dashboard
     assert 'notify_debug_file: "Debug file scope"' in dashboard
+    assert 'notify_debug_reset_file: "Debug-Datei vor neuem Ablauf leeren"' in dashboard
+    assert 'notify_debug_reset_file: "Clear debug file before a new flow"' in dashboard
     assert 'debug_scope_scheduler: "Scheduler"' in dashboard
     assert 'debug_scope_auto_mode: "Auto-Modus"' in dashboard
     assert 'ATTR_NOTIFY_DEBUG_FILE = "notify_debug_file"' in constants
+    assert 'ATTR_NOTIFY_DEBUG_RESET_FILE = "notify_debug_reset_file"' in constants
+    assert 'ATTR_NOTIFY_DEBUG_RETENTION_DAYS = "notify_debug_retention_days"' in constants
     assert "_append_led_notify_debug_file" in services
+    assert "reset_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_RESET_FILE, False))" in services
+    assert "retention_days=_notify_debug_retention_days(call)" in services
     assert "LED DEBUG START" in services
     assert "LED DEBUG ENDE" in services
     assert "_debug_schedule_target_range" in services
@@ -449,6 +472,7 @@ def test_notify_debug_file_setting_is_sent_to_led_services() -> None:
     assert "schedule batch verification " in services
     assert "prepare_device_debug(chihiros_data.device, debug or notify_debug_file)" in services
     assert "notify_debug_file=bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))" in services
+    assert "notify_debug_retention_days=_notify_debug_retention_days(call)" in services
     assert '"notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False))' in services
 
 
@@ -743,8 +767,7 @@ def test_scheduler_front_delete_opens_running_dialog() -> None:
     assert 'String(right.start || "").localeCompare(String(left.start || ""))' in implementation
     assert "periods: this.ledSchedulePeriodsFromRows(rowsToSend, this.activeLedDevice || {}, true)," in implementation
     assert (
-        "remaining_periods: this.ledSchedulePeriodsFromRows(remainingRows, "
-        "this.activeLedDevice || {}, true),"
+        "remaining_periods: this.ledSchedulePeriodsFromRows(remainingRows, this.activeLedDevice || {}, true),"
     ) in implementation
     assert "delete_only: true" in implementation
     assert "delete_only: remainingRows.length > 0" not in implementation
