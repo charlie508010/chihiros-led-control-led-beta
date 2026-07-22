@@ -754,6 +754,11 @@ def _debug_schedule_target(target: dict[str, Any]) -> str:
     )
 
 
+def _debug_schedule_target_range(target: dict[str, Any]) -> str:
+    """Return one compact schedule start/end range for debug block titles."""
+    return f"{target.get('start', '')}-{target.get('end', '')}"
+
+
 async def _record_or_schedule_led_verification(
     hass: HomeAssistant,
     chihiros_data: ChihirosData,
@@ -829,7 +834,7 @@ def _schedule_led_verification(
                         await _append_led_notify_debug_file(
                             hass,
                             device_key,
-                            "schedule verification",
+                            f"schedule verification {_debug_schedule_target_range(target)}",
                             [
                                 f"Target: {_debug_schedule_target(target)}",
                                 f"Status: {status}",
@@ -910,7 +915,8 @@ def _schedule_led_verification_batch(
                             await _append_led_notify_debug_file(
                                 hass,
                                 device_key,
-                                "schedule batch verification",
+                                "schedule batch verification "
+                                f"{', '.join(_debug_schedule_target_range(target) for target in targets)}",
                                 [
                                     f"Attempt: {attempt + 1}",
                                     f"Matched: {len(matched)}",
