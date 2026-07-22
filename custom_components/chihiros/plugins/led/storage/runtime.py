@@ -296,25 +296,6 @@ def finish_led_schedule_verification(device_key: str, target: dict[str, Any], st
     record_led_schedule_verification(device_key, target, status)
 
 
-def reset_led_schedule_verifications(device_key: str, targets: list[dict[str, Any]]) -> None:
-    """Mark schedule rows as pending without scheduling a device check."""
-    if not targets:
-        return
-    with sqlite3.connect(state_db_path()) as conn:
-        ensure_led_schedule_table(conn)
-        for target in targets:
-            signature = _schedule_signature(
-                str(target["start"]), str(target["end"]), target["levels"], int(target["ramp"]), target["weekdays"]
-            )
-            conn.execute(
-                """
-                UPDATE led_schedules SET verification_status='pending', verified_at=''
-                WHERE UPPER(device_key)=UPPER(?) AND schedule_signature=?
-                """,
-                (device_key, signature),
-            )
-
-
 def delete_led_schedule_rows(chihiros_data: ChihirosData) -> int:
     """Delete persisted LED schedule rows for one device."""
     path = state_db_path()

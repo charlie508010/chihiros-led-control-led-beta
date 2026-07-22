@@ -455,7 +455,7 @@ def test_scheduler_reset_debug_keeps_delete_and_verification_operations() -> Non
 
 
 def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
-    """The dashboard marker uses only the persisted verification result."""
+    """The dashboard marker lets a fresh matching snapshot recover a stored failed result."""
     panel = source(LED_PANEL)
     server = source(ROOT / "chihiros_beta" / "ui" / "server.py")
     verification = panel.split("ledScheduleRowVerification(row)", 1)[1].split("ledScheduleDialog()", 1)[0]
@@ -463,9 +463,15 @@ def test_scheduler_verification_uses_persisted_one_shot_result() -> None:
     assert 'storedStatus === "verified"' in panel
     assert 'storedStatus === "failed"' in panel
     assert 'if (storedStatus === "verified") return' in verification
+    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
+        'if (storedStatus === "verified") return'
+    )
     assert 'if (storedStatus === "failed") return' in verification
-    assert 'return { level: "pending", text: this.tr("not_checked") };' in verification
-    assert "const ranges = this.ledScheduleSnapshotRanges();" not in verification
+    assert verification.index("const ranges = this.ledScheduleSnapshotRanges();") < verification.index(
+        'if (storedStatus === "failed") return'
+    )
+    assert 'if (storedStatus === "pending") return' not in verification
+    assert "const ranges = this.ledScheduleSnapshotRanges();" in verification
     services = source(LED_SERVICES)
     assert "device._schedule_curve_ranges(sorted(points))" in services
     assert "if not positive_expected_levels:" not in services
@@ -560,9 +566,10 @@ def test_scheduler_verification_is_queued_per_schedule_row() -> None:
     assert "if not cancelled:" in services
     assert "finish_led_schedule_verification, device_key, target, status" in services
     assert '"verified" if _schedule_snapshot_matches' in services
-    assert "_cancel_led_schedule_verification_tasks(hass, device_key, verification_rows)" in services
-    assert "reset_led_schedule_verifications, device_key, verification_rows" in services
-    assert 'return {"schedules_restored": schedule_count, "verification_scheduled": False}' in services
+    assert 'finish_led_schedule_verification, device_key, "verified"' not in services
+    assert (
+        'return {"schedules_restored": schedule_count, "verification_scheduled": bool(verification_rows)}' in services
+    )
     assert "if not _verification_requires_snapshot" not in services
     assert "PRIMARY KEY (device_key, schedule_signature)" in storage
     assert "WHERE UPPER(device_key)=UPPER(?) AND schedule_signature=?" in storage
@@ -837,11 +844,13 @@ def test_connection_panel_shows_runtime_sensor() -> None:
     assert "startsZeroRange" in panel
     assert "sharesBoundary || startsZeroRange ? zeroIndex : followingIndex" in panel
     assert "candidateRamp >= 1 && candidateRamp <= 150" in panel
+    assert "const expectedRamp = configuredRamp;" in panel
     assert "if (minutes <= 1) return 1;" in panel
     assert "if (!Number.isFinite(minutes)) return 1;" in panel
     assert 'ramp: Math.max(1, Math.min(150, Math.round(Number(get("ramp", "1")))))' in panel
     assert "rampControl(row.ramp ?? 1)" in panel
     assert "if (addonMode) {" in panel
+    assert "range.ramp === expectedRamp" in panel
     assert "ledScheduleRowVerification(row)" in panel
     assert "const existingBoundary = normalized" in panel
     assert "ranges.push({ start, end: existingBoundary.time, level, ramp });" in panel
@@ -1072,11 +1081,7 @@ def test_enable_auto_mode_button_uses_response_service_instead_of_schedule_write
     assert "output: debug && serviceOutput ? serviceOutput" in implementation
     assert 'service: "set_schedule"' not in implementation
     assert "Auto-Mode-Entitaet nicht gefunden" not in implementation
-    services = source(LED_SERVICES)
-    assert "_cancel_led_schedule_verification_tasks(hass, device_key, verification_rows)" in services
-    assert "reset_led_schedule_verifications, device_key, verification_rows" in services
-    assert 'await _finish_led_schedule_verifications(hass, device_key, verification_rows, "verified")' not in services
-    assert 'return {"schedules_restored": schedule_count, "verification_scheduled": False}' in services
+    assert '"verification_scheduled": bool(verification_rows)' in source(LED_SERVICES)
 
 
 def test_vivid_iii_replaces_presets_with_fan_status_and_control() -> None:
