@@ -1790,14 +1790,22 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       return ok;
     }
     const address = this.activeLedDevice && this.activeLedDevice.address ? this.activeLedDevice.address : undefined;
-    const rowsToSend = remainingRows.length > 0 ? [{ ...remainingRows[0], active: false }] : [{ ...deletedRow, active: false }];
+    const rowsToSend = [...rows]
+      .sort((left, right) => String(right.start || "").localeCompare(String(left.start || "")))
+      .map((row) => ({ ...row, active: false }));
     const deletePeriod = this.ledSchedulePeriodsFromRows(
-      rowsToSend,
+      [{ ...deletedRow, active: false }],
       this.activeLedDevice || {},
       true,
     )[0] || {};
     const serviceData = send
-      ? { ...deletePeriod, delete_only: true, device_key: deviceKey, ...this.ledServiceSelector() }
+      ? {
+          ...deletePeriod,
+          periods: this.ledSchedulePeriodsFromRows(rowsToSend, this.activeLedDevice || {}, true),
+          delete_only: true,
+          device_key: deviceKey,
+          ...this.ledServiceSelector(),
+        }
       : { periods: this.ledSchedulePeriodsFromRows(remainingRows), send: false, device_key: deviceKey };
     if (!send && address) serviceData.address = address;
     const title = `${this.tr("delete_send")}\n1 ${this.tr("led_schedule_rows")}`;
@@ -1814,7 +1822,7 @@ window.ChihirosLedPanelMixin = (Base) => class extends Base {
       this.render();
     }
     const sendResult = send
-      ? await this.runLedScheduleService({ service: "add_schedule", data: serviceData, title, debug, dialog: true })
+      ? await this.runLedScheduleService({ service: "remove_schedule", data: serviceData, title, debug, dialog: true })
       : null;
     const ok = send
       ? Boolean(sendResult && sendResult.ok)

@@ -258,20 +258,58 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
             operation=_operation,
         )
 
-    async def async_remove_schedule(call: ServiceCall) -> None:
-        chihiros_data = await _async_resolve_led_device(hass, resolve_device, call.data)
-        ensure_light_device(chihiros_data)
-        start = parse_schedule_time(call.data[ATTR_START])
-        end = parse_schedule_time(call.data[ATTR_END])
-        validate_time_range(start, end)
-        await chihiros_data.device.remove_setting(
-            start,
-            end,
-            ramp_up_in_minutes=call.data[ATTR_RAMP_UP_MINUTES],
-            weekdays=parse_weekdays(call.data.get(ATTR_WEEKDAYS)),
-            delete_only=bool(call.data.get(ATTR_DELETE_ONLY, False)),
+    async def async_remove_schedule(call: ServiceCall) -> dict[str, Any] | None:
+        request = {
+            "entry_id": call.data.get(ATTR_ENTRY_ID, ""),
+            "entity_id": call.data.get(ATTR_ENTITY_ID, ""),
+            "address": call.data.get(ATTR_ADDRESS, ""),
+            "start": call.data.get(ATTR_START, ""),
+            "end": call.data.get(ATTR_END, ""),
+            "ramp_up_minutes": call.data.get(ATTR_RAMP_UP_MINUTES, 1),
+            "weekdays": call.data.get(ATTR_WEEKDAYS, []),
+            "periods": call.data.get(ATTR_PERIODS, []),
+            "delete_only": bool(call.data.get(ATTR_DELETE_ONLY, False)),
+            "notify_debug_file": bool(call.data.get(ATTR_NOTIFY_DEBUG_FILE, False)),
+        }
+
+        async def _operation(chihiros_data: ChihirosData) -> dict[str, Any]:
+            periods = call.data.get(ATTR_PERIODS)
+            if periods:
+                validate_schedule_periods(chihiros_data, periods)
+                settings = [
+                    (
+                        parse_schedule_time(period[ATTR_START]),
+                        parse_schedule_time(period[ATTR_END]),
+                        int(period[ATTR_RAMP_UP_MINUTES]),
+                        parse_weekdays(period.get(ATTR_WEEKDAYS)),
+                    )
+                    for period in periods
+                ]
+                await chihiros_data.device.remove_settings(settings)
+            else:
+                start = parse_schedule_time(call.data[ATTR_START])
+                end = parse_schedule_time(call.data[ATTR_END])
+                validate_time_range(start, end)
+                await chihiros_data.device.remove_setting(
+                    start,
+                    end,
+                    ramp_up_in_minutes=call.data[ATTR_RAMP_UP_MINUTES],
+                    weekdays=parse_weekdays(call.data.get(ATTR_WEEKDAYS)),
+                    delete_only=bool(call.data.get(ATTR_DELETE_ONLY, False)),
+                )
+            await async_refresh_status(chihiros_data)
+            return {"rows_deleted": len(periods) if isinstance(periods, list) and periods else 1}
+
+        return await _async_led_send_service(
+            call,
+            hass=hass,
+            resolve_device=resolve_device,
+            service=SERVICE_REMOVE_SCHEDULE,
+            action="remove_schedule",
+            summary="LED schedule deleted",
+            request=request,
+            operation=_operation,
         )
-        await async_refresh_status(chihiros_data)
 
     async def async_reset_schedule(call: ServiceCall) -> dict[str, Any] | None:
         preserve_local = bool(call.data.get(ATTR_PRESERVE_LOCAL, False))
@@ -406,7 +444,12 @@ def _async_register_led_services(hass: HomeAssistant, resolve_device: ResolveDev
         schema=ENABLE_AUTO_MODE_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
-    _register_or_replace(SERVICE_REMOVE_SCHEDULE, async_remove_schedule, schema=REMOVE_SCHEDULE_SCHEMA)
+    _register_or_replace(
+        SERVICE_REMOVE_SCHEDULE,
+        async_remove_schedule,
+        schema=REMOVE_SCHEDULE_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
     _register_or_replace(
         SERVICE_RESET_SCHEDULE,
         async_reset_schedule,

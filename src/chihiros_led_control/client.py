@@ -54,7 +54,8 @@ BLEAK_BACKOFF_TIME = 0.25
 COMMAND_NOTIFICATION_WAIT = 0.5
 AUTH_NOTIFICATION_WAIT = 3.0
 SCHEDULE_DELETE_SETTLE_WAIT = 3.5
-SCHEDULE_RESTORE_COMMAND_WAIT = 5.0
+SCHEDULE_DELETE_COMMAND_WAIT = 1.5
+SCHEDULE_RESTORE_COMMAND_WAIT = 0.25
 NotificationCallback = Callable[[ParsedNotification], None]
 
 
@@ -482,6 +483,37 @@ class ChihirosDevice:
                     )
                 )
         await self._send_command(commands_to_send, 3, immediate_after_prelude=True)
+
+    async def remove_settings(
+        self,
+        settings: Sequence[tuple[datetime, datetime, int, list[WeekdaySelect] | None]],
+    ) -> None:
+        """Remove multiple automation settings in one app-like delete sequence."""
+        commands_to_send: list[bytearray] = []
+        for sunrise, sunset, ramp_up_in_minutes, weekdays in settings:
+            commands_to_send.append(
+                commands.create_delete_auto_setting_command(
+                    self.get_next_msg_id(),
+                    sunrise.time(),
+                    sunset.time(),
+                    ramp_up_in_minutes,
+                    encode_selected_weekdays(weekdays or [WeekdaySelect.everyday]),
+                    brightness_channels=self._channel_count(),
+                )
+            )
+        if self.model.schedule_reset_parameter != 5:
+            commands_to_send.append(
+                commands.create_auto_parameter_command(
+                    self.get_next_msg_id(),
+                    self.model.schedule_reset_parameter,
+                )
+            )
+        await self._send_command(
+            commands_to_send,
+            3,
+            immediate_after_prelude=True,
+            inter_command_wait=SCHEDULE_DELETE_COMMAND_WAIT,
+        )
 
     async def replace_setting(
         self,

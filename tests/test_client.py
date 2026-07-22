@@ -256,6 +256,57 @@ def test_dyu1000_delete_only_remove_setting_sends_delete_and_finalize_frame() ->
     assert sent_commands[1][6:-1] == bytes([40, 255, 255])
 
 
+def test_dyu1000_remove_settings_sends_app_like_delete_sequence() -> None:
+    """DYU1000 multi-row deletion clears each known row before the finalizer."""
+    sent_commands: list[bytes] = []
+    call_options: list[dict[str, object]] = []
+
+    async def run() -> None:
+        model = DeviceModel(
+            "Universal WRGB",
+            ("DYU1000",),
+            WRGB_CHANNELS,
+            max_brightness=100,
+            schedule_reset_parameter=40,
+        )
+        device = ChihirosDevice(FakeBLEDevice(), model)  # type: ignore[arg-type]
+
+        async def capture_command(
+            command: list[bytes] | bytes | bytearray,
+            retry: int | None = None,
+            **kwargs: object,
+        ) -> None:
+            del retry
+            call_options.append(kwargs)
+            if isinstance(command, list):
+                sent_commands.extend(bytes(item) for item in command)
+            else:
+                sent_commands.append(bytes(command))
+
+        device._send_command = capture_command  # type: ignore[method-assign]
+        await device.remove_settings(
+            [
+                (datetime(2026, 7, 16, 12, 0), datetime(2026, 7, 16, 18, 0), 1, None),
+                (datetime(2026, 7, 16, 9, 5), datetime(2026, 7, 16, 11, 55), 1, None),
+                (datetime(2026, 7, 16, 3, 25), datetime(2026, 7, 16, 7, 25), 1, None),
+            ]
+        )
+
+    asyncio.run(run())
+
+    assert [command[5] for command in sent_commands] == [25, 25, 25, 5]
+    assert sent_commands[0][6:-1] == bytes([12, 0, 18, 0, 1, 127, *([255] * 8)])
+    assert sent_commands[1][6:-1] == bytes([9, 5, 11, 55, 1, 127, *([255] * 8)])
+    assert sent_commands[2][6:-1] == bytes([3, 25, 7, 25, 1, 127, *([255] * 8)])
+    assert sent_commands[3][6:-1] == bytes([40, 255, 255])
+    assert call_options == [
+        {
+            "immediate_after_prelude": True,
+            "inter_command_wait": client_module.SCHEDULE_DELETE_COMMAND_WAIT,
+        }
+    ]
+
+
 def test_dyu1000_inactive_schedule_can_append_app_matching_final_values() -> None:
     """DYU1000 inactive schedule can append the app-observed final value frame."""
     sent_commands: list[bytes] = []

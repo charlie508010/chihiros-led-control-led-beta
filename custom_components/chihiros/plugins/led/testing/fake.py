@@ -237,6 +237,14 @@ class FakeChihirosDevice:
         del sunrise, sunset, max_brightness, ramp_up_in_minutes, weekdays, delete_only
         await self.query_status()
 
+    async def remove_settings(
+        self,
+        settings: Sequence[tuple[datetime, datetime, int, list[object] | None]],
+    ) -> None:
+        """Accept fake multi-row schedule deletes."""
+        del settings
+        await self.query_status()
+
     async def replace_setting(
         self,
         previous_sunrise: datetime,
