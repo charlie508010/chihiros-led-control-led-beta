@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1225";
+import "./panels/chihiros-led-panel.js?v=0.2.1226";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -288,23 +288,6 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
     };
     this.render();
     try {
-      const addonApi = window.ChihirosAddonApi;
-      if (addonApi && typeof addonApi.runAddonUpdate === "function") {
-        const addonResult = await addonApi.runAddonUpdate();
-        if (!updateDialogIsOpen()) return;
-        this.dialogState = {
-          type: "debug",
-          channel: 1,
-          output: `OK\n${String(
-            addonResult && addonResult.message ? addonResult.message : "LED Core wird neu gestartet.",
-          )}`,
-          running: false,
-          noChannel: true,
-          level: "ok",
-        };
-        this.render();
-        return;
-      }
       const serviceFailure = (result) => {
         const response = result && typeof result === "object"
           ? (result.response || result.serviceResponse || null)

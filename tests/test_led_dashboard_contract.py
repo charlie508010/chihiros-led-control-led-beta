@@ -188,8 +188,7 @@ def test_led_core_update_button_uses_the_supervisor_update_flow() -> None:
     assert "const updateDialogIsOpen = () => (" in dashboard
     assert "if (!updateDialogIsOpen()) return;" in dashboard
     assert "if (state.updateOperationId)" in dashboard
-    assert dashboard.index("const addonApi = window.ChihirosAddonApi;") < dashboard.index("const updateEntities =")
-    assert "const addonResult = await addonApi.runAddonUpdate();" in dashboard
+    assert dashboard.index("const updateEntities =") < dashboard.index("const api = window.ChihirosAddonApi;")
 
 
 def test_doser_plugin_gets_one_led_core_entry_per_physical_device() -> None:
