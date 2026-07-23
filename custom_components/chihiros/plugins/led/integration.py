@@ -12,7 +12,7 @@ from homeassistant.components import bluetooth, frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_ADDRESS, CONF_NAME, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
@@ -30,6 +30,8 @@ from ...core.notifications import (
 from ...core.plugin_loader import (
     PLUGIN_REGISTRY_DATA_KEY,
     async_load_plugins,
+    discover_plugin_manifests,
+    plugin_roots,
 )
 from .const import (
     ADD_SCHEDULE_SCHEMA,
@@ -113,6 +115,7 @@ RUNTIME_POLL_INTERVAL = NOTIFICATION_POLL_INTERVAL
 RUNTIME_POLL_GAP_SECONDS = NOTIFICATION_POLL_GAP_SECONDS
 DOSER_PLUGIN_ID = "doser"
 DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")
+DOSER_DISCOVERY_UNSUBS = f"{DOMAIN}_doser_discovery_unsubs"
 
 
 def _is_doser_service_info(service_info: bluetooth.BluetoothServiceInfoBleak) -> bool:
@@ -121,46 +124,91 @@ def _is_doser_service_info(service_info: bluetooth.BluetoothServiceInfoBleak) ->
     return name.startswith(DOSER_NAME_PREFIXES)
 
 
-async def _async_ensure_doser_plugin_entries(hass: HomeAssistant) -> None:
-    """Create one LED Core config entry for every discovered physical Doser."""
-    registry = await async_load_plugins(hass, DOMAIN)
-    if registry.get(DOSER_PLUGIN_ID) is None:
+async def _async_doser_plugin_installed(hass: HomeAssistant) -> bool:
+    """Return whether the external Doser manifest is installed."""
+    manifests = await hass.async_add_executor_job(discover_plugin_manifests, plugin_roots(hass))
+    return any(manifest.plugin_id == DOSER_PLUGIN_ID for manifest in manifests)
+
+
+async def _async_create_doser_plugin_entry(
+    hass: HomeAssistant,
+    service_info: bluetooth.BluetoothServiceInfoBleak,
+    *,
+    plugin_installed: bool | None = None,
+) -> None:
+    """Create the physical Doser entry represented by one advertisement."""
+    if not _is_doser_service_info(service_info):
+        return
+    if plugin_installed is None:
+        plugin_installed = await _async_doser_plugin_installed(hass)
+    if not plugin_installed:
+        return
+
+    address = str(service_info.address).upper()
+    if not address:
         return
 
     entries = hass.config_entries.async_entries(DOMAIN)
     doser_entries = [entry for entry in entries if is_doser_entry(entry)]
-    configured_addresses = {
-        str(entry.data[CONF_ADDRESS]).upper() for entry in doser_entries if entry.data.get(CONF_ADDRESS)
-    }
-    legacy_host = next((entry for entry in doser_entries if not entry.data.get(CONF_ADDRESS)), None)
+    configured_addresses = {str(entry.data.get(CONF_ADDRESS) or "").upper() for entry in entries}
+    if address in configured_addresses:
+        return
 
-    for service_info in bluetooth.async_discovered_service_info(hass):
-        if not _is_doser_service_info(service_info):
-            continue
-        address = str(service_info.address).upper()
-        if not address or address in configured_addresses:
-            continue
-        title = str(service_info.name or service_info.device.name or address)
-        data = {
-            CONF_ADDRESS: address,
-            CONF_NAME: title,
-            ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
-        }
-        if legacy_host is not None:
-            hass.config_entries.async_update_entry(
-                legacy_host,
-                title=title,
-                data=data,
-                unique_id=address,
+    legacy_host = next((entry for entry in doser_entries if not entry.data.get(CONF_ADDRESS)), None)
+    title = str(service_info.name or service_info.device.name or address)
+    data = {
+        CONF_ADDRESS: address,
+        CONF_NAME: title,
+        ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
+    }
+    if legacy_host is not None:
+        hass.config_entries.async_update_entry(
+            legacy_host,
+            title=title,
+            data=data,
+            unique_id=address,
+        )
+        return
+
+    await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_IMPORT},
+        data=data,
+    )
+
+
+async def _async_ensure_doser_plugin_entries(hass: HomeAssistant) -> None:
+    """Create entries for cached Dosers and continue watching advertisements."""
+    plugin_installed = await _async_doser_plugin_installed(hass)
+    if plugin_installed:
+        for service_info in bluetooth.async_discovered_service_info(hass):
+            await _async_create_doser_plugin_entry(
+                hass,
+                service_info,
+                plugin_installed=True,
             )
-            legacy_host = None
-        else:
-            await hass.config_entries.flow.async_init(
-                DOMAIN,
-                context={"source": SOURCE_IMPORT},
-                data=data,
+
+    @callback
+    def async_discovered_doser(
+        service_info: bluetooth.BluetoothServiceInfoBleak,
+        _change: bluetooth.BluetoothChange,
+    ) -> None:
+        hass.async_create_task(
+            _async_create_doser_plugin_entry(hass, service_info),
+            f"create physical Chihiros Doser entry {service_info.address}",
+        )
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if DOSER_DISCOVERY_UNSUBS not in domain_data:
+        domain_data[DOSER_DISCOVERY_UNSUBS] = [
+            bluetooth.async_register_callback(
+                hass,
+                async_discovered_doser,
+                {"local_name": f"{prefix}*"},
+                bluetooth.BluetoothScanningMode.ACTIVE,
             )
-        configured_addresses.add(address)
+            for prefix in DOSER_NAME_PREFIXES
+        ]
 
 
 def _frontend_panel_version() -> str:

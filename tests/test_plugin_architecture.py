@@ -119,10 +119,13 @@ def test_doser_plugin_uses_physical_entries_in_led_core_domain() -> None:
     assert "Platform.NUMBER," in integration
     assert "Platform.BUTTON," in integration
     assert "if is_doser_entry(entry):" in integration
-    assert "registry.get(DOSER_PLUGIN_ID)" in integration
+    assert "_async_doser_plugin_installed(hass)" in integration
     assert "async_setup_doser_plugin_devices" in sensor
     assert "_async_ensure_doser_plugin_entries(hass)" in integration
     assert "async_discovered_service_info(hass)" in integration
+    assert "async_register_callback(" in integration
+    assert "async_discovered_doser" in integration
+    assert "_async_create_doser_plugin_entry(hass, service_info)" in integration
     assert "unique_id=address" in integration
     assert '"create physical Chihiros Doser entries"' in integration
     assert 'context={"source": SOURCE_IMPORT}' in integration

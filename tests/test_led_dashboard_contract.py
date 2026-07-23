@@ -198,8 +198,9 @@ def test_doser_plugin_gets_one_led_core_entry_per_physical_device() -> None:
     sensor = source(ROOT / "custom_components" / "chihiros" / "sensor.py")
     bridge = source(ROOT / "custom_components" / "chihiros" / "core" / "plugin_devices.py")
 
-    assert "registry.get(DOSER_PLUGIN_ID)" in integration
+    assert "_async_doser_plugin_installed(hass)" in integration
     assert "_async_ensure_doser_plugin_entries" in integration
+    assert "async_register_callback(" in integration
     assert "async_setup_doser_plugin_devices" in sensor
     assert '_DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")' in bridge
     assert 'identifiers={(DOMAIN, f"doser:{address}")}' in bridge

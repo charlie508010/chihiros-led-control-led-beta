@@ -18,7 +18,7 @@ from ...core.device_entries import (
     DEVICE_KIND_DOSER,
     ENTRY_DEVICE_KIND,
 )
-from ...core.plugin_loader import async_load_plugins
+from ...core.plugin_loader import discover_plugin_manifests, plugin_roots
 from .discovery import ChihirosDiscovery, discovery_title
 from .testing.fake import iter_enabled_fake_devices
 from .vendor.chihiros_led_control import (
@@ -56,8 +56,11 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
         if _is_doser_discovery(discovery_info):
-            registry = await async_load_plugins(self.hass, DOMAIN)
-            if registry.get(DOSER_PLUGIN_ID) is None:
+            manifests = await self.hass.async_add_executor_job(
+                discover_plugin_manifests,
+                plugin_roots(self.hass),
+            )
+            if not any(manifest.plugin_id == DOSER_PLUGIN_ID for manifest in manifests):
                 return self.async_abort(reason="not_supported")
             title = str(discovery_info.name or discovery_info.device.name or discovery_info.address)
             return self.async_create_entry(
