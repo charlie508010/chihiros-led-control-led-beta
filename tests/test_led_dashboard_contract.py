@@ -185,6 +185,23 @@ def test_led_core_update_button_uses_the_supervisor_update_flow() -> None:
     assert 'f"/addons/{slug}/update" if update_available else "/addons/self/restart"' in server
     assert "reloadWhenReady();" in index
     assert "await this.runAddonUpdate();" in dashboard
+    assert "const updateDialogIsOpen = () => (" in dashboard
+    assert "if (!updateDialogIsOpen()) return;" in dashboard
+    assert "if (state.updateOperationId)" in dashboard
+
+
+def test_addon_only_doser_plugin_gets_separate_led_core_devices() -> None:
+    """An installed Doser tab must create separate devices without using an LED entry."""
+    integration = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "integration.py")
+    sensor = source(ROOT / "custom_components" / "chihiros" / "sensor.py")
+    bridge = source(ROOT / "custom_components" / "chihiros" / "core" / "plugin_devices.py")
+
+    assert "discover_plugin_manifests" in integration
+    assert "manifest.plugin_id == DOSER_PLUGIN_ID" in integration
+    assert "async_setup_doser_plugin_devices" in sensor
+    assert '_DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")' in bridge
+    assert 'identifiers={(DOMAIN, f"doser:{address}")}' in bridge
+    assert "via_device" not in bridge
 
 
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:

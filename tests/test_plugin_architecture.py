@@ -111,8 +111,10 @@ def test_doser_plugin_uses_internal_host_entry_in_led_core_domain() -> None:
     assert 'DOSER_PLUGIN_ENTRY_UNIQUE_ID = "doser-plugin"' in config_flow
     assert "DOSER_PLATFORMS: list[Platform] = [Platform.SENSOR]" in integration
     assert "if is_doser_entry(entry):" in integration
-    assert "registry.get(DOSER_PLUGIN_ID)" in integration
-    assert "_async_ensure_doser_plugin_entry(hass, registry)" in integration
+    assert "discover_plugin_manifests" in integration
+    assert "manifest.plugin_id == DOSER_PLUGIN_ID" in integration
+    assert "async_setup_doser_plugin_devices" in sensor
+    assert "_async_ensure_doser_plugin_entry(hass)" in integration
     assert 'context={"source": SOURCE_IMPORT}' in integration
     assert 'doser_integration_target="/config/custom_components/chihiros_doser"' not in run_script
     assert "custom_components/chihiros_doser/." not in run_script

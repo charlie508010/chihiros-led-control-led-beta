@@ -1,5 +1,5 @@
 import "./chihiros-notification-ui.js?v=0.1.1";
-import "./panels/chihiros-led-panel.js?v=0.2.1222";
+import "./panels/chihiros-led-panel.js?v=0.2.1223";
 
 class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   setConfig(config) {
@@ -271,6 +271,12 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
   }
 
   async runAddonUpdate() {
+    const updateOperationId = (Number(this._addonUpdateOperationId) || 0) + 1;
+    this._addonUpdateOperationId = updateOperationId;
+    const updateDialogIsOpen = () => (
+      this._addonUpdateOperationId === updateOperationId
+      && Number(this.dialogState && this.dialogState.updateOperationId) === updateOperationId
+    );
     this.dialogState = {
       type: "debug",
       channel: 1,
@@ -278,6 +284,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       running: true,
       noChannel: true,
       level: "pending",
+      updateOperationId,
     };
     this.render();
     try {
@@ -296,6 +303,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
         for (const candidate of updateEntities) {
           try {
             updateState = await this._hass.callApi("GET", `states/${candidate}`);
+            if (!updateDialogIsOpen()) return;
             if (updateState) {
               updateEntity = candidate;
               break;
@@ -307,17 +315,21 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       }
       if (updateEntity && this._hass && typeof this._hass.callService === "function") {
         const refreshResult = await this._hass.callService("homeassistant", "update_entity", { entity_id: updateEntity });
+        if (!updateDialogIsOpen()) return;
         const refreshError = serviceFailure(refreshResult);
         if (refreshError) throw new Error(`homeassistant.update_entity fehlgeschlagen: ${refreshError}`);
         for (let attempt = 0; attempt < 30; attempt += 1) {
           updateState = await this._hass.callApi("GET", `states/${updateEntity}`);
+          if (!updateDialogIsOpen()) return;
           if (String(updateState && updateState.state || "").toLowerCase() === "on") break;
           await new Promise((resolve) => window.setTimeout(resolve, 1000));
+          if (!updateDialogIsOpen()) return;
         }
         if (String(updateState && updateState.state || "").toLowerCase() === "on") {
           let startError = "";
           try {
             const installResult = await this._hass.callService("update", "install", { backup: false }, { entity_id: updateEntity });
+            if (!updateDialogIsOpen()) return;
             const installError = serviceFailure(installResult);
             if (installError) throw new Error(installError);
           } catch (error) {
@@ -325,8 +337,10 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           }
           for (let poll = 0; poll < 30; poll += 1) {
             await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            if (!updateDialogIsOpen()) return;
             try {
               updateState = await this._hass.callApi("GET", `states/${updateEntity}`);
+              if (!updateDialogIsOpen()) return;
             } catch (error) {
               const message = error && error.message ? error.message : String(error);
               if (message.includes("502") || message.toLowerCase().includes("bad gateway")) continue;
@@ -340,6 +354,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
           const latest = String(attrs.latest_version || "");
           if (installed && latest && installed === latest
             && String(updateState && updateState.state || "").toLowerCase() !== "on") {
+            if (!updateDialogIsOpen()) return;
             this.dialogState = {
               type: "debug",
               channel: 1,
@@ -367,6 +382,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       const api = window.ChihirosAddonApi;
       if (!api || typeof api.runAddonUpdate !== "function") throw new Error("LED-Core-Update-Endpunkt fehlt");
       const result = await api.runAddonUpdate();
+      if (!updateDialogIsOpen()) return;
       this.dialogState = {
         type: "debug",
         channel: 1,
@@ -377,6 +393,7 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
       };
       this.render();
     } catch (error) {
+      if (!updateDialogIsOpen()) return;
       this.dialogState = {
         type: "debug",
         channel: 1,
@@ -701,6 +718,9 @@ class ChihirosLedCoreCard extends window.ChihirosLedPanelMixin(HTMLElement) {
 
   closeDialog() {
     const state = this.dialogState || {};
+    if (state.updateOperationId) {
+      this._addonUpdateOperationId = (Number(this._addonUpdateOperationId) || 0) + 1;
+    }
     if (
       state.type === "led-template-editor"
       && state.templateLivePreviewChanged

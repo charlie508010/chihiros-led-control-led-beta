@@ -27,7 +27,12 @@ from ...core.notifications import (
     async_poll_device_notifications,
     async_track_notification_poll,
 )
-from ...core.plugin_loader import PLUGIN_REGISTRY_DATA_KEY, PluginRegistry, async_load_plugins
+from ...core.plugin_loader import (
+    PLUGIN_REGISTRY_DATA_KEY,
+    async_load_plugins,
+    discover_plugin_manifests,
+    plugin_roots,
+)
 from .const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
@@ -106,9 +111,10 @@ RUNTIME_POLL_GAP_SECONDS = NOTIFICATION_POLL_GAP_SECONDS
 DOSER_PLUGIN_ID = "doser"
 
 
-async def _async_ensure_doser_plugin_entry(hass: HomeAssistant, registry: PluginRegistry) -> None:
+async def _async_ensure_doser_plugin_entry(hass: HomeAssistant) -> None:
     """Create one Doser plugin host entry inside the LED Core integration."""
-    if registry.get(DOSER_PLUGIN_ID) is None:
+    manifests = await hass.async_add_executor_job(discover_plugin_manifests, plugin_roots(hass))
+    if not any(manifest.plugin_id == DOSER_PLUGIN_ID for manifest in manifests):
         return
     if any(is_doser_entry(entry) for entry in hass.config_entries.async_entries(DOMAIN)):
         return
@@ -130,9 +136,9 @@ def _frontend_panel_version() -> str:
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the bundled Chihiros dashboard panel."""
-    registry = await async_load_plugins(hass, DOMAIN)
+    await async_load_plugins(hass, DOMAIN)
     hass.async_create_task(
-        _async_ensure_doser_plugin_entry(hass, registry),
+        _async_ensure_doser_plugin_entry(hass),
         "create Chihiros Doser plugin host entry",
     )
     async_update_led_services(hass, True, lambda data: _resolve_service_device(hass, data))
