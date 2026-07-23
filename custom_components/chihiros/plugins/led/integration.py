@@ -8,10 +8,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from homeassistant.components import frontend
+from homeassistant.components import bluetooth, frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
-from homeassistant.const import CONF_ADDRESS, Platform
+from homeassistant.const import CONF_ADDRESS, CONF_NAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -30,8 +30,6 @@ from ...core.notifications import (
 from ...core.plugin_loader import (
     PLUGIN_REGISTRY_DATA_KEY,
     async_load_plugins,
-    discover_plugin_manifests,
-    plugin_roots,
 )
 from .const import (
     ADD_SCHEDULE_SCHEMA,
@@ -69,7 +67,12 @@ from .storage.history import record_led_notification_poll
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH, Platform.SENSOR, Platform.FAN]
-DOSER_PLATFORMS: list[Platform] = [Platform.SENSOR]
+DOSER_PLATFORMS: list[Platform] = [
+    Platform.SENSOR,
+    Platform.SWITCH,
+    Platform.NUMBER,
+    Platform.BUTTON,
+]
 
 __all__ = [
     "ADD_SCHEDULE_SCHEMA",
@@ -109,20 +112,55 @@ RUNTIME_POLL_LAST_FINISHED = NOTIFICATION_POLL_LAST_FINISHED
 RUNTIME_POLL_INTERVAL = NOTIFICATION_POLL_INTERVAL
 RUNTIME_POLL_GAP_SECONDS = NOTIFICATION_POLL_GAP_SECONDS
 DOSER_PLUGIN_ID = "doser"
+DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")
 
 
-async def _async_ensure_doser_plugin_entry(hass: HomeAssistant) -> None:
-    """Create one Doser plugin host entry inside the LED Core integration."""
-    manifests = await hass.async_add_executor_job(discover_plugin_manifests, plugin_roots(hass))
-    if not any(manifest.plugin_id == DOSER_PLUGIN_ID for manifest in manifests):
+def _is_doser_service_info(service_info: bluetooth.BluetoothServiceInfoBleak) -> bool:
+    """Return whether Bluetooth metadata belongs to a Chihiros Doser."""
+    name = str(service_info.name or service_info.device.name or "").upper()
+    return name.startswith(DOSER_NAME_PREFIXES)
+
+
+async def _async_ensure_doser_plugin_entries(hass: HomeAssistant) -> None:
+    """Create one LED Core config entry for every discovered physical Doser."""
+    registry = await async_load_plugins(hass, DOMAIN)
+    if registry.get(DOSER_PLUGIN_ID) is None:
         return
-    if any(is_doser_entry(entry) for entry in hass.config_entries.async_entries(DOMAIN)):
-        return
-    await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": SOURCE_IMPORT},
-        data={ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER},
-    )
+
+    entries = hass.config_entries.async_entries(DOMAIN)
+    doser_entries = [entry for entry in entries if is_doser_entry(entry)]
+    configured_addresses = {
+        str(entry.data[CONF_ADDRESS]).upper() for entry in doser_entries if entry.data.get(CONF_ADDRESS)
+    }
+    legacy_host = next((entry for entry in doser_entries if not entry.data.get(CONF_ADDRESS)), None)
+
+    for service_info in bluetooth.async_discovered_service_info(hass):
+        if not _is_doser_service_info(service_info):
+            continue
+        address = str(service_info.address).upper()
+        if not address or address in configured_addresses:
+            continue
+        title = str(service_info.name or service_info.device.name or address)
+        data = {
+            CONF_ADDRESS: address,
+            CONF_NAME: title,
+            ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
+        }
+        if legacy_host is not None:
+            hass.config_entries.async_update_entry(
+                legacy_host,
+                title=title,
+                data=data,
+                unique_id=address,
+            )
+            legacy_host = None
+        else:
+            await hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": SOURCE_IMPORT},
+                data=data,
+            )
+        configured_addresses.add(address)
 
 
 def _frontend_panel_version() -> str:
@@ -138,8 +176,8 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the bundled Chihiros dashboard panel."""
     await async_load_plugins(hass, DOMAIN)
     hass.async_create_task(
-        _async_ensure_doser_plugin_entry(hass),
-        "create Chihiros Doser plugin host entry",
+        _async_ensure_doser_plugin_entries(hass),
+        "create physical Chihiros Doser entries",
     )
     async_update_led_services(hass, True, lambda data: _resolve_service_device(hass, data))
     await _async_register_frontend_panel(hass)

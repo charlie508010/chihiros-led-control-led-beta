@@ -47,6 +47,8 @@ def test_integration_uses_led_plugin_as_canonical_domain_implementation() -> Non
     light = (COMPONENT / "light.py").read_text(encoding="utf-8")
     sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     switch = (COMPONENT / "switch.py").read_text(encoding="utf-8")
+    number = (COMPONENT / "number.py").read_text(encoding="utf-8")
+    button = (COMPONENT / "button.py").read_text(encoding="utf-8")
 
     assert "from .const import (" in integration
     assert "from .services import async_update_led_services" in integration
@@ -56,7 +58,9 @@ def test_integration_uses_led_plugin_as_canonical_domain_implementation() -> Non
     assert ".packages.led" not in switch
     assert "async_setup_entry = async_setup_led_plugin_entry" in light
     assert "async_setup_entry = async_setup_led_plugin_entry" in sensor
-    assert "async_setup_entry = async_setup_led_plugin_entry" in switch
+    assert 'async_setup_plugin_platform_entries(hass, entry, async_add_entities, "switch")' in switch
+    assert 'async_setup_plugin_platform_entries(hass, entry, async_add_entities, "number")' in number
+    assert 'async_setup_plugin_platform_entries(hass, entry, async_add_entities, "button")' in button
 
 
 def test_plugin_manifest_rejects_paths_outside_plugin_directory(tmp_path: Path) -> None:
@@ -95,8 +99,8 @@ def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values()
     assert '"plugin_assets": plugin_assets()' in server
 
 
-def test_doser_plugin_uses_internal_host_entry_in_led_core_domain() -> None:
-    """Doser devices must use one plugin host without creating a second integration tile."""
+def test_doser_plugin_uses_physical_entries_in_led_core_domain() -> None:
+    """Each Doser must be a physical entry inside the LED Core integration."""
     manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
     sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     config_flow = (LED_PLUGIN / "config_flow.py").read_text(encoding="utf-8")
@@ -104,17 +108,23 @@ def test_doser_plugin_uses_internal_host_entry_in_led_core_domain() -> None:
     run_script = (ROOT / "chihiros_beta" / "run.sh").read_text(encoding="utf-8")
 
     assert manifest["domain"] == "chihiros_led_core"
-    assert not any(row.get("local_name") in {"DYDOSE*", "DYMIX*"} for row in manifest["bluetooth"])
+    assert {"DYDOSE*", "DYMIX*"}.issubset({row.get("local_name") for row in manifest["bluetooth"]})
     assert "if is_doser_entry(entry):" in sensor
     assert "ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER" in config_flow
     assert "async def async_step_import(" in config_flow
-    assert 'DOSER_PLUGIN_ENTRY_UNIQUE_ID = "doser-plugin"' in config_flow
-    assert "DOSER_PLATFORMS: list[Platform] = [Platform.SENSOR]" in integration
+    assert 'DOSER_PLUGIN_ENTRY_UNIQUE_ID = "doser-plugin"' not in config_flow
+    assert "CONF_ADDRESS: address" in config_flow
+    assert "Platform.SENSOR," in integration
+    assert "Platform.SWITCH," in integration
+    assert "Platform.NUMBER," in integration
+    assert "Platform.BUTTON," in integration
     assert "if is_doser_entry(entry):" in integration
-    assert "discover_plugin_manifests" in integration
-    assert "manifest.plugin_id == DOSER_PLUGIN_ID" in integration
+    assert "registry.get(DOSER_PLUGIN_ID)" in integration
     assert "async_setup_doser_plugin_devices" in sensor
-    assert "_async_ensure_doser_plugin_entry(hass)" in integration
+    assert "_async_ensure_doser_plugin_entries(hass)" in integration
+    assert "async_discovered_service_info(hass)" in integration
+    assert "unique_id=address" in integration
+    assert '"create physical Chihiros Doser entries"' in integration
     assert 'context={"source": SOURCE_IMPORT}' in integration
     assert 'doser_integration_target="/config/custom_components/chihiros_doser"' not in run_script
     assert "custom_components/chihiros_doser/." not in run_script

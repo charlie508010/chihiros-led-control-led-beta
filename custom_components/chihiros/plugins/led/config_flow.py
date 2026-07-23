@@ -18,6 +18,7 @@ from ...core.device_entries import (
     DEVICE_KIND_DOSER,
     ENTRY_DEVICE_KIND,
 )
+from ...core.plugin_loader import async_load_plugins
 from .discovery import ChihirosDiscovery, discovery_title
 from .testing.fake import iter_enabled_fake_devices
 from .vendor.chihiros_led_control import (
@@ -27,7 +28,14 @@ from .vendor.chihiros_led_control import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-DOSER_PLUGIN_ENTRY_UNIQUE_ID = "doser-plugin"
+DOSER_PLUGIN_ID = "doser"
+DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")
+
+
+def _is_doser_discovery(discovery_info: BluetoothServiceInfoBleak) -> bool:
+    """Return whether Bluetooth metadata belongs to a Chihiros Doser."""
+    name = str(discovery_info.name or discovery_info.device.name or "").upper()
+    return name.startswith(DOSER_NAME_PREFIXES)
 
 
 class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -47,6 +55,19 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the bluetooth discovery step."""
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
+        if _is_doser_discovery(discovery_info):
+            registry = await async_load_plugins(self.hass, DOMAIN)
+            if registry.get(DOSER_PLUGIN_ID) is None:
+                return self.async_abort(reason="not_supported")
+            title = str(discovery_info.name or discovery_info.device.name or discovery_info.address)
+            return self.async_create_entry(
+                title=title,
+                data={
+                    CONF_ADDRESS: discovery_info.address,
+                    CONF_NAME: title,
+                    ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
+                },
+            )
         device = create_device(discovery_info.device)
         if not device.colors:
             return self.async_abort(reason="not_supported")
@@ -165,16 +186,23 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
 
     async def async_step_import(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Create the internal host entry for the installed Doser plugin."""
-        if not user_input or user_input.get(ENTRY_DEVICE_KIND) != DEVICE_KIND_DOSER:
+        """Create one physical Doser entry inside the shared integration."""
+        if (
+            not user_input
+            or user_input.get(ENTRY_DEVICE_KIND) != DEVICE_KIND_DOSER
+            or not user_input.get(CONF_ADDRESS)
+        ):
             return self.async_abort(reason="not_supported")
 
-        await self.async_set_unique_id(DOSER_PLUGIN_ENTRY_UNIQUE_ID)
+        address = str(user_input[CONF_ADDRESS])
+        title = str(user_input.get(CONF_NAME) or address)
+        await self.async_set_unique_id(address)
         self._abort_if_unique_id_configured()
         return self.async_create_entry(
-            title="Chihiros Doser",
+            title=title,
             data={
-                CONF_NAME: "Chihiros Doser",
+                CONF_ADDRESS: address,
+                CONF_NAME: title,
                 ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
             },
         )

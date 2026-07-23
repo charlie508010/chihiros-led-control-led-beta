@@ -49,17 +49,21 @@ async def async_setup_doser_plugin_devices(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Register discovered Doser devices below the shared LED Core integration."""
-    known_addresses: set[str] = set()
+    """Register the physical Doser represented by this config entry."""
+    target_address = str(entry.data.get("address") or "").upper()
+    if not target_address:
+        return
+    entity_added = False
 
     @callback
     def async_add_service_info(service_info: bluetooth.BluetoothServiceInfoBleak) -> None:
+        nonlocal entity_added
         if not _is_doser_service_info(service_info):
             return
         address = str(service_info.address).upper()
-        if not address or address in known_addresses:
+        if address != target_address or entity_added:
             return
-        known_addresses.add(address)
+        entity_added = True
         async_add_entities([ChihirosPluginDeviceSensor(service_info)])
 
     for service_info in bluetooth.async_discovered_service_info(hass):
