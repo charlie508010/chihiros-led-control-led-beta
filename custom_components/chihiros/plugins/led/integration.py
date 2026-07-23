@@ -26,7 +26,7 @@ from ...core.notifications import (
     async_poll_device_notifications,
     async_track_notification_poll,
 )
-from ...core.plugin_loader import async_load_plugins
+from ...core.plugin_loader import PLUGIN_REGISTRY_DATA_KEY, async_load_plugins
 from .const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
@@ -201,6 +201,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         chihiros_data.coordinator.async_close()
         await chihiros_data.device.disconnect()
         _async_update_services(hass)
+        hass.data.setdefault(DOMAIN, {}).pop(PLUGIN_REGISTRY_DATA_KEY, None)
 
     return unload_ok
 
