@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "chihiros"
 LED_PLUGIN = COMPONENT / "plugins" / "led"
+DOSER_COMPONENT = ROOT / "custom_components" / "chihiros_doser"
 
 
 def _load_manifest_module():
@@ -93,3 +94,18 @@ def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values()
     assert 'CONFIG_ROOT / ".chihiros_led_core" / "plugins"' in server
     assert '"installed_plugins": installed_plugin_kinds()' in server
     assert '"plugin_assets": plugin_assets()' in server
+
+
+def test_doser_devices_use_a_separate_home_assistant_domain() -> None:
+    """Doser devices must never be registered below an LED config entry."""
+    manifest = json.loads((DOSER_COMPONENT / "manifest.json").read_text(encoding="utf-8"))
+    sensor = (DOSER_COMPONENT / "sensor.py").read_text(encoding="utf-8")
+    config_flow = (DOSER_COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+    run_script = (ROOT / "chihiros_beta" / "run.sh").read_text(encoding="utf-8")
+
+    assert manifest["domain"] == "chihiros_doser"
+    assert manifest["bluetooth"] == [{"local_name": "DYDOSE*", "connectable": True}]
+    assert "from .const import DOMAIN" in sensor
+    assert "via_device" not in sensor
+    assert 'DOSER_NAME_PREFIX = "DYDOSE"' in config_flow
+    assert 'doser_integration_target="/config/custom_components/chihiros_doser"' in run_script

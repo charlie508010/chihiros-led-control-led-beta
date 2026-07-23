@@ -1,0 +1,21 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "This Doser is already configured.",
+      "no_devices_found": "No unconfigured Chihiros Doser was found.",
+      "not_supported": "This Bluetooth device is not a supported Chihiros Doser."
+    },
+    "step": {
+      "bluetooth_confirm": {
+        "description": "Set up {name} as a separate Doser device?",
+        "title": "Chihiros Doser discovered"
+      },
+      "user": {
+        "data": {
+          "address": "Doser"
+        },
+        "title": "Select Chihiros Doser"
+      }
+    }
+  }
+}
