@@ -63,25 +63,18 @@ echo "Chihiros dashboard assets installed to add-on UI."
 if [[ "${INSTALL_INTEGRATION}" == "true" ]]; then
   mkdir -p /config/custom_components
   integration_target="/config/custom_components/chihiros_led_core"
-  doser_integration_target="/config/custom_components/chihiros_doser"
   if [[ -d "${integration_target}" ]]; then
     integration_backup="/config/.chihiros_led_core/backups/chihiros_led_core-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$(dirname "${integration_backup}")"
     cp -a "${integration_target}" "${integration_backup}"
     echo "Existing LED Core integration backed up to ${integration_backup}"
   fi
-  if [[ -d "${doser_integration_target}" ]]; then
-    doser_integration_backup="/config/.chihiros_led_core/backups/chihiros_doser-$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$(dirname "${doser_integration_backup}")"
-    cp -a "${doser_integration_target}" "${doser_integration_backup}"
-    echo "Existing Doser integration backed up to ${doser_integration_backup}"
-  fi
   mkdir -p "${integration_target}"
-  mkdir -p "${doser_integration_target}"
   cp -a /opt/chihiros-led-core-src/custom_components/chihiros/. "${integration_target}/"
-  cp -a /opt/chihiros-led-core-src/custom_components/chihiros_doser/. "${doser_integration_target}/"
   echo "LED Core integration installed to ${integration_target}"
-  echo "Doser integration installed separately to ${doser_integration_target}"
+  if [[ -d /config/custom_components/chihiros_doser ]]; then
+    echo "Legacy Chihiros Doser integration detected; it is no longer installed by LED Core."
+  fi
   echo "Restart Home Assistant after first install or update."
 fi
 

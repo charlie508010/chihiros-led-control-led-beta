@@ -17,6 +17,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 from ...const import DOMAIN
+from ...core.device_entries import is_doser_entry
 from ...core.notifications import (
     NOTIFICATION_POLL_GAP_SECONDS,
     NOTIFICATION_POLL_INTERVAL,
@@ -63,6 +64,7 @@ from .storage.history import record_led_notification_poll
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.LIGHT, Platform.SWITCH, Platform.SENSOR, Platform.FAN]
+DOSER_PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 __all__ = [
     "ADD_SCHEDULE_SCHEMA",
@@ -123,6 +125,13 @@ async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up chihiros from a config entry."""
     await async_load_plugins(hass, DOMAIN)
+    if is_doser_entry(entry):
+        hass.data.setdefault(DOMAIN, {})
+        _async_update_services(hass)
+        await _async_register_frontend_panel(hass)
+        await hass.config_entries.async_forward_entry_setups(entry, DOSER_PLATFORMS)
+        return True
+
     runtime = await resolve_chihiros_runtime(hass, entry)
     coordinator = ChihirosDataUpdateCoordinator(
         hass,
@@ -193,6 +202,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    if is_doser_entry(entry):
+        return await hass.config_entries.async_unload_platforms(entry, DOSER_PLATFORMS)
+
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         unsubscribe = hass.data.get(RUNTIME_POLL_UNSUBS, {}).pop(entry.entry_id, None)
         if unsubscribe is not None:

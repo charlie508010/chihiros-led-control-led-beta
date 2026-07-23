@@ -14,6 +14,11 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
 
 from ...const import DOMAIN
+from ...core.device_entries import (
+    DEVICE_KIND_DOSER,
+    ENTRY_DEVICE_KIND,
+    is_doser_name,
+)
 from .discovery import ChihirosDiscovery, discovery_title
 from .testing.fake import iter_enabled_fake_devices
 from .vendor.chihiros_led_control import (
@@ -42,6 +47,9 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the bluetooth discovery step."""
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
+        if is_doser_name(discovery_info.name):
+            self._discovery_info = discovery_info
+            return await self.async_step_bluetooth_confirm()
         device = create_device(discovery_info.device)
         if not device.colors:
             return self.async_abort(reason="not_supported")
@@ -54,11 +62,30 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_bluetooth_confirm()
 
     async def async_step_bluetooth_confirm(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Confirm discovery."""
-        assert self._discovered_device is not None
-        device = self._discovered_device
+        """Confirm an LED or Doser discovery inside the shared integration."""
         assert self._discovery_info is not None
         discovery_info = self._discovery_info
+        if is_doser_name(discovery_info.name):
+            title = discovery_info.name or f"Chihiros Doser {discovery_info.address}"
+            if user_input is not None:
+                return self.async_create_entry(
+                    title=title,
+                    data={
+                        CONF_ADDRESS: discovery_info.address,
+                        CONF_NAME: title,
+                        ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
+                    },
+                )
+            self._set_confirm_only()
+            placeholders = {"name": title}
+            self.context["title_placeholders"] = placeholders
+            return self.async_show_form(
+                step_id="bluetooth_confirm",
+                description_placeholders=placeholders,
+            )
+
+        assert self._discovered_device is not None
+        device = self._discovered_device
         title = device.name or discovery_info.name
         if user_input is not None:
             self._entry_title = title
@@ -115,6 +142,16 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
             assert discovery_info is not None
             await self.async_set_unique_id(discovery_info.address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
+            if is_doser_name(discovery_info.name):
+                title = discovery_info.name or f"Chihiros Doser {discovery_info.address}"
+                return self.async_create_entry(
+                    title=title,
+                    data={
+                        CONF_ADDRESS: discovery_info.address,
+                        CONF_NAME: title,
+                        ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
+                    },
+                )
             device = create_device(discovery_info.device)
             if not device.colors:
                 return self.async_abort(reason="not_supported")

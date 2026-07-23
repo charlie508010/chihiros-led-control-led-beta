@@ -10,7 +10,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "chihiros"
 LED_PLUGIN = COMPONENT / "plugins" / "led"
-DOSER_COMPONENT = ROOT / "custom_components" / "chihiros_doser"
 
 
 def _load_manifest_module():
@@ -96,25 +95,28 @@ def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values()
     assert '"plugin_assets": plugin_assets()' in server
 
 
-def test_doser_devices_use_a_separate_home_assistant_domain() -> None:
-    """Doser devices must never be registered below an LED config entry."""
-    manifest = json.loads((DOSER_COMPONENT / "manifest.json").read_text(encoding="utf-8"))
-    sensor = (DOSER_COMPONENT / "sensor.py").read_text(encoding="utf-8")
-    config_flow = (DOSER_COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+def test_doser_devices_use_separate_entries_in_led_core_domain() -> None:
+    """Doser devices must use their own entries without creating a second integration tile."""
+    manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
+    sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+    config_flow = (LED_PLUGIN / "config_flow.py").read_text(encoding="utf-8")
+    integration = (LED_PLUGIN / "integration.py").read_text(encoding="utf-8")
     run_script = (ROOT / "chihiros_beta" / "run.sh").read_text(encoding="utf-8")
 
-    assert manifest["domain"] == "chihiros_doser"
-    assert manifest["bluetooth"] == [
-        {"local_name": "DYDOSE*", "connectable": True},
-        {"local_name": "DYMIX*", "connectable": True},
-    ]
-    assert "from .const import DOMAIN" in sensor
-    assert "via_device" not in sensor
-    assert 'DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")' in config_flow
-    assert 'doser_integration_target="/config/custom_components/chihiros_doser"' in run_script
+    assert manifest["domain"] == "chihiros_led_core"
+    assert {"local_name": "DYDOSE*", "connectable": True} in manifest["bluetooth"]
+    assert {"local_name": "DYMIX*", "connectable": True} in manifest["bluetooth"]
+    assert "if is_doser_entry(entry):" in sensor
+    assert "ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER" in config_flow
+    assert "if is_doser_name(discovery_info.name):" in config_flow
+    assert "DOSER_PLATFORMS: list[Platform] = [Platform.SENSOR]" in integration
+    assert "if is_doser_entry(entry):" in integration
+    assert 'doser_integration_target="/config/custom_components/chihiros_doser"' not in run_script
+    assert "custom_components/chihiros_doser/." not in run_script
 
     platform_loader = (ROOT / "custom_components" / "chihiros" / "core" / "plugin_loader" / "platforms.py").read_text(
         encoding="utf-8"
     )
-    assert '_SEPARATE_INTEGRATION_PLUGIN_IDS = frozenset({"doser"})' in platform_loader
-    assert "loaded.manifest.plugin_id in _SEPARATE_INTEGRATION_PLUGIN_IDS" in platform_loader
+    assert '_DOSER_PLUGIN_ID = "doser"' in platform_loader
+    assert "doser_entry = is_doser_entry(entry)" in platform_loader
+    assert "not doser_entry and loaded.manifest.plugin_id == _DOSER_PLUGIN_ID" in platform_loader
