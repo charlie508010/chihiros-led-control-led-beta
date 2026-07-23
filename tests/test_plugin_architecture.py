@@ -95,8 +95,8 @@ def test_addon_server_reports_discovered_plugins_instead_of_fixed_empty_values()
     assert '"plugin_assets": plugin_assets()' in server
 
 
-def test_doser_devices_use_separate_entries_in_led_core_domain() -> None:
-    """Doser devices must use their own entries without creating a second integration tile."""
+def test_doser_plugin_uses_internal_host_entry_in_led_core_domain() -> None:
+    """Doser devices must use one plugin host without creating a second integration tile."""
     manifest = json.loads((COMPONENT / "manifest.json").read_text(encoding="utf-8"))
     sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
     config_flow = (LED_PLUGIN / "config_flow.py").read_text(encoding="utf-8")
@@ -104,13 +104,16 @@ def test_doser_devices_use_separate_entries_in_led_core_domain() -> None:
     run_script = (ROOT / "chihiros_beta" / "run.sh").read_text(encoding="utf-8")
 
     assert manifest["domain"] == "chihiros_led_core"
-    assert {"local_name": "DYDOSE*", "connectable": True} in manifest["bluetooth"]
-    assert {"local_name": "DYMIX*", "connectable": True} in manifest["bluetooth"]
+    assert not any(row.get("local_name") in {"DYDOSE*", "DYMIX*"} for row in manifest["bluetooth"])
     assert "if is_doser_entry(entry):" in sensor
     assert "ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER" in config_flow
-    assert "if is_doser_name(discovery_info.name):" in config_flow
+    assert "async def async_step_import(" in config_flow
+    assert 'DOSER_PLUGIN_ENTRY_UNIQUE_ID = "doser-plugin"' in config_flow
     assert "DOSER_PLATFORMS: list[Platform] = [Platform.SENSOR]" in integration
     assert "if is_doser_entry(entry):" in integration
+    assert "registry.get(DOSER_PLUGIN_ID)" in integration
+    assert "_async_ensure_doser_plugin_entry(hass, registry)" in integration
+    assert 'context={"source": SOURCE_IMPORT}' in integration
     assert 'doser_integration_target="/config/custom_components/chihiros_doser"' not in run_script
     assert "custom_components/chihiros_doser/." not in run_script
 

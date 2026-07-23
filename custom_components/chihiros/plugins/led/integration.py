@@ -10,14 +10,14 @@ from typing import Any
 
 from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import CONF_ADDRESS, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 
 from ...const import DOMAIN
-from ...core.device_entries import is_doser_entry
+from ...core.device_entries import DEVICE_KIND_DOSER, ENTRY_DEVICE_KIND, is_doser_entry
 from ...core.notifications import (
     NOTIFICATION_POLL_GAP_SECONDS,
     NOTIFICATION_POLL_INTERVAL,
@@ -27,7 +27,7 @@ from ...core.notifications import (
     async_poll_device_notifications,
     async_track_notification_poll,
 )
-from ...core.plugin_loader import PLUGIN_REGISTRY_DATA_KEY, async_load_plugins
+from ...core.plugin_loader import PLUGIN_REGISTRY_DATA_KEY, PluginRegistry, async_load_plugins
 from .const import (
     ADD_SCHEDULE_SCHEMA,
     ATTR_ACTIVE,
@@ -103,6 +103,20 @@ RUNTIME_POLL_LOCK = NOTIFICATION_POLL_LOCK
 RUNTIME_POLL_LAST_FINISHED = NOTIFICATION_POLL_LAST_FINISHED
 RUNTIME_POLL_INTERVAL = NOTIFICATION_POLL_INTERVAL
 RUNTIME_POLL_GAP_SECONDS = NOTIFICATION_POLL_GAP_SECONDS
+DOSER_PLUGIN_ID = "doser"
+
+
+async def _async_ensure_doser_plugin_entry(hass: HomeAssistant, registry: PluginRegistry) -> None:
+    """Create one Doser plugin host entry inside the LED Core integration."""
+    if registry.get(DOSER_PLUGIN_ID) is None:
+        return
+    if any(is_doser_entry(entry) for entry in hass.config_entries.async_entries(DOMAIN)):
+        return
+    await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_IMPORT},
+        data={ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER},
+    )
 
 
 def _frontend_panel_version() -> str:
@@ -116,7 +130,11 @@ def _frontend_panel_version() -> str:
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
     """Set up the bundled Chihiros dashboard panel."""
-    await async_load_plugins(hass, DOMAIN)
+    registry = await async_load_plugins(hass, DOMAIN)
+    hass.async_create_task(
+        _async_ensure_doser_plugin_entry(hass, registry),
+        "create Chihiros Doser plugin host entry",
+    )
     async_update_led_services(hass, True, lambda data: _resolve_service_device(hass, data))
     await _async_register_frontend_panel(hass)
     return True
