@@ -104,8 +104,17 @@ def test_doser_devices_use_a_separate_home_assistant_domain() -> None:
     run_script = (ROOT / "chihiros_beta" / "run.sh").read_text(encoding="utf-8")
 
     assert manifest["domain"] == "chihiros_doser"
-    assert manifest["bluetooth"] == [{"local_name": "DYDOSE*", "connectable": True}]
+    assert manifest["bluetooth"] == [
+        {"local_name": "DYDOSE*", "connectable": True},
+        {"local_name": "DYMIX*", "connectable": True},
+    ]
     assert "from .const import DOMAIN" in sensor
     assert "via_device" not in sensor
-    assert 'DOSER_NAME_PREFIX = "DYDOSE"' in config_flow
+    assert 'DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")' in config_flow
     assert 'doser_integration_target="/config/custom_components/chihiros_doser"' in run_script
+
+    platform_loader = (ROOT / "custom_components" / "chihiros" / "core" / "plugin_loader" / "platforms.py").read_text(
+        encoding="utf-8"
+    )
+    assert '_SEPARATE_INTEGRATION_PLUGIN_IDS = frozenset({"doser"})' in platform_loader
+    assert "loaded.manifest.plugin_id in _SEPARATE_INTEGRATION_PLUGIN_IDS" in platform_loader

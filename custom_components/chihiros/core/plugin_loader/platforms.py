@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 _DOMAIN = "chihiros_led_core"
 _PACKAGED_CORE_PLUGIN_IDS = frozenset({"led"})
+_SEPARATE_INTEGRATION_PLUGIN_IDS = frozenset({"doser"})
 
 
 async def async_setup_plugin_platform_entries(
@@ -29,6 +30,13 @@ async def async_setup_plugin_platform_entries(
     setup_name = f"async_setup_{platform}_entry"
     for loaded in registry.all():
         if loaded.manifest.plugin_id in _PACKAGED_CORE_PLUGIN_IDS:
+            continue
+        if loaded.manifest.plugin_id in _SEPARATE_INTEGRATION_PLUGIN_IDS:
+            _LOGGER.debug(
+                "Skipping separate Home Assistant integration plugin %s for LED entry %s",
+                loaded.manifest.plugin_id,
+                entry.entry_id,
+            )
             continue
         if platform not in loaded.manifest.platforms:
             continue

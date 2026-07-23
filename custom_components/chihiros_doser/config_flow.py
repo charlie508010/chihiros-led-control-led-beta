@@ -11,12 +11,12 @@ from homeassistant.const import CONF_ADDRESS, CONF_NAME
 
 from .const import DOMAIN
 
-DOSER_NAME_PREFIX = "DYDOSE"
+DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")
 
 
 def _is_doser_name(name: str | None) -> bool:
     """Return whether a Bluetooth name belongs to a Doser."""
-    return str(name or "").upper().startswith(DOSER_NAME_PREFIX)
+    return str(name or "").upper().startswith(DOSER_NAME_PREFIXES)
 
 
 class ChihirosDoserConfigFlow(ConfigFlow, domain=DOMAIN):

@@ -5,6 +5,10 @@
     {
       "local_name": "DYDOSE*",
       "connectable": true
+    },
+    {
+      "local_name": "DYMIX*",
+      "connectable": true
     }
   ],
   "codeowners": [
