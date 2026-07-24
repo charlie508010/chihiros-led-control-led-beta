@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import voluptuous as vol
@@ -14,11 +13,6 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_ADDRESS, CONF_NAME
 
 from ...const import DOMAIN
-from ...core.device_entries import (
-    DEVICE_KIND_DOSER,
-    ENTRY_DEVICE_KIND,
-)
-from ...core.plugin_loader import discover_plugin_manifests, plugin_roots
 from .discovery import ChihirosDiscovery, discovery_title
 from .testing.fake import iter_enabled_fake_devices
 from .vendor.chihiros_led_control import (
@@ -26,16 +20,6 @@ from .vendor.chihiros_led_control import (
     create_device,
     needs_device_type,
 )
-
-_LOGGER = logging.getLogger(__name__)
-DOSER_PLUGIN_ID = "doser"
-DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")
-
-
-def _is_doser_discovery(discovery_info: BluetoothServiceInfoBleak) -> bool:
-    """Return whether Bluetooth metadata belongs to a Chihiros Doser."""
-    name = str(discovery_info.name or discovery_info.device.name or "").upper()
-    return name.startswith(DOSER_NAME_PREFIXES)
 
 
 class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -55,28 +39,11 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
         """Handle the bluetooth discovery step."""
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
-        if _is_doser_discovery(discovery_info):
-            manifests = await self.hass.async_add_executor_job(
-                discover_plugin_manifests,
-                plugin_roots(self.hass),
-            )
-            if not any(manifest.plugin_id == DOSER_PLUGIN_ID for manifest in manifests):
-                return self.async_abort(reason="not_supported")
-            title = str(discovery_info.name or discovery_info.device.name or discovery_info.address)
-            return self.async_create_entry(
-                title=title,
-                data={
-                    CONF_ADDRESS: discovery_info.address,
-                    CONF_NAME: title,
-                    ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
-                },
-            )
         device = create_device(discovery_info.device)
         if not device.colors:
             return self.async_abort(reason="not_supported")
         self._discovery_info = discovery_info
         self._discovered_device = device
-        _LOGGER.debug("async_step_bluetooth - discovered device %s", discovery_info.name)
         if needs_device_type(discovery_info.name):
             return await self.async_step_fallback_config()
 
@@ -187,25 +154,3 @@ class ChihirosConfigFlow(ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(step_id="user", data_schema=data_schema, errors=errors)
-
-    async def async_step_import(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Create one physical Doser entry inside the shared integration."""
-        if (
-            not user_input
-            or user_input.get(ENTRY_DEVICE_KIND) != DEVICE_KIND_DOSER
-            or not user_input.get(CONF_ADDRESS)
-        ):
-            return self.async_abort(reason="not_supported")
-
-        address = str(user_input[CONF_ADDRESS])
-        title = str(user_input.get(CONF_NAME) or address)
-        await self.async_set_unique_id(address)
-        self._abort_if_unique_id_configured()
-        return self.async_create_entry(
-            title=title,
-            data={
-                CONF_ADDRESS: address,
-                CONF_NAME: title,
-                ENTRY_DEVICE_KIND: DEVICE_KIND_DOSER,
-            },
-        )

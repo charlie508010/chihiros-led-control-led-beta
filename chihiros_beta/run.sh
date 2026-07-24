@@ -72,9 +72,6 @@ if [[ "${INSTALL_INTEGRATION}" == "true" ]]; then
   mkdir -p "${integration_target}"
   cp -a /opt/chihiros-led-core-src/custom_components/chihiros/. "${integration_target}/"
   echo "LED Core integration installed to ${integration_target}"
-  if [[ -d /config/custom_components/chihiros_doser ]]; then
-    echo "Legacy Chihiros Doser integration detected; it is no longer installed by LED Core."
-  fi
   echo "Restart Home Assistant after first install or update."
 fi
 

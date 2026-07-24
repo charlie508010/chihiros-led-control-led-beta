@@ -18,8 +18,8 @@ def source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_led_services_do_not_depend_on_removed_doser_state() -> None:
-    """LED-only service validation must use model channels, never Doser runtime fields."""
+def test_led_services_use_model_channels_for_validation() -> None:
+    """LED-only service validation must use model channels."""
     services = source(LED_SERVICES)
 
     assert "dosing_totals" not in services
@@ -191,22 +191,6 @@ def test_led_core_update_button_uses_the_supervisor_update_flow() -> None:
     assert dashboard.index("const updateEntities =") < dashboard.index("const api = window.ChihirosAddonApi;")
 
 
-def test_doser_plugin_gets_one_led_core_entry_per_physical_device() -> None:
-    """Installed Doser devices must not share a synthetic host or an LED entry."""
-    integration = source(ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "integration.py")
-    sensor = source(ROOT / "custom_components" / "chihiros" / "sensor.py")
-    bridge = source(ROOT / "custom_components" / "chihiros" / "core" / "plugin_devices.py")
-
-    assert "_async_doser_plugin_installed(hass)" in integration
-    assert "_async_ensure_doser_plugin_entries" in integration
-    assert "async_register_callback(" in integration
-    assert "async_setup_doser_plugin_devices" in sensor
-    assert '_DOSER_NAME_PREFIXES = ("DYDOSE", "DYMIX")' in bridge
-    assert 'identifiers={(DOMAIN, f"doser:{address}")}' in bridge
-    assert 'target_address = str(entry.data.get("address") or "").upper()' in bridge
-    assert "via_device" not in bridge
-
-
 def test_led_device_selection_and_confirmed_reset_keep_the_original_target() -> None:
     """Transient HA state updates and confirmation delays must not retarget LED actions."""
     dashboard = source(DASHBOARD)
@@ -318,7 +302,7 @@ def test_led_core_storage_stays_separate_from_home_assistant_recorder() -> None:
 
 
 def test_addon_promotes_only_addresses_with_led_color_light_entities() -> None:
-    """Doser or other auxiliary sensors must not create false LED device tabs."""
+    """Auxiliary sensors must not create false LED device tabs."""
     server = source(ADDON_SERVER)
 
     assert 'match.group(1).lower() != "light"' in server
@@ -327,7 +311,7 @@ def test_addon_promotes_only_addresses_with_led_color_light_entities() -> None:
 
 
 def test_addon_accepts_only_entities_owned_by_led_core() -> None:
-    """Legacy Chihiros and Doser entities must never become LED Core device tabs."""
+    """Legacy Chihiros entities must never become LED Core device tabs."""
     server = source(ADDON_SERVER)
     entities = ROOT / "custom_components" / "chihiros" / "plugins" / "led" / "entities"
     light = source(entities / "light.py")
